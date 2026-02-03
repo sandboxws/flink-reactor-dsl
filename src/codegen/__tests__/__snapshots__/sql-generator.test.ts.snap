@@ -359,3 +359,107 @@ INSERT INTO \`KafkaSink_3\`
 SELECT /*+ BROADCAST(\`KafkaSource_1\`) */ * FROM \`KafkaSource_0\` INNER JOIN \`KafkaSource_1\` ON \`KafkaSource_0\`.\`product_id\` = \`KafkaSource_1\`.\`product_id\`;
 "
 `;
+
+exports[`9.1: RawSQL inlines SQL in pipeline > inlines raw SQL as a subquery 1`] = `
+"CREATE TABLE \`KafkaSource_0\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSource_1\` (
+  \`user_id\` STRING,
+  \`name\` STRING,
+  \`email\` STRING
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'users',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSink_3\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'enriched-orders',
+  'format' = 'json'
+);
+
+INSERT INTO \`KafkaSink_3\`
+SELECT o.*, u.name AS user_name FROM \`KafkaSource_0\` o JOIN \`KafkaSource_1\` u ON o.\`user_id\` = u.\`user_id\`;
+"
+`;
+
+exports[`9.2: UDF generates CREATE FUNCTION DDL > produces CREATE FUNCTION statement 1`] = `
+"CREATE FUNCTION \`my_hash\` AS 'com.mycompany.HashFunction';
+
+CREATE TABLE \`KafkaSource_1\` (
+  \`event_id\` BIGINT,
+  \`user_id\` STRING,
+  \`event_type\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  \`payload\` STRING,
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'events',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSink_3\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'hashed-events',
+  'format' = 'json'
+);
+
+INSERT INTO \`KafkaSink_3\`
+SELECT \`event_id\` AS \`event_id\`, my_hash(\`payload\`) AS \`hashed\` FROM \`KafkaSource_1\`;
+"
+`;
+
+exports[`9.3: MatchRecognize generates MATCH_RECOGNIZE clause > produces MATCH_RECOGNIZE with PARTITION BY, ORDER BY, MEASURES, PATTERN, DEFINE 1`] = `
+"CREATE TABLE \`KafkaSource_0\` (
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`event_type\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'transactions',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSink_2\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'fraud-alerts',
+  'format' = 'json'
+);
+
+INSERT INTO \`KafkaSink_2\`
+SELECT *
+FROM \`KafkaSource_0\`
+MATCH_RECOGNIZE (
+  PARTITION BY \`user_id\`
+  ORDER BY \`event_time\`
+  MEASURES
+    A.\`event_time\` AS \`start_time\`,
+    C.\`event_time\` AS \`end_time\`,
+    SUM(B.\`amount\`) AS \`total_amount\`
+  AFTER MATCH SKIP PAST LAST ROW
+  PATTERN (A B+ C)
+  DEFINE
+    A AS A.\`event_type\` = 'login',
+    B AS B.\`amount\` > 1000,
+    C AS C.\`event_type\` = 'withdrawal'
+);
+"
+`;

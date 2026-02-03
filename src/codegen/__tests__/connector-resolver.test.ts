@@ -7,6 +7,7 @@ import { KafkaSink } from '../../components/sinks.js';
 import { JdbcSink } from '../../components/sinks.js';
 import { FileSystemSink } from '../../components/sinks.js';
 import { Filter } from '../../components/transforms.js';
+import { UDF } from '../../components/escape-hatches.js';
 import { Pipeline } from '../../components/pipeline.js';
 import { resolveConnectors } from '../connector-resolver.js';
 
@@ -303,5 +304,66 @@ describe('provenance tracking', () => {
     expect(kafkaJar).toBeDefined();
     // Both the source and sink should be in provenance
     expect(kafkaJar!.provenance.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// ── UDF JAR Inclusion ─────────────────────────────────────────────
+
+describe('UDF JAR inclusion', () => {
+  it('includes UDF JAR in resolved JARs', () => {
+    const udf = UDF({
+      name: 'my_hash',
+      className: 'com.mycompany.HashFunction',
+      jarPath: '/opt/flink/lib/udf.jar',
+    });
+
+    const source = KafkaSource({
+      topic: 'orders',
+      schema: OrderSchema,
+    });
+
+    const sink = KafkaSink({
+      topic: 'output',
+      children: [source],
+    });
+
+    const pipeline = Pipeline({ name: 'test', children: [udf, sink] });
+
+    const result = resolveConnectors(pipeline, { flinkVersion: '2.0' });
+    const udfJar = result.jars.find((j) => j.artifact.artifactId === 'udf');
+    expect(udfJar).toBeDefined();
+    expect(udfJar!.jarName).toBe('udf.jar');
+    expect(udfJar!.downloadUrl).toBe('file:///opt/flink/lib/udf.jar');
+  });
+
+  it('de-duplicates same UDF JAR from multiple UDFs', () => {
+    const udf1 = UDF({
+      name: 'func_a',
+      className: 'com.example.FuncA',
+      jarPath: '/opt/flink/lib/shared-udf.jar',
+    });
+
+    const udf2 = UDF({
+      name: 'func_b',
+      className: 'com.example.FuncB',
+      jarPath: '/opt/flink/lib/shared-udf.jar',
+    });
+
+    const source = KafkaSource({
+      topic: 'events',
+      schema: OrderSchema,
+    });
+
+    const sink = KafkaSink({
+      topic: 'output',
+      children: [source],
+    });
+
+    const pipeline = Pipeline({ name: 'test', children: [udf1, udf2, sink] });
+
+    const result = resolveConnectors(pipeline, { flinkVersion: '2.0' });
+    const udfJars = result.jars.filter((j) => j.artifact.groupId === 'local');
+    expect(udfJars).toHaveLength(1);
+    expect(udfJars[0].jarName).toBe('shared-udf.jar');
   });
 });

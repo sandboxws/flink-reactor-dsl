@@ -49,6 +49,12 @@ export function generateSql(
     statements.push(generateCatalogDdl(cat));
   }
 
+  // 2.5. CREATE FUNCTION (UDFs)
+  const udfs = ctx.getNodesByKind('UDF');
+  for (const udf of udfs) {
+    statements.push(generateUdfDdl(udf));
+  }
+
   // 3. CREATE TABLE (sources)
   const sources = ctx.getNodesByKind('Source');
   for (const src of sources) {
@@ -235,6 +241,14 @@ function generateCatalogDdl(node: ConstructNode): string {
     .join(',\n');
 
   return `CREATE CATALOG ${q(name)} WITH (\n${withClause}\n);`;
+}
+
+// ── CREATE FUNCTION DDL (UDFs) ──────────────────────────────────────
+
+function generateUdfDdl(node: ConstructNode): string {
+  const name = node.props.name as string;
+  const className = node.props.className as string;
+  return `CREATE FUNCTION ${q(name)} AS '${className}';`;
 }
 
 // ── CREATE TABLE DDL (Sources) ──────────────────────────────────────
@@ -568,6 +582,14 @@ function buildQuery(
     case 'SessionWindow':
       return buildWindowQuery(node, nodeIndex);
 
+    // Escape hatches
+    case 'RawSQL':
+      return buildRawSqlQuery(node);
+
+    // CEP
+    case 'MatchRecognize':
+      return buildMatchRecognizeQuery(node, nodeIndex);
+
     default:
       // Unknown — try first child
       if (node.children.length > 0) {
@@ -854,6 +876,61 @@ function buildWindowTvf(node: ConstructNode, sourceRef: string, windowCol: strin
     default:
       return `UNKNOWN_WINDOW(TABLE ${sourceRef})`;
   }
+}
+
+// ── RawSQL ──────────────────────────────────────────────────────────
+
+function buildRawSqlQuery(node: ConstructNode): string {
+  const sql = node.props.sql as string;
+  return sql;
+}
+
+// ── MatchRecognize (CEP) ────────────────────────────────────────────
+
+function buildMatchRecognizeQuery(
+  node: ConstructNode,
+  nodeIndex: Map<string, ConstructNode>,
+): string {
+  const pattern = node.props.pattern as string;
+  const define = node.props.define as Record<string, string>;
+  const measures = node.props.measures as Record<string, string>;
+  const after = node.props.after as string | undefined;
+  const partitionBy = node.props.partitionBy as readonly string[] | undefined;
+  const orderBy = node.props.orderBy as string | undefined;
+
+  const upstream = getUpstream(node, nodeIndex);
+  const fromClause = upstream.isSimple ? upstream.sourceRef : `(\n${upstream.sql}\n)`;
+
+  const parts: string[] = [];
+
+  if (partitionBy && partitionBy.length > 0) {
+    parts.push(`  PARTITION BY ${partitionBy.map(q).join(', ')}`);
+  }
+
+  if (orderBy) {
+    parts.push(`  ORDER BY ${q(orderBy)}`);
+  }
+
+  const measuresClause = Object.entries(measures)
+    .map(([alias, expr]) => `    ${expr} AS ${q(alias)}`)
+    .join(',\n');
+  parts.push(`  MEASURES\n${measuresClause}`);
+
+  if (after) {
+    const strategy = after === 'NEXT_ROW'
+      ? 'SKIP TO NEXT ROW'
+      : 'SKIP PAST LAST ROW';
+    parts.push(`  AFTER MATCH ${strategy}`);
+  }
+
+  parts.push(`  PATTERN (${pattern})`);
+
+  const defineClause = Object.entries(define)
+    .map(([variable, condition]) => `    ${variable} AS ${condition}`)
+    .join(',\n');
+  parts.push(`  DEFINE\n${defineClause}`);
+
+  return `SELECT *\nFROM ${fromClause}\nMATCH_RECOGNIZE (\n${parts.join('\n')}\n)`;
 }
 
 // ── Ref resolution ──────────────────────────────────────────────────

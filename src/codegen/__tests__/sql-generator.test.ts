@@ -8,6 +8,8 @@ import { Join, TemporalJoin, LookupJoin, IntervalJoin } from '../../components/j
 import { TumbleWindow } from '../../components/windows.js';
 import { PaimonCatalog } from '../../components/catalogs.js';
 import { CatalogSource } from '../../components/catalog-source.js';
+import { RawSQL, UDF } from '../../components/escape-hatches.js';
+import { MatchRecognize } from '../../components/cep.js';
 import { Pipeline } from '../../components/pipeline.js';
 import { generateSql } from '../sql-generator.js';
 
@@ -500,5 +502,143 @@ describe('6.12: Broadcast hint in join SQL', () => {
 
     const result = generateSql(pipeline);
     expect(result.sql).toMatchSnapshot();
+  });
+});
+
+// ── 9.1: RawSQL inlines SQL in pipeline output ──────────────────────
+
+describe('9.1: RawSQL inlines SQL in pipeline', () => {
+  it('inlines raw SQL as a subquery', () => {
+    const orders = KafkaSource({
+      topic: 'orders',
+      schema: OrderSchema,
+      bootstrapServers: 'kafka:9092',
+    });
+
+    const users = KafkaSource({
+      topic: 'users',
+      schema: UserSchema,
+      bootstrapServers: 'kafka:9092',
+    });
+
+    const raw = RawSQL({
+      sql: 'SELECT o.*, u.name AS user_name FROM `KafkaSource_0` o JOIN `KafkaSource_1` u ON o.`user_id` = u.`user_id`',
+      inputs: [orders, users],
+      outputSchema: Schema({
+        fields: {
+          order_id: Field.BIGINT(),
+          user_name: Field.STRING(),
+        },
+      }),
+    });
+
+    const sink = KafkaSink({
+      topic: 'enriched-orders',
+      children: [raw],
+    });
+
+    const pipeline = Pipeline({
+      name: 'raw-sql-pipeline',
+      children: [sink],
+    });
+
+    const result = generateSql(pipeline);
+    expect(result.sql).toMatchSnapshot();
+  });
+});
+
+// ── 9.2: UDF generates CREATE FUNCTION DDL ──────────────────────────
+
+describe('9.2: UDF generates CREATE FUNCTION DDL', () => {
+  it('produces CREATE FUNCTION statement', () => {
+    const udf = UDF({
+      name: 'my_hash',
+      className: 'com.mycompany.HashFunction',
+      jarPath: '/path/to/udf.jar',
+    });
+
+    const source = KafkaSource({
+      topic: 'events',
+      schema: EventSchema,
+      bootstrapServers: 'kafka:9092',
+    });
+
+    const mapped = Map({
+      select: { event_id: '`event_id`', hashed: 'my_hash(`payload`)' },
+      children: [source],
+    });
+
+    const sink = KafkaSink({
+      topic: 'hashed-events',
+      children: [mapped],
+    });
+
+    const pipeline = Pipeline({
+      name: 'udf-pipeline',
+      children: [udf, sink],
+    });
+
+    const result = generateSql(pipeline);
+    expect(result.sql).toMatchSnapshot();
+    expect(result.statements.some((s) => s.includes('CREATE FUNCTION'))).toBe(true);
+    expect(result.statements.some((s) => s.includes("'com.mycompany.HashFunction'"))).toBe(true);
+  });
+});
+
+// ── 9.3: MatchRecognize generates MATCH_RECOGNIZE clause ────────────
+
+describe('9.3: MatchRecognize generates MATCH_RECOGNIZE clause', () => {
+  it('produces MATCH_RECOGNIZE with PARTITION BY, ORDER BY, MEASURES, PATTERN, DEFINE', () => {
+    const source = KafkaSource({
+      topic: 'transactions',
+      schema: Schema({
+        fields: {
+          user_id: Field.STRING(),
+          amount: Field.DECIMAL(10, 2),
+          event_type: Field.STRING(),
+          event_time: Field.TIMESTAMP(3),
+        },
+        watermark: {
+          column: 'event_time',
+          expression: "`event_time` - INTERVAL '5' SECOND",
+        },
+      }),
+      bootstrapServers: 'kafka:9092',
+    });
+
+    const cep = MatchRecognize({
+      input: source,
+      pattern: 'A B+ C',
+      define: {
+        A: "A.`event_type` = 'login'",
+        B: 'B.`amount` > 1000',
+        C: "C.`event_type` = 'withdrawal'",
+      },
+      measures: {
+        start_time: 'A.`event_time`',
+        end_time: 'C.`event_time`',
+        total_amount: 'SUM(B.`amount`)',
+      },
+      partitionBy: ['user_id'],
+      orderBy: 'event_time',
+      after: 'MATCH_RECOGNIZED',
+    });
+
+    const sink = KafkaSink({
+      topic: 'fraud-alerts',
+      children: [cep],
+    });
+
+    const pipeline = Pipeline({
+      name: 'cep-pipeline',
+      children: [sink],
+    });
+
+    const result = generateSql(pipeline);
+    expect(result.sql).toMatchSnapshot();
+    expect(result.sql).toContain('MATCH_RECOGNIZE');
+    expect(result.sql).toContain('PATTERN (A B+ C)');
+    expect(result.sql).toContain('DEFINE');
+    expect(result.sql).toContain('MEASURES');
   });
 });

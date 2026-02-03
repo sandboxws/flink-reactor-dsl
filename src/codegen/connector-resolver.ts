@@ -82,6 +82,32 @@ function collectUsages(node: ConstructNode): ConnectorUsage[] {
   return usages;
 }
 
+// ── UDF JAR collection ──────────────────────────────────────────────
+
+interface UdfJarUsage {
+  readonly jarPath: string;
+  readonly nodeId: string;
+}
+
+function collectUdfJars(node: ConstructNode): UdfJarUsage[] {
+  const usages: UdfJarUsage[] = [];
+
+  function walk(n: ConstructNode): void {
+    if (n.component === 'UDF' && n.props.jarPath) {
+      usages.push({
+        jarPath: n.props.jarPath as string,
+        nodeId: n.id,
+      });
+    }
+    for (const child of n.children) {
+      walk(child);
+    }
+  }
+
+  walk(node);
+  return usages;
+}
+
 // ── De-duplication key ──────────────────────────────────────────────
 
 function usageKey(usage: ConnectorUsage): string {
@@ -220,19 +246,40 @@ export function resolveConnectors(
     }
   }
 
+  // 3.5. Collect UDF JARs from the tree
+  const udfJars = collectUdfJars(pipelineNode);
+  for (const udf of udfJars) {
+    const jarName = udf.jarPath.split('/').pop() ?? udf.jarPath;
+    const udfArtifact: MavenArtifact = {
+      groupId: 'local',
+      artifactId: jarName.replace(/\.jar$/, ''),
+      version: 'local',
+    };
+    trackArtifact(udfArtifact, [udf.nodeId]);
+  }
+
   // 4. De-duplicate artifacts and build final ResolvedJar list
   const seen = new Set<string>();
   const jars: ResolvedJar[] = [];
+
+  // Also index UDF local JARs by path for download URL resolution
+  const udfJarPaths = new Map<string, string>();
+  for (const udf of udfJars) {
+    const jarName = udf.jarPath.split('/').pop() ?? udf.jarPath;
+    const artId = jarName.replace(/\.jar$/, '');
+    udfJarPaths.set(`local:${artId}:local`, udf.jarPath);
+  }
 
   for (const artifact of allArtifacts) {
     const key = artifactKey(artifact);
     if (seen.has(key)) continue;
     seen.add(key);
 
+    const localPath = udfJarPaths.get(key);
     jars.push({
       artifact,
-      jarName: artifactToJarName(artifact),
-      downloadUrl: artifactToMavenUrl(artifact, mavenBase),
+      jarName: localPath ? (localPath.split('/').pop() ?? artifactToJarName(artifact)) : artifactToJarName(artifact),
+      downloadUrl: localPath ? `file://${localPath}` : artifactToMavenUrl(artifact, mavenBase),
       provenance: provenanceMap.get(key) ?? [],
     });
   }
