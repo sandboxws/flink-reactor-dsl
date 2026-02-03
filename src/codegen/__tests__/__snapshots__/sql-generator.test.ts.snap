@@ -1,0 +1,361 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`6.1: KafkaSource → Filter → KafkaSink > produces correct DDL + DML 1`] = `
+"CREATE TABLE \`KafkaSource_0\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSink_2\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'large-orders',
+  'format' = 'json'
+);
+
+INSERT INTO \`KafkaSink_2\`
+SELECT * FROM \`KafkaSource_0\` WHERE \`amount\` > 100;
+"
+`;
+
+exports[`6.2: Two-table inner join > produces correct JOIN SQL 1`] = `
+"CREATE TABLE \`KafkaSource_0\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSource_1\` (
+  \`user_id\` STRING,
+  \`name\` STRING,
+  \`email\` STRING
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'users',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSink_3\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'enriched-orders',
+  'format' = 'json'
+);
+
+INSERT INTO \`KafkaSink_3\`
+SELECT * FROM \`KafkaSource_0\` INNER JOIN \`KafkaSource_1\` ON \`KafkaSource_0\`.\`user_id\` = \`KafkaSource_1\`.\`user_id\`;
+"
+`;
+
+exports[`6.3: Windowed aggregation with TUMBLE > produces correct TVF + GROUP BY 1`] = `
+"CREATE TABLE \`KafkaSource_0\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSink_3\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'hourly-totals',
+  'format' = 'json'
+);
+
+INSERT INTO \`KafkaSink_3\`
+SELECT \`user_id\`, SUM(\`amount\`) AS \`total_amount\`, COUNT(*) AS \`order_count\`, window_start, window_end FROM TABLE(
+  TUMBLE(TABLE \`KafkaSource_0\`, DESCRIPTOR(\`event_time\`), INTERVAL '1' HOUR)
+) GROUP BY \`user_id\`, window_start, window_end;
+"
+`;
+
+exports[`6.4: Deduplicate produces ROW_NUMBER pattern > produces correct ROW_NUMBER with WHERE rownum = 1 1`] = `
+"CREATE TABLE \`KafkaSource_0\` (
+  \`event_id\` BIGINT,
+  \`user_id\` STRING,
+  \`event_type\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  \`payload\` STRING,
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'events',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSink_2\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'deduped-events',
+  'format' = 'json'
+);
+
+INSERT INTO \`KafkaSink_2\`
+SELECT * FROM (
+  SELECT *, ROW_NUMBER() OVER (PARTITION BY \`event_id\` ORDER BY \`event_time\` ASC) AS rownum
+  FROM \`KafkaSource_0\`
+) WHERE rownum = 1;
+"
+`;
+
+exports[`6.5: TopN produces ROW_NUMBER pattern > produces correct ROW_NUMBER with WHERE rownum <= N 1`] = `
+"CREATE TABLE \`KafkaSource_0\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSink_2\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'top-orders',
+  'format' = 'json'
+);
+
+INSERT INTO \`KafkaSink_2\`
+SELECT * FROM (
+  SELECT *, ROW_NUMBER() OVER (PARTITION BY \`user_id\` ORDER BY \`amount\` DESC) AS rownum
+  FROM \`KafkaSource_0\`
+) WHERE rownum <= 5;
+"
+`;
+
+exports[`6.6: Multi-sink produces STATEMENT SET > wraps multiple INSERT INTO in STATEMENT SET 1`] = `
+"CREATE TABLE \`KafkaSource_0\` (
+  \`event_id\` BIGINT,
+  \`user_id\` STRING,
+  \`event_type\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  \`payload\` STRING,
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'events',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSink_4\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'errors',
+  'format' = 'json'
+);
+
+CREATE TABLE \`KafkaSink_5\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'all-events',
+  'format' = 'json'
+);
+
+EXECUTE STATEMENT SET BEGIN
+INSERT INTO \`KafkaSink_4\`
+SELECT * FROM \`KafkaSource_0\` WHERE \`event_type\` = 'ERROR';
+INSERT INTO \`KafkaSink_5\`
+SELECT * FROM \`KafkaSource_0\`;
+END;
+"
+`;
+
+exports[`6.7: Catalog pipeline produces CREATE CATALOG > generates CREATE CATALOG and catalog-qualified references 1`] = `
+"CREATE CATALOG \`lake\` WITH (
+  'type' = 'paimon',
+  'warehouse' = 's3://bucket/paimon'
+);
+
+CREATE TABLE \`KafkaSink_2\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'page-view-alerts',
+  'format' = 'json'
+);
+
+INSERT INTO \`KafkaSink_2\`
+SELECT * FROM \`lake\`.\`analytics\`.\`page_views\`;
+"
+`;
+
+exports[`6.8: CDC source with debezium-json > produces Kafka source DDL with debezium-json format 1`] = `
+"CREATE TABLE \`KafkaSource_0\` (
+  \`order_id\` BIGINT,
+  \`product\` STRING,
+  \`quantity\` INT,
+  \`price\` DECIMAL(10, 2),
+  PRIMARY KEY (\`order_id\`) NOT ENFORCED
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'dbserver1.inventory.orders',
+  'format' = 'debezium-json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`JdbcSink_1\` (
+  PRIMARY KEY (\`order_id\`) NOT ENFORCED
+) WITH (
+  'connector' = 'jdbc',
+  'url' = 'jdbc:postgresql://localhost:5432/warehouse',
+  'table-name' = 'orders_snapshot'
+);
+
+INSERT INTO \`JdbcSink_1\`
+SELECT * FROM \`KafkaSource_0\`;
+"
+`;
+
+exports[`6.9: LookupJoin with async config > produces lookup join with proc_time and FOR SYSTEM_TIME AS OF 1`] = `
+"CREATE TABLE \`KafkaSource_0\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSink_2\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'enriched-orders',
+  'format' = 'json'
+);
+
+INSERT INTO \`KafkaSink_2\`
+SELECT * FROM \`KafkaSource_0\` LEFT JOIN \`dim_users\` FOR SYSTEM_TIME AS OF \`KafkaSource_0\`.proc_time ON \`KafkaSource_0\`.\`user_id\` = \`dim_users\`.\`user_id\`;
+"
+`;
+
+exports[`6.10: IntervalJoin with time bounds > produces BETWEEN ... AND ... time predicates 1`] = `
+"CREATE TABLE \`KafkaSource_0\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSource_1\` (
+  \`order_id\` BIGINT,
+  \`shipped_time\` TIMESTAMP(3),
+  \`carrier\` STRING,
+  WATERMARK FOR \`shipped_time\` AS \`shipped_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'shipments',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSink_3\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'order-shipments',
+  'format' = 'json'
+);
+
+INSERT INTO \`KafkaSink_3\`
+SELECT * FROM \`KafkaSource_0\` JOIN \`KafkaSource_1\` ON \`KafkaSource_0\`.\`order_id\` = \`KafkaSource_1\`.\`order_id\` AND \`KafkaSource_0\`.event_time BETWEEN \`KafkaSource_1\`.event_time AND \`KafkaSource_1\`.event_time + INTERVAL '7' DAY;
+"
+`;
+
+exports[`6.11: Anti join produces WHERE NOT EXISTS > generates correlated subquery with NOT EXISTS 1`] = `
+"CREATE TABLE \`KafkaSource_0\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSource_1\` (
+  \`order_id\` BIGINT,
+  \`cancelled_at\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'cancellations',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSink_3\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'active-orders',
+  'format' = 'json'
+);
+
+INSERT INTO \`KafkaSink_3\`
+SELECT \`KafkaSource_0\`.* FROM \`KafkaSource_0\` WHERE NOT EXISTS (
+  SELECT 1 FROM \`KafkaSource_1\` WHERE \`KafkaSource_0\`.\`order_id\` = \`KafkaSource_1\`.\`order_id\`
+);
+"
+`;
+
+exports[`6.12: Broadcast hint in join SQL > generates /*+ BROADCAST(alias) */ hint 1`] = `
+"CREATE TABLE \`KafkaSource_0\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSource_1\` (
+  \`product_id\` STRING,
+  \`product_name\` STRING,
+  \`category\` STRING
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'products',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSink_3\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'enriched-orders',
+  'format' = 'json'
+);
+
+INSERT INTO \`KafkaSink_3\`
+SELECT /*+ BROADCAST(\`KafkaSource_1\`) */ * FROM \`KafkaSource_0\` INNER JOIN \`KafkaSource_1\` ON \`KafkaSource_0\`.\`product_id\` = \`KafkaSource_1\`.\`product_id\`;
+"
+`;
