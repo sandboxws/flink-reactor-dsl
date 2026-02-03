@@ -3,6 +3,11 @@ import { registerNewCommand } from './commands/new.js';
 import { registerDoctorCommand } from './commands/doctor.js';
 import { registerInstallCommand } from './commands/install.js';
 import { registerGenerateCommand } from './commands/generate.js';
+import { registerSynthCommand } from './commands/synth.js';
+import { registerValidateCommand } from './commands/validate.js';
+import { registerGraphCommand } from './commands/graph.js';
+import { registerDevCommand } from './commands/dev.js';
+import { registerDeployCommand } from './commands/deploy.js';
 
 const VERSION = '0.1.0';
 
@@ -14,52 +19,18 @@ export function createProgram(): Command {
     .description('React-style TSX DSL that synthesizes to Flink SQL + Kubernetes CRDs')
     .version(VERSION);
 
-  // Implemented commands
+  // Scaffold commands
   registerNewCommand(program);
   registerDoctorCommand(program);
   registerInstallCommand(program);
   registerGenerateCommand(program);
 
-  // Stub commands (implemented in change 11)
-  program
-    .command('synth')
-    .description('Synthesize pipelines to Flink SQL and CRDs')
-    .action(() => {
-      console.log('Not yet implemented. Coming soon.');
-      process.exitCode = 1;
-    });
-
-  program
-    .command('validate')
-    .description('Validate pipeline definitions and configuration')
-    .action(() => {
-      console.log('Not yet implemented. Coming soon.');
-      process.exitCode = 1;
-    });
-
-  program
-    .command('graph')
-    .description('Visualize pipeline DAG')
-    .action(() => {
-      console.log('Not yet implemented. Coming soon.');
-      process.exitCode = 1;
-    });
-
-  program
-    .command('dev')
-    .description('Start development mode with file watching')
-    .action(() => {
-      console.log('Not yet implemented. Coming soon.');
-      process.exitCode = 1;
-    });
-
-  program
-    .command('deploy')
-    .description('Deploy pipelines to a Kubernetes cluster')
-    .action(() => {
-      console.log('Not yet implemented. Coming soon.');
-      process.exitCode = 1;
-    });
+  // Core commands
+  registerSynthCommand(program);
+  registerValidateCommand(program);
+  registerGraphCommand(program);
+  registerDevCommand(program);
+  registerDeployCommand(program);
 
   return program;
 }
