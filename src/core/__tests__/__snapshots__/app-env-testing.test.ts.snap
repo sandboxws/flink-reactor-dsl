@@ -1,0 +1,61 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`5.5: synth() test helper > works with toMatchSnapshot() 1`] = `
+"SET 'parallelism.default' = '1';
+
+CREATE TABLE \`KafkaSource_0\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json'
+);
+
+CREATE TABLE \`KafkaSink_1\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'output',
+  'format' = 'json'
+);
+
+INSERT INTO \`KafkaSink_1\`
+SELECT * FROM \`KafkaSource_0\`;
+"
+`;
+
+exports[`5.5: synth() test helper > works with toMatchSnapshot() 2`] = `
+{
+  "apiVersion": "flink.apache.org/v1beta1",
+  "kind": "FlinkDeployment",
+  "metadata": {
+    "name": "snapshot-test",
+  },
+  "spec": {
+    "flinkConfiguration": {
+      "execution.runtime-mode": "STREAMING",
+    },
+    "flinkVersion": "v2_0",
+    "image": "flink:2.0",
+    "job": {
+      "jarURI": "local:///opt/flink/usrlib/sql-runner.jar",
+      "parallelism": 1,
+    },
+    "jobManager": {
+      "replicas": 1,
+      "resource": {
+        "cpu": "1",
+        "memory": "1024m",
+      },
+    },
+    "taskManager": {
+      "resource": {
+        "cpu": "1",
+        "memory": "1024m",
+      },
+    },
+  },
+}
+`;
