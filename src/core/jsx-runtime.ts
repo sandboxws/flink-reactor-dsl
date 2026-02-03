@@ -25,6 +25,7 @@ const KIND_MAP: ReadonlyMap<string, NodeKind> = new Map([
   ['FileSystemSink', 'Sink'],
   ['PaimonSink', 'Sink'],
   ['IcebergSink', 'Sink'],
+  ['GenericSink', 'Sink'],
   ['Filter', 'Transform'],
   ['Map', 'Transform'],
   ['FlatMap', 'Transform'],
