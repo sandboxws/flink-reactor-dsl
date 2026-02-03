@@ -1,0 +1,54 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`CRD generation: batch mode pipeline > produces snapshot-stable YAML for batch 1`] = `
+"apiVersion: flink.apache.org/v1beta1
+kind: FlinkDeployment
+metadata:
+  name: batch-job
+spec:
+  image: 'flink:2.0'
+  flinkVersion: v2_0
+  flinkConfiguration:
+    execution.runtime-mode: BATCH
+  jobManager:
+    resource:
+      cpu: '1'
+      memory: 1024m
+    replicas: 1
+  taskManager:
+    resource:
+      cpu: '1'
+      memory: 1024m
+  job:
+    jarURI: 'local:///opt/flink/usrlib/sql-runner.jar'
+    parallelism: 1
+"
+`;
+
+exports[`CRD generation: streaming pipeline > produces snapshot-stable YAML 1`] = `
+"apiVersion: flink.apache.org/v1beta1
+kind: FlinkDeployment
+metadata:
+  name: orders
+spec:
+  image: 'flink:2.0'
+  flinkVersion: v2_0
+  flinkConfiguration:
+    execution.runtime-mode: STREAMING
+    execution.checkpointing.interval: '60000'
+    execution.checkpointing.mode: EXACTLY_ONCE
+    state.backend.type: hashmap
+  jobManager:
+    resource:
+      cpu: '1'
+      memory: 1024m
+    replicas: 1
+  taskManager:
+    resource:
+      cpu: '1'
+      memory: 1024m
+  job:
+    jarURI: 'local:///opt/flink/usrlib/sql-runner.jar'
+    parallelism: 4
+"
+`;
