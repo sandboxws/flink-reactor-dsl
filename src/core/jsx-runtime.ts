@@ -45,6 +45,7 @@ const KIND_MAP: ReadonlyMap<string, NodeKind> = new Map([
   ['IcebergCatalog', 'Catalog'],
   ['HiveCatalog', 'Catalog'],
   ['JdbcCatalog', 'Catalog'],
+  ['GenericCatalog', 'Catalog'],
   ['RawSQL', 'RawSQL'],
   ['UDF', 'UDF'],
   ['MatchRecognize', 'CEP'],

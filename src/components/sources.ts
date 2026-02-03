@@ -1,6 +1,18 @@
-import type { FlinkType, BaseComponentProps, ConstructNode } from '../core/types.js';
+import type { FlinkType, ChangelogMode, BaseComponentProps, ConstructNode } from '../core/types.js';
 import type { SchemaDefinition, WatermarkDeclaration } from '../core/schema.js';
 import { createElement } from '../core/jsx-runtime.js';
+
+// ── CDC format → ChangelogMode inference ────────────────────────────
+
+const CDC_FORMATS: ReadonlySet<KafkaFormat> = new Set([
+  'debezium-json',
+  'canal-json',
+  'maxwell-json',
+]);
+
+export function inferChangelogMode(format: KafkaFormat | undefined): ChangelogMode {
+  return CDC_FORMATS.has(format ?? 'json') ? 'retract' : 'append-only';
+}
 
 // ── Shared source types ─────────────────────────────────────────────
 
@@ -34,6 +46,7 @@ export interface KafkaSourceProps<T extends Record<string, FlinkType> = Record<s
   readonly watermark?: WatermarkDeclaration;
   readonly startupMode?: KafkaStartupMode;
   readonly consumerGroup?: string;
+  readonly primaryKey?: readonly string[];
   readonly children?: ConstructNode | ConstructNode[];
 }
 
@@ -42,6 +55,10 @@ export interface KafkaSourceProps<T extends Record<string, FlinkType> = Record<s
  *
  * Format defaults to 'json'. bootstrapServers falls back to
  * pipeline-level config if not specified here.
+ *
+ * When a CDC format (debezium-json, canal-json, maxwell-json) is used,
+ * the resulting stream carries ChangelogMode 'retract'. Non-CDC formats
+ * produce an 'append-only' stream.
  */
 export function KafkaSource<T extends Record<string, FlinkType>>(
   props: KafkaSourceProps<T>,
@@ -53,7 +70,9 @@ export function KafkaSource<T extends Record<string, FlinkType>>(
       ? children
       : [children];
 
-  return createElement('KafkaSource', { ...rest }, ...childArray);
+  const changelogMode = inferChangelogMode(props.format);
+
+  return createElement('KafkaSource', { ...rest, changelogMode }, ...childArray);
 }
 
 // ── JdbcSource ──────────────────────────────────────────────────────

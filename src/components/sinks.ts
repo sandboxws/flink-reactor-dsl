@@ -1,4 +1,5 @@
 import type { BaseComponentProps, ConstructNode } from '../core/types.js';
+import type { CatalogHandle } from './catalogs.js';
 import { createElement } from '../core/jsx-runtime.js';
 
 // ── Shared sink types ───────────────────────────────────────────────
@@ -116,4 +117,77 @@ export function GenericSink(props: GenericSinkProps): ConstructNode {
       : [children];
 
   return createElement('GenericSink', { ...rest }, ...childArray);
+}
+
+// ── PaimonSink ─────────────────────────────────────────────────────
+
+export type PaimonMergeEngine = 'deduplicate' | 'partial-update' | 'aggregation';
+export type PaimonChangelogProducer = 'input' | 'lookup' | 'full-compaction';
+
+export interface PaimonSinkProps extends BaseComponentProps {
+  readonly catalog: CatalogHandle;
+  readonly database: string;
+  readonly table: string;
+  readonly primaryKey?: readonly string[];
+  readonly mergeEngine?: PaimonMergeEngine;
+  readonly changelogProducer?: PaimonChangelogProducer;
+  readonly sequenceField?: string;
+  readonly children?: ConstructNode | ConstructNode[];
+}
+
+/**
+ * Paimon sink: writes to an Apache Paimon lakehouse table.
+ *
+ * References a PaimonCatalog handle to form catalog-qualified table names.
+ * Supports merge engines for deduplication, partial updates, and aggregation.
+ * `changelogProducer` controls how the table generates changelog for
+ * downstream consumers.
+ */
+export function PaimonSink(props: PaimonSinkProps): ConstructNode {
+  const { children, catalog, ...rest } = props;
+  const childArray = children == null
+    ? []
+    : Array.isArray(children)
+      ? children
+      : [children];
+
+  return createElement('PaimonSink', {
+    ...rest,
+    catalogName: catalog.catalogName,
+    catalogNodeId: catalog.nodeId,
+  }, ...childArray);
+}
+
+// ── IcebergSink ────────────────────────────────────────────────────
+
+export interface IcebergSinkProps extends BaseComponentProps {
+  readonly catalog: CatalogHandle;
+  readonly database: string;
+  readonly table: string;
+  readonly primaryKey?: readonly string[];
+  readonly formatVersion?: 1 | 2;
+  readonly upsertEnabled?: boolean;
+  readonly children?: ConstructNode | ConstructNode[];
+}
+
+/**
+ * Iceberg sink: writes to an Apache Iceberg table.
+ *
+ * References an IcebergCatalog handle to form catalog-qualified table names.
+ * `formatVersion` 2 is required for row-level deletes (upsert support).
+ * When `upsertEnabled` is true, the sink accepts retract/upsert streams.
+ */
+export function IcebergSink(props: IcebergSinkProps): ConstructNode {
+  const { children, catalog, ...rest } = props;
+  const childArray = children == null
+    ? []
+    : Array.isArray(children)
+      ? children
+      : [children];
+
+  return createElement('IcebergSink', {
+    ...rest,
+    catalogName: catalog.catalogName,
+    catalogNodeId: catalog.nodeId,
+  }, ...childArray);
 }
