@@ -71,7 +71,7 @@ services:
         condition: service_healthy
     ports:
       - "${SQL_GATEWAY_PORT:-8083}:8083"
-    command: ["bash", "-c", "/opt/flink/bin/sql-gateway.sh start-foreground -Dsql-gateway.endpoint.rest.address=0.0.0.0 -Dsql-gateway.endpoint.rest.port=8083 -Djobmanager.rpc.address=jobmanager"]
+    command: ["bash", "-c", "/opt/flink/bin/sql-gateway.sh start-foreground -Dsql-gateway.endpoint.rest.address=0.0.0.0 -Dsql-gateway.endpoint.rest.port=8083 -Djobmanager.rpc.address=jobmanager -Drest.address=jobmanager -Drest.port=8081"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8083/info"]
       interval: 5s

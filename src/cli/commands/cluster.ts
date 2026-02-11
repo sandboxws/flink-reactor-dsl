@@ -234,7 +234,7 @@ async function seedPipelines(opts: { only?: 'streaming' | 'batch' | 'cdc' }): Pr
     const spinner = clack.spinner();
     spinner.start('Publishing CDC seed data to Kafka...');
     try {
-      await publishCdcMessages({ mode: 'batch' });
+      await publishCdcMessages({ mode: 'batch', composeFile: composePath() });
       spinner.stop(pc.green('CDC seed data published.'));
     } catch (err) {
       spinner.stop(pc.yellow('Failed to publish CDC data (Kafka may not be ready).'));
@@ -416,6 +416,7 @@ function startBackgroundCdcPublisher(): void {
   const scriptPath = join(tmpdir(), 'flink-reactor-cdc-continuous.mjs');
   const cdcModulePath = join(clusterDir(), 'cdc-publisher.js');
 
+  const compose = composePath();
   writeFileSync(
     scriptPath,
     `
@@ -423,7 +424,7 @@ import { publishCdcMessages } from '${cdcModulePath}';
 const ac = new AbortController();
 process.on('SIGTERM', () => ac.abort());
 process.on('SIGINT', () => ac.abort());
-publishCdcMessages({ mode: 'continuous', signal: ac.signal }).catch(() => {});
+publishCdcMessages({ mode: 'continuous', composeFile: '${compose}', signal: ac.signal }).catch(() => {});
 `,
     'utf-8',
   );

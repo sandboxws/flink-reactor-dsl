@@ -3,7 +3,7 @@ import pc from 'picocolors';
 
 export interface CdcPublishOptions {
   mode: 'batch' | 'continuous';
-  kafkaContainer?: string;
+  composeFile?: string;
   topic?: string;
   intervalMs?: number;
   signal?: AbortSignal;
@@ -31,18 +31,18 @@ const SEED_PRODUCTS: Product[] = [
 ];
 
 export async function publishCdcMessages(opts: CdcPublishOptions): Promise<void> {
-  const container = opts.kafkaContainer ?? 'kafka';
+  const composeFile = opts.composeFile;
   const topic = opts.topic ?? 'cdc.inventory.products';
   const intervalMs = opts.intervalMs ?? 5_000;
 
   if (opts.mode === 'batch') {
-    await publishBatch(container, topic);
+    await publishBatch(composeFile, topic);
   } else {
-    await publishContinuous(container, topic, intervalMs, opts.signal);
+    await publishContinuous(composeFile, topic, intervalMs, opts.signal);
   }
 }
 
-async function publishBatch(container: string, topic: string): Promise<void> {
+async function publishBatch(composeFile: string | undefined, topic: string): Promise<void> {
   const messages: string[] = [];
 
   // 10 inserts
@@ -70,12 +70,12 @@ async function publishBatch(container: string, topic: string): Promise<void> {
     );
   }
 
-  publishToKafka(container, topic, messages);
+  publishToKafka(composeFile, topic, messages);
   console.log(`  ${pc.green('✓')} Published ${messages.length} CDC messages to ${pc.dim(topic)}`);
 }
 
 async function publishContinuous(
-  container: string,
+  composeFile: string | undefined,
   topic: string,
   intervalMs: number,
   signal?: AbortSignal,
@@ -97,7 +97,7 @@ async function publishContinuous(
 
     const message = JSON.stringify(createDebeziumEnvelope('u', before, after));
     try {
-      publishToKafka(container, topic, [message]);
+      publishToKafka(composeFile, topic, [message]);
     } catch {
       // Container might be stopped — exit gracefully
       break;
@@ -144,11 +144,12 @@ function createDebeziumEnvelope(
   };
 }
 
-function publishToKafka(container: string, topic: string, messages: string[]): void {
-  // Pipe all messages to kafka-console-producer via docker exec
+function publishToKafka(composeFile: string | undefined, topic: string, messages: string[]): void {
+  // Pipe messages to kafka-console-producer via docker compose exec (uses service names)
   const input = messages.join('\n');
+  const composeArgs = composeFile ? `docker compose -f "${composeFile}" exec -T` : 'docker compose exec -T';
   execSync(
-    `docker exec -i ${container} /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic ${topic}`,
+    `${composeArgs} kafka /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic ${topic}`,
     {
       input,
       stdio: ['pipe', 'pipe', 'pipe'],
