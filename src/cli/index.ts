@@ -8,6 +8,7 @@ import { registerValidateCommand } from './commands/validate.js';
 import { registerGraphCommand } from './commands/graph.js';
 import { registerDevCommand } from './commands/dev.js';
 import { registerDeployCommand } from './commands/deploy.js';
+import { registerClusterCommand } from './commands/cluster.js';
 
 const VERSION = '0.1.0';
 
@@ -31,6 +32,7 @@ export function createProgram(): Command {
   registerGraphCommand(program);
   registerDevCommand(program);
   registerDeployCommand(program);
+  registerClusterCommand(program);
 
   return program;
 }
