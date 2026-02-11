@@ -4,7 +4,7 @@
   "description": "React-style TSX DSL that synthesizes to Flink SQL + Kubernetes FlinkDeployment CRDs",
   "type": "module",
   "bin": {
-    "flink-reactor": "./dist/cli/index.js"
+    "flink-reactor": "./dist/index.js"
   },
   "scripts": {
     "build": "tsup",

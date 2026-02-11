@@ -8,11 +8,20 @@ import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 
 // ── Resource path resolution ─────────────────────────────────────────
+// When bundled by tsup → dist/index.js, __dirname = <root>/dist
+// When running from source, __dirname = <root>/src/cli/commands
+// In both cases we need to find <root>/src/cli/cluster/
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 function clusterDir(): string {
+  // Bundled: dist/ → ../src/cli/cluster
+  const fromDist = join(__dirname, '..', 'src', 'cli', 'cluster');
+  if (existsSync(join(fromDist, 'docker-compose.yml'))) {
+    return fromDist;
+  }
+  // Source: src/cli/commands/ → ../cluster
   return join(__dirname, '..', 'cluster');
 }
 
