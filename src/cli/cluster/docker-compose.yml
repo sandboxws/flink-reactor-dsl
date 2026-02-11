@@ -3,7 +3,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.flink
-    image: flink-reactor-dev
     ports:
       - "${FLINK_PORT:-8081}:8081"
     command: jobmanager
@@ -24,7 +23,9 @@ services:
       retries: 10
 
   taskmanager-1:
-    image: flink-reactor-dev
+    build:
+      context: .
+      dockerfile: Dockerfile.flink
     depends_on:
       jobmanager:
         condition: service_healthy
@@ -42,7 +43,9 @@ services:
       - flink-data:/opt/flink/data
 
   taskmanager-2:
-    image: flink-reactor-dev
+    build:
+      context: .
+      dockerfile: Dockerfile.flink
     depends_on:
       jobmanager:
         condition: service_healthy
@@ -60,7 +63,9 @@ services:
       - flink-data:/opt/flink/data
 
   sql-gateway:
-    image: flink-reactor-dev
+    build:
+      context: .
+      dockerfile: Dockerfile.flink
     depends_on:
       jobmanager:
         condition: service_healthy
@@ -80,24 +85,24 @@ services:
       retries: 10
 
   kafka:
-    image: bitnami/kafka:3.7
+    image: apache/kafka:3.9.0
     ports:
       - "${KAFKA_EXTERNAL_PORT:-9094}:9094"
     environment:
-      # KRaft mode (no Zookeeper)
-      KAFKA_CFG_NODE_ID: 1
-      KAFKA_CFG_PROCESS_ROLES: broker,controller
-      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
-      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      # KRaft mode (built-in, no Zookeeper)
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       # Dual listeners: internal (for Flink) + external (for host)
-      KAFKA_CFG_LISTENERS: INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:9094,CONTROLLER://0.0.0.0:9093
-      KAFKA_CFG_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:${KAFKA_EXTERNAL_PORT:-9094}
-      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
-      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:9094,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:${KAFKA_EXTERNAL_PORT:-9094}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
       # Topic defaults
-      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
     healthcheck:
-      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list"]
       interval: 5s
       timeout: 5s
       retries: 10

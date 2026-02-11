@@ -148,7 +148,7 @@ function publishToKafka(container: string, topic: string, messages: string[]): v
   // Pipe all messages to kafka-console-producer via docker exec
   const input = messages.join('\n');
   execSync(
-    `docker exec -i ${container} kafka-console-producer.sh --bootstrap-server localhost:9092 --topic ${topic}`,
+    `docker exec -i ${container} /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic ${topic}`,
     {
       input,
       stdio: ['pipe', 'pipe', 'pipe'],
