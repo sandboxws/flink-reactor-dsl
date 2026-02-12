@@ -463,3 +463,264 @@ MATCH_RECOGNIZE (
 );
 "
 `;
+
+exports[`LateralJoin produces LATERAL TABLE > generates cross join lateral table SQL 1`] = `
+"CREATE FUNCTION \`parse_address\` AS 'com.mycompany.fns.AddressParser';
+
+CREATE TABLE \`KafkaSource_0\` (
+  \`order_id\` BIGINT,
+  \`shipping_address\` STRING,
+  \`amount\` DECIMAL(10, 2)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSink_2\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'enriched-orders',
+  'format' = 'json'
+);
+
+INSERT INTO \`KafkaSink_2\`
+SELECT \`KafkaSource_0\`.*, T.\`street\`, T.\`city\`, T.\`zip\` FROM \`KafkaSource_0\` JOIN LATERAL TABLE(parse_address(shipping_address)) AS T(\`street\`, \`city\`, \`zip\`);
+"
+`;
+
+exports[`LateralJoin produces LATERAL TABLE > generates left join lateral table SQL 1`] = `
+"CREATE TABLE \`KafkaSource_0\` (
+  \`doc_id\` BIGINT,
+  \`content\` STRING
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'documents',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSink_2\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'entities',
+  'format' = 'json'
+);
+
+INSERT INTO \`KafkaSink_2\`
+SELECT \`KafkaSource_0\`.*, T.\`entity\`, T.\`entity_type\` FROM \`KafkaSource_0\` LEFT JOIN LATERAL TABLE(extract_entities(content)) AS T(\`entity\`, \`entity_type\`);
+"
+`;
+
+exports[`SideOutput produces STATEMENT SET with main + side INSERTs > generates WHERE NOT for main path and WHERE for side path with metadata 1`] = `
+"CREATE TABLE \`KafkaSource_0\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSink_4\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'processed-orders',
+  'format' = 'json'
+);
+
+CREATE TABLE \`KafkaSink_1\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'order-errors',
+  'format' = 'json'
+);
+
+EXECUTE STATEMENT SET BEGIN
+INSERT INTO \`KafkaSink_4\`
+SELECT * FROM \`KafkaSource_0\` WHERE NOT (amount < 0 OR user_id IS NULL);
+INSERT INTO \`KafkaSink_1\`
+SELECT *, CURRENT_TIMESTAMP AS \`_side_ts\`, 'invalid-order' AS \`_side_tag\` FROM \`KafkaSource_0\` WHERE (amount < 0 OR user_id IS NULL);
+END;
+"
+`;
+
+exports[`SideOutput produces STATEMENT SET with main + side INSERTs > generates side output without tag 1`] = `
+"CREATE TABLE \`KafkaSource_0\` (
+  \`event_id\` BIGINT,
+  \`user_id\` STRING,
+  \`event_type\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  \`payload\` STRING,
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'events',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSink_4\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'good-events',
+  'format' = 'json'
+);
+
+CREATE TABLE \`KafkaSink_1\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'bad-events',
+  'format' = 'json'
+);
+
+EXECUTE STATEMENT SET BEGIN
+INSERT INTO \`KafkaSink_4\`
+SELECT * FROM \`KafkaSource_0\` WHERE NOT (payload IS NULL);
+INSERT INTO \`KafkaSink_1\`
+SELECT *, CURRENT_TIMESTAMP AS \`_side_ts\` FROM \`KafkaSource_0\` WHERE (payload IS NULL);
+END;
+"
+`;
+
+exports[`Validate produces STATEMENT SET with valid + reject INSERTs > generates full validation SQL with notNull, range, and expression rules 1`] = `
+"CREATE TABLE \`KafkaSource_0\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`email\` STRING
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'raw-orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSink_4\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'valid-orders',
+  'format' = 'json'
+);
+
+CREATE TABLE \`KafkaSink_1\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'invalid-orders',
+  'format' = 'json'
+);
+
+EXECUTE STATEMENT SET BEGIN
+INSERT INTO \`KafkaSink_4\`
+SELECT * FROM \`KafkaSource_0\`
+WHERE \`order_id\` IS NOT NULL
+    AND \`user_id\` IS NOT NULL
+    AND \`amount\` IS NOT NULL
+    AND \`amount\` >= 0 AND \`amount\` <= 1000000
+    AND email LIKE '%@%.%';
+INSERT INTO \`KafkaSink_1\`
+SELECT *,
+    CASE
+      WHEN \`order_id\` IS NULL THEN 'notNull:order_id'
+      WHEN \`user_id\` IS NULL THEN 'notNull:user_id'
+      WHEN \`amount\` IS NULL THEN 'notNull:amount'
+      WHEN \`amount\` < 0 OR \`amount\` > 1000000 THEN 'range:amount[0,1000000]'
+      WHEN NOT (email LIKE '%@%.%') THEN 'expression:valid_email'
+    END AS \`_validation_error\`,
+    CURRENT_TIMESTAMP AS \`_validated_at\`
+FROM \`KafkaSource_0\`
+WHERE NOT (
+    \`order_id\` IS NOT NULL
+    AND \`user_id\` IS NOT NULL
+    AND \`amount\` IS NOT NULL
+    AND \`amount\` >= 0 AND \`amount\` <= 1000000
+    AND email LIKE '%@%.%'
+);
+END;
+"
+`;
+
+exports[`Validate produces STATEMENT SET with valid + reject INSERTs > generates notNull-only validation 1`] = `
+"CREATE TABLE \`KafkaSource_0\` (
+  \`event_id\` BIGINT,
+  \`user_id\` STRING,
+  \`event_type\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  \`payload\` STRING,
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'events',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSink_4\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'validated',
+  'format' = 'json'
+);
+
+CREATE TABLE \`KafkaSink_1\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'rejected',
+  'format' = 'json'
+);
+
+EXECUTE STATEMENT SET BEGIN
+INSERT INTO \`KafkaSink_4\`
+SELECT * FROM \`KafkaSource_0\`
+WHERE \`event_id\` IS NOT NULL
+    AND \`user_id\` IS NOT NULL;
+INSERT INTO \`KafkaSink_1\`
+SELECT *,
+    CASE
+      WHEN \`event_id\` IS NULL THEN 'notNull:event_id'
+      WHEN \`user_id\` IS NULL THEN 'notNull:user_id'
+    END AS \`_validation_error\`,
+    CURRENT_TIMESTAMP AS \`_validated_at\`
+FROM \`KafkaSource_0\`
+WHERE NOT (
+    \`event_id\` IS NOT NULL
+    AND \`user_id\` IS NOT NULL
+);
+END;
+"
+`;
+
+exports[`View produces CREATE VIEW > generates CREATE VIEW from upstream Map + Source 1`] = `
+"CREATE TABLE \`KafkaSource_0\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSink_5\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'high-value',
+  'format' = 'json'
+);
+
+CREATE TABLE \`KafkaSink_7\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'all-orders',
+  'format' = 'json'
+);
+
+CREATE VIEW \`enriched_orders\` AS
+SELECT \`order_id\` AS \`order_id\`, amount * quantity AS \`total\` FROM \`KafkaSource_0\`;
+
+EXECUTE STATEMENT SET BEGIN
+INSERT INTO \`KafkaSink_5\`
+SELECT * FROM (
+SELECT * FROM \`enriched_orders\`
+) WHERE total > 1000;
+INSERT INTO \`KafkaSink_7\`
+SELECT * FROM \`enriched_orders\`;
+END;
+"
+`;

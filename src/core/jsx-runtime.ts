@@ -50,6 +50,12 @@ const KIND_MAP: ReadonlyMap<string, NodeKind> = new Map([
   ['RawSQL', 'RawSQL'],
   ['UDF', 'UDF'],
   ['MatchRecognize', 'CEP'],
+  ['SideOutput', 'Transform'],
+  ['SideOutput.Sink', 'Transform'],
+  ['Validate', 'Transform'],
+  ['Validate.Reject', 'Transform'],
+  ['View', 'View'],
+  ['LateralJoin', 'Join'],
 ]);
 
 function resolveKind(component: string): NodeKind {

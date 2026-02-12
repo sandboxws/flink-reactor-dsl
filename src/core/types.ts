@@ -98,7 +98,8 @@ export type NodeKind =
   | 'Catalog'
   | 'RawSQL'
   | 'UDF'
-  | 'CEP';
+  | 'CEP'
+  | 'View';
 
 export interface ConstructNode {
   readonly id: string;

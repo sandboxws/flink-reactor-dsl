@@ -68,6 +68,14 @@ export function generateSql(
     statements.push(generateSinkDdl(sink));
   }
 
+  // 4.5. CREATE VIEW (only for View nodes that define a query, not references)
+  const views = ctx.getNodesByKind('View');
+  for (const view of views) {
+    if (view.children.length > 0) {
+      statements.push(generateViewDdl(view, nodeIndex));
+    }
+  }
+
   // 5. DML: INSERT INTO / STATEMENT SET
   const dmlStatements = generateDml(pipelineNode, nodeIndex);
   if (dmlStatements.length === 1) {
@@ -471,12 +479,28 @@ function collectSinkDml(
       ? buildQuery(node.children[0], nodeIndex)
       : 'SELECT * FROM unknown';
     statements.push(`INSERT INTO ${sinkRef}\n${upstream};`);
+    // Recurse into upstream to find SideOutput/Validate side-path DML
+    for (const child of node.children) {
+      collectSideDml(child, nodeIndex, statements);
+    }
     return;
   }
 
   // Route generates multiple INSERT statements (one per branch)
   if (node.component === 'Route') {
     collectRouteDml(node, nodeIndex, statements);
+    return;
+  }
+
+  // SideOutput generates two INSERT statements (main + side)
+  if (node.component === 'SideOutput') {
+    collectSideOutputDml(node, nodeIndex, statements);
+    return;
+  }
+
+  // Validate generates two INSERT statements (valid + rejected)
+  if (node.component === 'Validate') {
+    collectValidateDml(node, nodeIndex, statements);
     return;
   }
 
@@ -591,6 +615,22 @@ function buildQuery(
     // CEP
     case 'MatchRecognize':
       return buildMatchRecognizeQuery(node, nodeIndex);
+
+    // Validate — main path (valid records)
+    case 'Validate':
+      return buildValidateQuery(node, nodeIndex);
+
+    // View — reference by name
+    case 'View':
+      return `SELECT * FROM ${q(node.props.name as string)}`;
+
+    // SideOutput — main path (non-matching records)
+    case 'SideOutput':
+      return buildSideOutputQuery(node, nodeIndex);
+
+    // LateralJoin — LATERAL TABLE TVF join
+    case 'LateralJoin':
+      return buildLateralJoinQuery(node, nodeIndex);
 
     default:
       // Unknown — try first child
@@ -1056,6 +1096,261 @@ function buildMatchRecognizeQuery(
   parts.push(`  DEFINE\n${defineClause}`);
 
   return `SELECT *\nFROM ${fromClause}\nMATCH_RECOGNIZE (\n${parts.join('\n')}\n)`;
+}
+
+// ── Side-path DML collector ──────────────────────────────────────────
+
+/**
+ * Recursively walk upstream nodes to find SideOutput/Validate nodes
+ * that need to emit their side-path INSERT statements.
+ */
+function collectSideDml(
+  node: ConstructNode,
+  nodeIndex: Map<string, ConstructNode>,
+  statements: string[],
+): void {
+  if (node.component === 'SideOutput') {
+    collectSideOutputDml(node, nodeIndex, statements);
+  } else if (node.component === 'Validate') {
+    collectValidateDml(node, nodeIndex, statements);
+  }
+
+  // Continue recursing to find nested SideOutput/Validate
+  for (const child of node.children) {
+    collectSideDml(child, nodeIndex, statements);
+  }
+}
+
+// ── SideOutput ──────────────────────────────────────────────────────
+
+function buildSideOutputQuery(
+  node: ConstructNode,
+  nodeIndex: Map<string, ConstructNode>,
+): string {
+  const condition = node.props.condition as string;
+
+  // Upstream is found from non-SideOutput.Sink children
+  const upstreamChildren = node.children.filter(
+    (c) => c.component !== 'SideOutput.Sink',
+  );
+  const upstream = upstreamChildren.length > 0
+    ? getUpstream({ children: upstreamChildren } as ConstructNode, nodeIndex)
+    : { sql: 'SELECT * FROM unknown', sourceRef: 'unknown', isSimple: false };
+
+  if (upstream.isSimple) {
+    return `SELECT * FROM ${upstream.sourceRef} WHERE NOT (${condition})`;
+  }
+  return `SELECT * FROM (\n${upstream.sql}\n) WHERE NOT (${condition})`;
+}
+
+function collectSideOutputDml(
+  sideOutputNode: ConstructNode,
+  nodeIndex: Map<string, ConstructNode>,
+  statements: string[],
+): void {
+  const condition = sideOutputNode.props.condition as string;
+  const tag = sideOutputNode.props.tag as string | undefined;
+
+  // Find the SideOutput.Sink child and its sink
+  const sideSinkWrapper = sideOutputNode.children.find(
+    (c) => c.component === 'SideOutput.Sink',
+  );
+
+  // Find upstream children (not SideOutput.Sink)
+  const upstreamChildren = sideOutputNode.children.filter(
+    (c) => c.component !== 'SideOutput.Sink',
+  );
+
+  const upstream = upstreamChildren.length > 0
+    ? getUpstream({ children: upstreamChildren } as ConstructNode, nodeIndex)
+    : { sql: 'SELECT * FROM unknown', sourceRef: 'unknown', isSimple: false };
+
+  const fromClause = upstream.isSimple ? upstream.sourceRef : `(\n${upstream.sql}\n)`;
+
+  // Side path: matching records to the side sink
+  if (sideSinkWrapper) {
+    for (const child of sideSinkWrapper.children) {
+      if (child.kind === 'Sink') {
+        const sinkRef = resolveSinkRef(child);
+        const metaCols: string[] = [];
+        metaCols.push("CURRENT_TIMESTAMP AS `_side_ts`");
+        if (tag) {
+          metaCols.push(`'${tag}' AS \`_side_tag\``);
+        }
+        const selectList = metaCols.length > 0
+          ? `*, ${metaCols.join(', ')}`
+          : '*';
+        statements.push(`INSERT INTO ${sinkRef}\nSELECT ${selectList} FROM ${fromClause} WHERE (${condition});`);
+      }
+    }
+  }
+
+  // Main path continues — handled by the parent collectSinkDml
+  // traversal finding the enclosing sink above the SideOutput.
+  // We don't emit the main path INSERT here because the parent
+  // sink will call buildQuery on SideOutput, which emits
+  // SELECT ... WHERE NOT (condition).
+}
+
+// ── Validate ────────────────────────────────────────────────────────
+
+function buildValidateQuery(
+  node: ConstructNode,
+  nodeIndex: Map<string, ConstructNode>,
+): string {
+  const rules = node.props.rules as {
+    notNull?: readonly string[];
+    range?: Record<string, [number, number]>;
+    expression?: Record<string, string>;
+  };
+
+  // Upstream is found from non-Validate.Reject children
+  const upstreamChildren = node.children.filter(
+    (c) => c.component !== 'Validate.Reject',
+  );
+  const upstream = upstreamChildren.length > 0
+    ? getUpstream({ children: upstreamChildren } as ConstructNode, nodeIndex)
+    : { sql: 'SELECT * FROM unknown', sourceRef: 'unknown', isSimple: false };
+
+  const validCondition = buildValidateCondition(rules);
+  const fromClause = upstream.isSimple ? upstream.sourceRef : `(\n${upstream.sql}\n)`;
+
+  return `SELECT * FROM ${fromClause}\nWHERE ${validCondition}`;
+}
+
+function buildValidateCondition(rules: {
+  notNull?: readonly string[];
+  range?: Record<string, [number, number]>;
+  expression?: Record<string, string>;
+}): string {
+  const conditions: string[] = [];
+
+  if (rules.notNull) {
+    for (const col of rules.notNull) {
+      conditions.push(`${q(col)} IS NOT NULL`);
+    }
+  }
+
+  if (rules.range) {
+    for (const [col, [min, max]] of Object.entries(rules.range)) {
+      conditions.push(`${q(col)} >= ${min} AND ${q(col)} <= ${max}`);
+    }
+  }
+
+  if (rules.expression) {
+    for (const expr of Object.values(rules.expression)) {
+      conditions.push(expr);
+    }
+  }
+
+  return conditions.join('\n    AND ');
+}
+
+function buildValidateErrorCase(rules: {
+  notNull?: readonly string[];
+  range?: Record<string, [number, number]>;
+  expression?: Record<string, string>;
+}): string {
+  const cases: string[] = [];
+
+  if (rules.notNull) {
+    for (const col of rules.notNull) {
+      cases.push(`WHEN ${q(col)} IS NULL THEN 'notNull:${col}'`);
+    }
+  }
+
+  if (rules.range) {
+    for (const [col, [min, max]] of Object.entries(rules.range)) {
+      cases.push(`WHEN ${q(col)} < ${min} OR ${q(col)} > ${max} THEN 'range:${col}[${min},${max}]'`);
+    }
+  }
+
+  if (rules.expression) {
+    for (const [name, expr] of Object.entries(rules.expression)) {
+      cases.push(`WHEN NOT (${expr}) THEN 'expression:${name}'`);
+    }
+  }
+
+  return cases.map((c) => `      ${c}`).join('\n');
+}
+
+function collectValidateDml(
+  validateNode: ConstructNode,
+  nodeIndex: Map<string, ConstructNode>,
+  statements: string[],
+): void {
+  const rules = validateNode.props.rules as {
+    notNull?: readonly string[];
+    range?: Record<string, [number, number]>;
+    expression?: Record<string, string>;
+  };
+
+  // Find the Validate.Reject child and its sink
+  const rejectWrapper = validateNode.children.find(
+    (c) => c.component === 'Validate.Reject',
+  );
+
+  // Find upstream children (not Validate.Reject)
+  const upstreamChildren = validateNode.children.filter(
+    (c) => c.component !== 'Validate.Reject',
+  );
+
+  const upstream = upstreamChildren.length > 0
+    ? getUpstream({ children: upstreamChildren } as ConstructNode, nodeIndex)
+    : { sql: 'SELECT * FROM unknown', sourceRef: 'unknown', isSimple: false };
+
+  const fromClause = upstream.isSimple ? upstream.sourceRef : `(\n${upstream.sql}\n)`;
+  const validCondition = buildValidateCondition(rules);
+
+  // Reject path: invalid records to the reject sink
+  if (rejectWrapper) {
+    for (const child of rejectWrapper.children) {
+      if (child.kind === 'Sink') {
+        const sinkRef = resolveSinkRef(child);
+        const errorCase = buildValidateErrorCase(rules);
+        statements.push(
+          `INSERT INTO ${sinkRef}\nSELECT *,\n    CASE\n${errorCase}\n    END AS \`_validation_error\`,\n    CURRENT_TIMESTAMP AS \`_validated_at\`\nFROM ${fromClause}\nWHERE NOT (\n    ${validCondition}\n);`,
+        );
+      }
+    }
+  }
+
+  // Valid path continues — handled by the parent collectSinkDml
+  // traversal finding the enclosing sink above the Validate.
+}
+
+// ── View ────────────────────────────────────────────────────────────
+
+function generateViewDdl(node: ConstructNode, nodeIndex: Map<string, ConstructNode>): string {
+  const name = node.props.name as string;
+
+  // The view's children define the upstream query
+  const upstream = node.children.length > 0
+    ? buildQuery(node.children[0], nodeIndex)
+    : 'SELECT * FROM unknown';
+
+  return `CREATE VIEW ${q(name)} AS\n${upstream};`;
+}
+
+// ── LateralJoin ─────────────────────────────────────────────────────
+
+function buildLateralJoinQuery(
+  node: ConstructNode,
+  nodeIndex: Map<string, ConstructNode>,
+): string {
+  const funcName = node.props.function as string;
+  const args = node.props.args as readonly (string | number)[];
+  const asFields = node.props.as as Record<string, string>;
+  const joinType = (node.props.type as string) ?? 'cross';
+  const inputId = node.props.input as string;
+
+  const inputRef = resolveRef(inputId, nodeIndex);
+  const aliases = Object.keys(asFields).map(q).join(', ');
+  const argList = args.map((a) => typeof a === 'string' ? a : String(a)).join(', ');
+
+  const sqlJoinType = joinType === 'left' ? 'LEFT JOIN' : 'JOIN';
+
+  return `SELECT ${inputRef}.*, T.${Object.keys(asFields).map(q).join(`, T.`)} FROM ${inputRef} ${sqlJoinType} LATERAL TABLE(${funcName}(${argList})) AS T(${aliases})`;
 }
 
 // ── Ref resolution ──────────────────────────────────────────────────

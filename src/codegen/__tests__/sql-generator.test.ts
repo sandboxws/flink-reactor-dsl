@@ -3,13 +3,17 @@ import { resetNodeIdCounter } from '../../core/jsx-runtime.js';
 import { Schema, Field } from '../../core/schema.js';
 import { KafkaSource, JdbcSource } from '../../components/sources.js';
 import { KafkaSink, JdbcSink, FileSystemSink } from '../../components/sinks.js';
-import { Filter, Map, Aggregate, Deduplicate, TopN } from '../../components/transforms.js';
+import { Filter, Map, Aggregate, Deduplicate, TopN, Union } from '../../components/transforms.js';
 import { Join, TemporalJoin, LookupJoin, IntervalJoin } from '../../components/joins.js';
 import { TumbleWindow } from '../../components/windows.js';
 import { PaimonCatalog } from '../../components/catalogs.js';
 import { CatalogSource } from '../../components/catalog-source.js';
 import { RawSQL, UDF } from '../../components/escape-hatches.js';
 import { MatchRecognize } from '../../components/cep.js';
+import { SideOutput } from '../../components/side-output.js';
+import { Validate } from '../../components/validate.js';
+import { View } from '../../components/view.js';
+import { LateralJoin } from '../../components/lateral-join.js';
 import { Pipeline } from '../../components/pipeline.js';
 import { generateSql } from '../sql-generator.js';
 
@@ -640,5 +644,278 @@ describe('9.3: MatchRecognize generates MATCH_RECOGNIZE clause', () => {
     expect(result.sql).toContain('PATTERN (A B+ C)');
     expect(result.sql).toContain('DEFINE');
     expect(result.sql).toContain('MEASURES');
+  });
+});
+
+// ── SideOutput: mid-pipeline tap with side sink ─────────────────────
+
+describe('SideOutput produces STATEMENT SET with main + side INSERTs', () => {
+  it('generates WHERE NOT for main path and WHERE for side path with metadata', () => {
+    const source = KafkaSource({
+      topic: 'orders',
+      schema: OrderSchema,
+      bootstrapServers: 'kafka:9092',
+    });
+
+    const sideSink = KafkaSink({ topic: 'order-errors' });
+    const sideSinkWrapper = SideOutput.Sink({ children: sideSink });
+
+    const sideOutput = SideOutput({
+      condition: 'amount < 0 OR user_id IS NULL',
+      tag: 'invalid-order',
+      children: [sideSinkWrapper, source],
+    });
+
+    const mainSink = KafkaSink({
+      topic: 'processed-orders',
+      children: [sideOutput],
+    });
+
+    const pipeline = Pipeline({
+      name: 'side-output-pipeline',
+      children: [mainSink],
+    });
+
+    const result = generateSql(pipeline);
+    expect(result.sql).toMatchSnapshot();
+    expect(result.sql).toContain('WHERE NOT (amount < 0 OR user_id IS NULL)');
+    expect(result.sql).toContain('WHERE (amount < 0 OR user_id IS NULL)');
+    expect(result.sql).toContain('_side_tag');
+    expect(result.sql).toContain('_side_ts');
+  });
+
+  it('generates side output without tag', () => {
+    const source = KafkaSource({
+      topic: 'events',
+      schema: EventSchema,
+      bootstrapServers: 'kafka:9092',
+    });
+
+    const sideSink = KafkaSink({ topic: 'bad-events' });
+    const sideSinkWrapper = SideOutput.Sink({ children: sideSink });
+
+    const sideOutput = SideOutput({
+      condition: 'payload IS NULL',
+      children: [sideSinkWrapper, source],
+    });
+
+    const mainSink = KafkaSink({
+      topic: 'good-events',
+      children: [sideOutput],
+    });
+
+    const pipeline = Pipeline({
+      name: 'no-tag-pipeline',
+      children: [mainSink],
+    });
+
+    const result = generateSql(pipeline);
+    expect(result.sql).toMatchSnapshot();
+    expect(result.sql).toContain('_side_ts');
+    expect(result.sql).not.toContain('_side_tag');
+  });
+});
+
+// ── Validate: declarative data quality with reject routing ──────────
+
+describe('Validate produces STATEMENT SET with valid + reject INSERTs', () => {
+  it('generates full validation SQL with notNull, range, and expression rules', () => {
+    const source = KafkaSource({
+      topic: 'raw-orders',
+      schema: Schema({
+        fields: {
+          order_id: Field.BIGINT(),
+          user_id: Field.STRING(),
+          amount: Field.DECIMAL(10, 2),
+          email: Field.STRING(),
+        },
+      }),
+      bootstrapServers: 'kafka:9092',
+    });
+
+    const rejectSink = KafkaSink({ topic: 'invalid-orders' });
+    const rejectWrapper = Validate.Reject({ children: rejectSink });
+
+    const validate = Validate({
+      rules: {
+        notNull: ['order_id', 'user_id', 'amount'],
+        range: { amount: [0, 1000000] },
+        expression: { valid_email: "email LIKE '%@%.%'" },
+      },
+      children: [rejectWrapper, source],
+    });
+
+    const validSink = KafkaSink({
+      topic: 'valid-orders',
+      children: [validate],
+    });
+
+    const pipeline = Pipeline({
+      name: 'validate-pipeline',
+      children: [validSink],
+    });
+
+    const result = generateSql(pipeline);
+    expect(result.sql).toMatchSnapshot();
+    expect(result.sql).toContain('_validation_error');
+    expect(result.sql).toContain('_validated_at');
+    expect(result.sql).toContain('IS NOT NULL');
+    expect(result.sql).toContain('CASE');
+  });
+
+  it('generates notNull-only validation', () => {
+    const source = KafkaSource({
+      topic: 'events',
+      schema: EventSchema,
+      bootstrapServers: 'kafka:9092',
+    });
+
+    const rejectSink = KafkaSink({ topic: 'rejected' });
+    const rejectWrapper = Validate.Reject({ children: rejectSink });
+
+    const validate = Validate({
+      rules: { notNull: ['event_id', 'user_id'] },
+      children: [rejectWrapper, source],
+    });
+
+    const validSink = KafkaSink({
+      topic: 'validated',
+      children: [validate],
+    });
+
+    const pipeline = Pipeline({
+      name: 'notnull-pipeline',
+      children: [validSink],
+    });
+
+    const result = generateSql(pipeline);
+    expect(result.sql).toMatchSnapshot();
+  });
+});
+
+// ── View: named reusable intermediate queries ───────────────────────
+
+describe('View produces CREATE VIEW', () => {
+  it('generates CREATE VIEW from upstream Map + Source', () => {
+    const source = KafkaSource({
+      topic: 'orders',
+      schema: OrderSchema,
+      bootstrapServers: 'kafka:9092',
+    });
+
+    const mapped = Map({
+      select: { order_id: '`order_id`', total: 'amount * quantity' },
+      children: [source],
+    });
+
+    const view = View({
+      name: 'enriched_orders',
+      children: [mapped],
+    });
+
+    // High-value branch reads from the view
+    const highValueSink = KafkaSink({
+      topic: 'high-value',
+      children: [Filter({
+        condition: 'total > 1000',
+        children: [View({ name: 'enriched_orders' })],
+      })],
+    });
+
+    // All orders branch also reads from the view
+    const allSink = KafkaSink({
+      topic: 'all-orders',
+      children: [View({ name: 'enriched_orders' })],
+    });
+
+    const pipeline = Pipeline({
+      name: 'view-pipeline',
+      children: [view, highValueSink, allSink],
+    });
+
+    const result = generateSql(pipeline);
+    expect(result.sql).toMatchSnapshot();
+    expect(result.sql).toContain('CREATE VIEW `enriched_orders`');
+  });
+});
+
+// ── LateralJoin: table-valued function join ─────────────────────────
+
+describe('LateralJoin produces LATERAL TABLE', () => {
+  it('generates cross join lateral table SQL', () => {
+    const source = KafkaSource({
+      topic: 'orders',
+      schema: Schema({
+        fields: {
+          order_id: Field.BIGINT(),
+          shipping_address: Field.STRING(),
+          amount: Field.DECIMAL(10, 2),
+        },
+      }),
+      bootstrapServers: 'kafka:9092',
+    });
+
+    const joined = LateralJoin({
+      input: source,
+      function: 'parse_address',
+      args: ['shipping_address'],
+      as: { street: 'STRING', city: 'STRING', zip: 'STRING' },
+    });
+
+    const sink = KafkaSink({
+      topic: 'enriched-orders',
+      children: [joined],
+    });
+
+    const udf = UDF({
+      name: 'parse_address',
+      className: 'com.mycompany.fns.AddressParser',
+      jarPath: '/opt/flink/udfs/address.jar',
+    });
+
+    const pipeline = Pipeline({
+      name: 'lateral-join-pipeline',
+      children: [udf, sink],
+    });
+
+    const result = generateSql(pipeline);
+    expect(result.sql).toMatchSnapshot();
+    expect(result.sql).toContain('LATERAL TABLE');
+    expect(result.sql).toContain('parse_address');
+  });
+
+  it('generates left join lateral table SQL', () => {
+    const source = KafkaSource({
+      topic: 'documents',
+      schema: Schema({
+        fields: {
+          doc_id: Field.BIGINT(),
+          content: Field.STRING(),
+        },
+      }),
+      bootstrapServers: 'kafka:9092',
+    });
+
+    const joined = LateralJoin({
+      input: source,
+      function: 'extract_entities',
+      args: ['content'],
+      as: { entity: 'STRING', entity_type: 'STRING' },
+      type: 'left',
+    });
+
+    const sink = KafkaSink({
+      topic: 'entities',
+      children: [joined],
+    });
+
+    const pipeline = Pipeline({
+      name: 'left-lateral-pipeline',
+      children: [sink],
+    });
+
+    const result = generateSql(pipeline);
+    expect(result.sql).toMatchSnapshot();
+    expect(result.sql).toContain('LEFT JOIN LATERAL TABLE');
   });
 });
