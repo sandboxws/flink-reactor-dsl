@@ -1,4 +1,5 @@
 import type { FlinkMajorVersion } from './types.js';
+import type { FlinkReactorPlugin } from './plugin.js';
 
 // ── Connector configuration ──────────────────────────────────────────
 
@@ -44,6 +45,8 @@ export interface FlinkReactorConfig {
     readonly bootstrapServers?: string;
   };
   readonly connectors?: ConnectorConfig;
+  /** Plugins to apply during synthesis */
+  readonly plugins?: readonly FlinkReactorPlugin[];
 
   /** Internal: convert this config to InfraConfig for app synthesis */
   toInfraConfig?(): InfraConfig;
@@ -79,6 +82,17 @@ export function defineConfig(config: Omit<FlinkReactorConfig, 'toInfraConfig'>):
     }
   }
 
+  // Validate plugin name uniqueness
+  if (config.plugins && config.plugins.length > 0) {
+    const seen = new Set<string>();
+    for (const plugin of config.plugins) {
+      if (seen.has(plugin.name)) {
+        throw new Error(`Duplicate plugin name '${plugin.name}' in config.plugins`);
+      }
+      seen.add(plugin.name);
+    }
+  }
+
   // Validate delivery strategy if provided
   if (config.connectors?.delivery !== undefined) {
     const validStrategies: readonly DeliveryStrategy[] = ['init-container', 'custom-image'];
@@ -100,5 +114,5 @@ export function defineConfig(config: Omit<FlinkReactorConfig, 'toInfraConfig'>):
     },
   };
 
-  return result;
+  return Object.freeze(result);
 }

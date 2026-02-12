@@ -1,4 +1,5 @@
 import type { ChangelogMode, ConstructNode, NodeKind } from './types.js';
+import type { PluginValidator } from './plugin.js';
 
 // ── Changelog compatibility ─────────────────────────────────────────
 
@@ -331,13 +332,29 @@ export class SynthContext {
 
   /**
    * Run all validations and return combined diagnostics.
+   * When plugin validators are provided, they run after built-in checks
+   * and receive the built-in diagnostics for context.
    */
-  validate(): ValidationDiagnostic[] {
-    return [
+  validate(
+    root?: ConstructNode,
+    pluginValidators?: readonly PluginValidator[],
+  ): ValidationDiagnostic[] {
+    const builtIn = [
       ...this.detectOrphanSources(),
       ...this.detectDanglingSinks(),
       ...this.detectCycles(),
       ...this.detectChangelogMismatch(),
     ];
+
+    if (!pluginValidators || pluginValidators.length === 0 || !root) {
+      return builtIn;
+    }
+
+    const pluginDiagnostics: ValidationDiagnostic[] = [];
+    for (const validator of pluginValidators) {
+      pluginDiagnostics.push(...validator(root, [...builtIn, ...pluginDiagnostics]));
+    }
+
+    return [...builtIn, ...pluginDiagnostics];
   }
 }

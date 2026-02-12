@@ -14,7 +14,7 @@ function generateNodeId(component: string): string {
 
 // ── Component type → NodeKind mapping ────────────────────────────────
 
-const KIND_MAP: ReadonlyMap<string, NodeKind> = new Map([
+const BUILTIN_KINDS: ReadonlyMap<string, NodeKind> = new Map([
   ['Pipeline', 'Pipeline'],
   ['KafkaSource', 'Source'],
   ['JdbcSource', 'Source'],
@@ -58,8 +58,29 @@ const KIND_MAP: ReadonlyMap<string, NodeKind> = new Map([
   ['LateralJoin', 'Join'],
 ]);
 
+/** Mutable map combining built-in + plugin-registered component kinds */
+let kindMap: Map<string, NodeKind> = new Map(BUILTIN_KINDS);
+
+/**
+ * Register additional component kinds from plugins.
+ * Merges plugin-provided component→kind mappings into the active kind map.
+ */
+export function registerComponentKinds(components: ReadonlyMap<string, NodeKind>): void {
+  for (const [name, kind] of components) {
+    kindMap.set(name, kind);
+  }
+}
+
+/**
+ * Reset the kind map to only built-in components.
+ * Used in tests to clean up after plugin registration.
+ */
+export function resetComponentKinds(): void {
+  kindMap = new Map(BUILTIN_KINDS);
+}
+
 function resolveKind(component: string): NodeKind {
-  return KIND_MAP.get(component) ?? 'Transform';
+  return kindMap.get(component) ?? 'Transform';
 }
 
 // ── createElement ────────────────────────────────────────────────────

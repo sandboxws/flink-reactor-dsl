@@ -1,9 +1,13 @@
 import type { ConstructNode, FlinkMajorVersion } from './types.js';
 import type { InfraConfig, FlinkReactorConfig } from './config.js';
 import type { EnvironmentConfig } from './environment.js';
+import type { FlinkReactorPlugin } from './plugin.js';
 import { generateSql, type GenerateSqlResult } from '../codegen/sql-generator.js';
 import { generateCrd, type FlinkDeploymentCrd, type CrdGeneratorOptions } from '../codegen/crd-generator.js';
 import { resolveEnvironment } from './environment.js';
+import { resolvePlugins, EMPTY_PLUGIN_CHAIN } from './plugin-registry.js';
+import { registerComponentKinds, resetComponentKinds } from './jsx-runtime.js';
+import { rekindTree } from './tree-utils.js';
 
 // ── FlinkReactorApp types ────────────────────────────────────────────
 
@@ -103,6 +107,13 @@ function propagateInfraToChildren(
 
 /**
  * Synthesize a FlinkReactorApp: produces separate SQL + CRD per pipeline.
+ *
+ * Plugin integration points (in order):
+ *   1. resolvePlugins() — order and validate
+ *   2. registerComponentKinds() — extend KIND_MAP
+ *   3. beforeSynth hooks
+ *   4. per pipeline: config cascade → infra propagation → transformTree → generateSql → generateCrd → transformCrd
+ *   5. afterSynth hooks
  */
 export function synthesizeApp(
   props: FlinkReactorAppProps,
@@ -111,6 +122,7 @@ export function synthesizeApp(
     readonly env?: EnvironmentConfig;
     readonly config?: FlinkReactorConfig;
     readonly crdOptions?: Partial<CrdGeneratorOptions>;
+    readonly plugins?: readonly FlinkReactorPlugin[];
   },
 ): AppSynthResult {
   const childArray = props.children == null
@@ -128,30 +140,98 @@ export function synthesizeApp(
 
   const infra = props.infra ?? options?.config?.toInfraConfig?.();
 
-  const pipelines: PipelineArtifact[] = pipelineNodes.map((pipelineNode) => {
-    // Apply config cascade
-    let node = applyConfigCascade(pipelineNode, infra, options?.env);
+  // ── Plugin resolution ──────────────────────────────────────────────
+  // Merge plugins from options and config (options take precedence / come first)
+  const allPlugins = [
+    ...(options?.config?.plugins ?? []),
+    ...(options?.plugins ?? []),
+  ];
+  const chain = allPlugins.length > 0
+    ? resolvePlugins(allPlugins)
+    : EMPTY_PLUGIN_CHAIN;
 
-    // Propagate infra settings to children
-    node = propagateInfraToChildren(node, infra);
+  // Register plugin component kinds (cleaned up after synthesis)
+  if (chain.components.size > 0) {
+    registerComponentKinds(chain.components);
+  }
 
-    const name = node.props.name as string;
+  try {
+    // ── beforeSynth hooks ──────────────────────────────────────────────
+    if (chain.beforeSynth.length > 0) {
+      const hookCtx = {
+        appName: props.name,
+        flinkVersion,
+        pipelines: pipelineNodes,
+      };
+      for (const hook of chain.beforeSynth) {
+        hook!(hookCtx);
+      }
+    }
 
-    // Generate SQL
-    const sql = generateSql(node, { flinkVersion });
+    // ── Per-pipeline synthesis ──────────────────────────────────────────
+    const pipelines: PipelineArtifact[] = pipelineNodes.map((pipelineNode) => {
+      // Apply config cascade
+      let node = applyConfigCascade(pipelineNode, infra, options?.env);
 
-    // Generate CRD
-    const crdOpts: CrdGeneratorOptions = {
-      flinkVersion,
-      ...options?.crdOptions,
+      // Propagate infra settings to children
+      node = propagateInfraToChildren(node, infra);
+
+      // Re-resolve node kinds for plugin-registered components
+      // (needed because createElement runs before plugin registration)
+      if (chain.components.size > 0) {
+        node = rekindTree(node, chain.components);
+      }
+
+      // Apply plugin tree transformers (composed left-to-right)
+      node = chain.transformTree(node);
+
+      const name = node.props.name as string;
+
+      // Generate SQL (with plugin SQL/DDL generators)
+      const sql = generateSql(node, {
+        flinkVersion,
+        pluginSqlGenerators: chain.sqlGenerators.size > 0 ? chain.sqlGenerators : undefined,
+        pluginDdlGenerators: chain.ddlGenerators.size > 0 ? chain.ddlGenerators : undefined,
+      });
+
+      // Generate CRD
+      const crdOpts: CrdGeneratorOptions = {
+        flinkVersion,
+        ...options?.crdOptions,
+      };
+      let crd = generateCrd(node, crdOpts);
+
+      // Apply plugin CRD transformers
+      crd = chain.transformCrd(crd, node);
+
+      return { name, sql, crd };
+    });
+
+    // ── afterSynth hooks ───────────────────────────────────────────────
+    if (chain.afterSynth.length > 0) {
+      const hookCtx = {
+        appName: props.name,
+        flinkVersion,
+        pipelines: pipelineNodes,
+        results: pipelines.map((p) => ({
+          name: p.name,
+          sql: p.sql.sql,
+          crd: p.crd,
+        })),
+      };
+      for (const hook of chain.afterSynth) {
+        hook!(hookCtx);
+      }
+    }
+
+    return {
+      appName: props.name,
+      pipelines,
     };
-    const crd = generateCrd(node, crdOpts);
-
-    return { name, sql, crd };
-  });
-
-  return {
-    appName: props.name,
-    pipelines,
-  };
+  } finally {
+    // Clean up plugin component registrations to avoid leaking between runs
+    if (chain.components.size > 0) {
+      resetComponentKinds();
+    }
+  }
 }

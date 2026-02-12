@@ -1,5 +1,6 @@
 import type { ConstructNode, FlinkMajorVersion } from '../core/types.js';
 import type { SchemaDefinition } from '../core/schema.js';
+import type { PluginSqlGenerator, PluginDdlGenerator } from '../core/plugin.js';
 import { FlinkVersionCompat } from '../core/flink-compat.js';
 import { SynthContext } from '../core/synth-context.js';
 
@@ -7,6 +8,10 @@ import { SynthContext } from '../core/synth-context.js';
 
 export interface GenerateSqlOptions {
   readonly flinkVersion?: FlinkMajorVersion;
+  /** Plugin-provided SQL query generators (component name → generator) */
+  readonly pluginSqlGenerators?: ReadonlyMap<string, PluginSqlGenerator>;
+  /** Plugin-provided DDL generators (component name → generator) */
+  readonly pluginDdlGenerators?: ReadonlyMap<string, PluginDdlGenerator>;
 }
 
 export interface GenerateSqlResult {
@@ -30,6 +35,8 @@ export function generateSql(
   options: GenerateSqlOptions = {},
 ): GenerateSqlResult {
   const version = options.flinkVersion ?? '2.0';
+  const pluginSql = options.pluginSqlGenerators;
+  const pluginDdl = options.pluginDdlGenerators;
 
   // Build a node index for lookups by ID
   const nodeIndex = new Map<string, ConstructNode>();
@@ -55,29 +62,41 @@ export function generateSql(
     statements.push(generateUdfDdl(udf));
   }
 
-  // 3. CREATE TABLE (sources)
+  // 3. CREATE TABLE (sources) — check plugin DDL generators first
   const sources = ctx.getNodesByKind('Source');
   for (const src of sources) {
-    const ddl = generateSourceDdl(src);
-    if (ddl) statements.push(ddl);
+    const pluginGen = pluginDdl?.get(src.component);
+    if (pluginGen) {
+      const ddl = pluginGen(src);
+      if (ddl) statements.push(ddl);
+    } else {
+      const ddl = generateSourceDdl(src);
+      if (ddl) statements.push(ddl);
+    }
   }
 
-  // 4. CREATE TABLE (sinks)
+  // 4. CREATE TABLE (sinks) — check plugin DDL generators first
   const sinks = ctx.getNodesByKind('Sink');
   for (const sink of sinks) {
-    statements.push(generateSinkDdl(sink));
+    const pluginGen = pluginDdl?.get(sink.component);
+    if (pluginGen) {
+      const ddl = pluginGen(sink);
+      if (ddl) statements.push(ddl);
+    } else {
+      statements.push(generateSinkDdl(sink));
+    }
   }
 
   // 4.5. CREATE VIEW (only for View nodes that define a query, not references)
   const views = ctx.getNodesByKind('View');
   for (const view of views) {
     if (view.children.length > 0) {
-      statements.push(generateViewDdl(view, nodeIndex));
+      statements.push(generateViewDdl(view, nodeIndex, pluginSql));
     }
   }
 
   // 5. DML: INSERT INTO / STATEMENT SET
-  const dmlStatements = generateDml(pipelineNode, nodeIndex);
+  const dmlStatements = generateDml(pipelineNode, nodeIndex, pluginSql);
   if (dmlStatements.length === 1) {
     statements.push(dmlStatements[0]);
   } else if (dmlStatements.length > 1) {
@@ -458,11 +477,12 @@ function generateSinkWithClause(node: ConstructNode): string {
 function generateDml(
   pipelineNode: ConstructNode,
   nodeIndex: Map<string, ConstructNode>,
+  pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
 ): string[] {
   const statements: string[] = [];
 
   // Collect all sinks from the pipeline's direct children
-  collectSinkDml(pipelineNode, nodeIndex, statements);
+  collectSinkDml(pipelineNode, nodeIndex, statements, pluginSql);
 
   return statements;
 }
@@ -471,42 +491,43 @@ function collectSinkDml(
   node: ConstructNode,
   nodeIndex: Map<string, ConstructNode>,
   statements: string[],
+  pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
 ): void {
   if (node.kind === 'Sink') {
     const sinkRef = resolveSinkRef(node);
     // The sink's children are its upstream (transforms/sources)
     const upstream = node.children.length > 0
-      ? buildQuery(node.children[0], nodeIndex)
+      ? buildQuery(node.children[0], nodeIndex, pluginSql)
       : 'SELECT * FROM unknown';
     statements.push(`INSERT INTO ${sinkRef}\n${upstream};`);
     // Recurse into upstream to find SideOutput/Validate side-path DML
     for (const child of node.children) {
-      collectSideDml(child, nodeIndex, statements);
+      collectSideDml(child, nodeIndex, statements, pluginSql);
     }
     return;
   }
 
   // Route generates multiple INSERT statements (one per branch)
   if (node.component === 'Route') {
-    collectRouteDml(node, nodeIndex, statements);
+    collectRouteDml(node, nodeIndex, statements, pluginSql);
     return;
   }
 
   // SideOutput generates two INSERT statements (main + side)
   if (node.component === 'SideOutput') {
-    collectSideOutputDml(node, nodeIndex, statements);
+    collectSideOutputDml(node, nodeIndex, statements, pluginSql);
     return;
   }
 
   // Validate generates two INSERT statements (valid + rejected)
   if (node.component === 'Validate') {
-    collectValidateDml(node, nodeIndex, statements);
+    collectValidateDml(node, nodeIndex, statements, pluginSql);
     return;
   }
 
   // Recurse into children to find sinks
   for (const child of node.children) {
-    collectSinkDml(child, nodeIndex, statements);
+    collectSinkDml(child, nodeIndex, statements, pluginSql);
   }
 }
 
@@ -514,6 +535,7 @@ function collectRouteDml(
   routeNode: ConstructNode,
   nodeIndex: Map<string, ConstructNode>,
   statements: string[],
+  pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
 ): void {
   // Route's upstream is found by looking at its own children that are
   // NOT Route.Branch / Route.Default
@@ -526,7 +548,7 @@ function collectRouteDml(
 
   // Find the source upstream of the route
   const sourceQuery = upstreamChildren.length > 0
-    ? buildQuery(upstreamChildren[0], nodeIndex)
+    ? buildQuery(upstreamChildren[0], nodeIndex, pluginSql)
     : 'SELECT * FROM unknown';
 
   for (const branch of branches) {
@@ -564,7 +586,14 @@ function resolveSinkRef(sink: ConstructNode): string {
 function buildQuery(
   node: ConstructNode,
   nodeIndex: Map<string, ConstructNode>,
+  pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
 ): string {
+  // Check plugin SQL generators first (allows overriding built-in components)
+  const pluginGen = pluginSql?.get(node.component);
+  if (pluginGen) {
+    return pluginGen(node, nodeIndex);
+  }
+
   switch (node.component) {
     // Sources — terminal nodes
     case 'KafkaSource':
@@ -576,19 +605,19 @@ function buildQuery(
 
     // Transforms
     case 'Filter':
-      return buildFilterQuery(node, nodeIndex);
+      return buildFilterQuery(node, nodeIndex, pluginSql);
     case 'Map':
-      return buildMapQuery(node, nodeIndex);
+      return buildMapQuery(node, nodeIndex, pluginSql);
     case 'FlatMap':
-      return buildFlatMapQuery(node, nodeIndex);
+      return buildFlatMapQuery(node, nodeIndex, pluginSql);
     case 'Aggregate':
-      return buildAggregateQuery(node, nodeIndex);
+      return buildAggregateQuery(node, nodeIndex, pluginSql);
     case 'Union':
-      return buildUnionQuery(node, nodeIndex);
+      return buildUnionQuery(node, nodeIndex, pluginSql);
     case 'Deduplicate':
-      return buildDeduplicateQuery(node, nodeIndex);
+      return buildDeduplicateQuery(node, nodeIndex, pluginSql);
     case 'TopN':
-      return buildTopNQuery(node, nodeIndex);
+      return buildTopNQuery(node, nodeIndex, pluginSql);
 
     // Joins
     case 'Join':
@@ -604,21 +633,21 @@ function buildQuery(
     case 'TumbleWindow':
     case 'SlideWindow':
     case 'SessionWindow':
-      return buildWindowQuery(node, nodeIndex);
+      return buildWindowQuery(node, nodeIndex, pluginSql);
 
     // Escape hatches
     case 'Query':
-      return buildQueryComponentQuery(node, nodeIndex);
+      return buildQueryComponentQuery(node, nodeIndex, pluginSql);
     case 'RawSQL':
       return buildRawSqlQuery(node);
 
     // CEP
     case 'MatchRecognize':
-      return buildMatchRecognizeQuery(node, nodeIndex);
+      return buildMatchRecognizeQuery(node, nodeIndex, pluginSql);
 
     // Validate — main path (valid records)
     case 'Validate':
-      return buildValidateQuery(node, nodeIndex);
+      return buildValidateQuery(node, nodeIndex, pluginSql);
 
     // View — reference by name
     case 'View':
@@ -626,7 +655,7 @@ function buildQuery(
 
     // SideOutput — main path (non-matching records)
     case 'SideOutput':
-      return buildSideOutputQuery(node, nodeIndex);
+      return buildSideOutputQuery(node, nodeIndex, pluginSql);
 
     // LateralJoin — LATERAL TABLE TVF join
     case 'LateralJoin':
@@ -635,7 +664,7 @@ function buildQuery(
     default:
       // Unknown — try first child
       if (node.children.length > 0) {
-        return buildQuery(node.children[0], nodeIndex);
+        return buildQuery(node.children[0], nodeIndex, pluginSql);
       }
       return `SELECT * FROM ${q(node.id)}`;
   }
@@ -644,7 +673,11 @@ function buildQuery(
 /**
  * Get the upstream SQL and source table reference from a node's children.
  */
-function getUpstream(node: ConstructNode, nodeIndex: Map<string, ConstructNode>): {
+function getUpstream(
+  node: ConstructNode,
+  nodeIndex: Map<string, ConstructNode>,
+  pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
+): {
   sql: string;
   sourceRef: string;
   isSimple: boolean;
@@ -655,8 +688,8 @@ function getUpstream(node: ConstructNode, nodeIndex: Map<string, ConstructNode>)
 
   const child = node.children[0];
 
-  // If the child is a source, return a simple reference
-  if (child.kind === 'Source') {
+  // If the child is a source and no plugin overrides it, return a simple reference
+  if (child.kind === 'Source' && !pluginSql?.has(child.component)) {
     const ref = child.component === 'CatalogSource'
       ? `${q(String(child.props.catalogName))}.${q(String(child.props.database))}.${q(String(child.props.table))}`
       : q(child.id);
@@ -664,15 +697,15 @@ function getUpstream(node: ConstructNode, nodeIndex: Map<string, ConstructNode>)
   }
 
   // Otherwise build the child query
-  const childSql = buildQuery(child, nodeIndex);
+  const childSql = buildQuery(child, nodeIndex, pluginSql);
   return { sql: childSql, sourceRef: child.id, isSimple: false };
 }
 
 // ── Filter ──────────────────────────────────────────────────────────
 
-function buildFilterQuery(node: ConstructNode, nodeIndex: Map<string, ConstructNode>): string {
+function buildFilterQuery(node: ConstructNode, nodeIndex: Map<string, ConstructNode>, pluginSql?: ReadonlyMap<string, PluginSqlGenerator>): string {
   const condition = node.props.condition as string;
-  const upstream = getUpstream(node, nodeIndex);
+  const upstream = getUpstream(node, nodeIndex, pluginSql);
 
   if (upstream.isSimple) {
     return `SELECT * FROM ${upstream.sourceRef} WHERE ${condition}`;
@@ -682,13 +715,13 @@ function buildFilterQuery(node: ConstructNode, nodeIndex: Map<string, ConstructN
 
 // ── Map ─────────────────────────────────────────────────────────────
 
-function buildMapQuery(node: ConstructNode, nodeIndex: Map<string, ConstructNode>): string {
+function buildMapQuery(node: ConstructNode, nodeIndex: Map<string, ConstructNode>, pluginSql?: ReadonlyMap<string, PluginSqlGenerator>): string {
   const select = node.props.select as Record<string, string>;
   const projections = Object.entries(select)
     .map(([alias, expr]) => `${expr} AS ${q(alias)}`)
     .join(', ');
 
-  const upstream = getUpstream(node, nodeIndex);
+  const upstream = getUpstream(node, nodeIndex, pluginSql);
 
   if (upstream.isSimple) {
     return `SELECT ${projections} FROM ${upstream.sourceRef}`;
@@ -698,12 +731,12 @@ function buildMapQuery(node: ConstructNode, nodeIndex: Map<string, ConstructNode
 
 // ── FlatMap ─────────────────────────────────────────────────────────
 
-function buildFlatMapQuery(node: ConstructNode, nodeIndex: Map<string, ConstructNode>): string {
+function buildFlatMapQuery(node: ConstructNode, nodeIndex: Map<string, ConstructNode>, pluginSql?: ReadonlyMap<string, PluginSqlGenerator>): string {
   const unnestField = node.props.unnest as string;
   const asFields = node.props.as as Record<string, string>;
   const aliases = Object.keys(asFields).map(q).join(', ');
 
-  const upstream = getUpstream(node, nodeIndex);
+  const upstream = getUpstream(node, nodeIndex, pluginSql);
   const ref = upstream.sourceRef;
 
   return `SELECT ${q(ref)}.*, ${aliases} FROM ${upstream.isSimple ? ref : `(\n${upstream.sql}\n) AS ${q(ref)}`} CROSS JOIN UNNEST(${q(ref)}.${q(unnestField)}) AS T(${aliases})`;
@@ -711,7 +744,7 @@ function buildFlatMapQuery(node: ConstructNode, nodeIndex: Map<string, Construct
 
 // ── Aggregate ───────────────────────────────────────────────────────
 
-function buildAggregateQuery(node: ConstructNode, nodeIndex: Map<string, ConstructNode>): string {
+function buildAggregateQuery(node: ConstructNode, nodeIndex: Map<string, ConstructNode>, pluginSql?: ReadonlyMap<string, PluginSqlGenerator>): string {
   const groupBy = node.props.groupBy as readonly string[];
   const select = node.props.select as Record<string, string>;
 
@@ -721,7 +754,7 @@ function buildAggregateQuery(node: ConstructNode, nodeIndex: Map<string, Constru
     ...Object.entries(select).map(([alias, expr]) => `${expr} AS ${q(alias)}`),
   ].join(', ');
 
-  const upstream = getUpstream(node, nodeIndex);
+  const upstream = getUpstream(node, nodeIndex, pluginSql);
 
   if (upstream.isSimple) {
     return `SELECT ${projections} FROM ${upstream.sourceRef} GROUP BY ${groupCols}`;
@@ -731,11 +764,11 @@ function buildAggregateQuery(node: ConstructNode, nodeIndex: Map<string, Constru
 
 // ── Union ───────────────────────────────────────────────────────────
 
-function buildUnionQuery(node: ConstructNode, nodeIndex: Map<string, ConstructNode>): string {
+function buildUnionQuery(node: ConstructNode, nodeIndex: Map<string, ConstructNode>, pluginSql?: ReadonlyMap<string, PluginSqlGenerator>): string {
   const parts: string[] = [];
 
   for (const child of node.children) {
-    parts.push(buildQuery(child, nodeIndex));
+    parts.push(buildQuery(child, nodeIndex, pluginSql));
   }
 
   if (parts.length === 0) return 'SELECT * FROM unknown';
@@ -744,7 +777,7 @@ function buildUnionQuery(node: ConstructNode, nodeIndex: Map<string, ConstructNo
 
 // ── Deduplicate ─────────────────────────────────────────────────────
 
-function buildDeduplicateQuery(node: ConstructNode, nodeIndex: Map<string, ConstructNode>): string {
+function buildDeduplicateQuery(node: ConstructNode, nodeIndex: Map<string, ConstructNode>, pluginSql?: ReadonlyMap<string, PluginSqlGenerator>): string {
   const key = node.props.key as readonly string[];
   const order = node.props.order as string;
   const keep = node.props.keep as 'first' | 'last';
@@ -752,7 +785,7 @@ function buildDeduplicateQuery(node: ConstructNode, nodeIndex: Map<string, Const
   const partitionBy = key.map(q).join(', ');
   const orderDir = keep === 'first' ? 'ASC' : 'DESC';
 
-  const upstream = getUpstream(node, nodeIndex);
+  const upstream = getUpstream(node, nodeIndex, pluginSql);
   const fromClause = upstream.isSimple ? upstream.sourceRef : `(\n${upstream.sql}\n)`;
 
   return [
@@ -765,7 +798,7 @@ function buildDeduplicateQuery(node: ConstructNode, nodeIndex: Map<string, Const
 
 // ── TopN ────────────────────────────────────────────────────────────
 
-function buildTopNQuery(node: ConstructNode, nodeIndex: Map<string, ConstructNode>): string {
+function buildTopNQuery(node: ConstructNode, nodeIndex: Map<string, ConstructNode>, pluginSql?: ReadonlyMap<string, PluginSqlGenerator>): string {
   const partitionBy = (node.props.partitionBy as readonly string[]).map(q).join(', ');
   const orderBy = node.props.orderBy as Record<string, 'ASC' | 'DESC'>;
   const n = node.props.n as number;
@@ -774,7 +807,7 @@ function buildTopNQuery(node: ConstructNode, nodeIndex: Map<string, ConstructNod
     .map(([field, dir]) => `${q(field)} ${dir}`)
     .join(', ');
 
-  const upstream = getUpstream(node, nodeIndex);
+  const upstream = getUpstream(node, nodeIndex, pluginSql);
   const fromClause = upstream.isSimple ? upstream.sourceRef : `(\n${upstream.sql}\n)`;
 
   return [
@@ -864,7 +897,7 @@ function buildIntervalJoinQuery(node: ConstructNode, nodeIndex: Map<string, Cons
 
 // ── Window ──────────────────────────────────────────────────────────
 
-function buildWindowQuery(node: ConstructNode, nodeIndex: Map<string, ConstructNode>): string {
+function buildWindowQuery(node: ConstructNode, nodeIndex: Map<string, ConstructNode>, pluginSql?: ReadonlyMap<string, PluginSqlGenerator>): string {
   const windowCol = node.props.on as string;
 
   // Find the Aggregate child (if windowed aggregation)
@@ -872,7 +905,7 @@ function buildWindowQuery(node: ConstructNode, nodeIndex: Map<string, ConstructN
 
   // Find the source feeding the window (non-Aggregate child)
   const sourceChild = node.children.find((c) => c.component !== 'Aggregate');
-  const upstream = sourceChild ? getUpstream({ children: [sourceChild] } as ConstructNode, nodeIndex) : getUpstream(node, nodeIndex);
+  const upstream = sourceChild ? getUpstream({ children: [sourceChild] } as ConstructNode, nodeIndex, pluginSql) : getUpstream(node, nodeIndex, pluginSql);
   const sourceRef = upstream.isSimple ? upstream.sourceRef : `(\n${upstream.sql}\n)`;
 
   const tvf = buildWindowTvf(node, sourceRef, windowCol);
@@ -933,6 +966,7 @@ const QUERY_CLAUSE_TYPES = new Set([
 function buildQueryComponentQuery(
   node: ConstructNode,
   nodeIndex: Map<string, ConstructNode>,
+  pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
 ): string {
   // Separate clause children from upstream data children
   const clauses = node.children.filter((c) => QUERY_CLAUSE_TYPES.has(c.component));
@@ -940,7 +974,7 @@ function buildQueryComponentQuery(
 
   // Resolve upstream
   const upstream = upstreamChildren.length > 0
-    ? getUpstream({ children: upstreamChildren } as ConstructNode, nodeIndex)
+    ? getUpstream({ children: upstreamChildren } as ConstructNode, nodeIndex, pluginSql)
     : { sql: 'SELECT * FROM unknown', sourceRef: 'unknown', isSimple: false };
 
   const fromClause = upstream.isSimple ? upstream.sourceRef : `(\n${upstream.sql}\n)`;
@@ -1055,6 +1089,7 @@ function buildRawSqlQuery(node: ConstructNode): string {
 function buildMatchRecognizeQuery(
   node: ConstructNode,
   nodeIndex: Map<string, ConstructNode>,
+  pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
 ): string {
   const pattern = node.props.pattern as string;
   const define = node.props.define as Record<string, string>;
@@ -1063,7 +1098,7 @@ function buildMatchRecognizeQuery(
   const partitionBy = node.props.partitionBy as readonly string[] | undefined;
   const orderBy = node.props.orderBy as string | undefined;
 
-  const upstream = getUpstream(node, nodeIndex);
+  const upstream = getUpstream(node, nodeIndex, pluginSql);
   const fromClause = upstream.isSimple ? upstream.sourceRef : `(\n${upstream.sql}\n)`;
 
   const parts: string[] = [];
@@ -1108,16 +1143,17 @@ function collectSideDml(
   node: ConstructNode,
   nodeIndex: Map<string, ConstructNode>,
   statements: string[],
+  pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
 ): void {
   if (node.component === 'SideOutput') {
-    collectSideOutputDml(node, nodeIndex, statements);
+    collectSideOutputDml(node, nodeIndex, statements, pluginSql);
   } else if (node.component === 'Validate') {
-    collectValidateDml(node, nodeIndex, statements);
+    collectValidateDml(node, nodeIndex, statements, pluginSql);
   }
 
   // Continue recursing to find nested SideOutput/Validate
   for (const child of node.children) {
-    collectSideDml(child, nodeIndex, statements);
+    collectSideDml(child, nodeIndex, statements, pluginSql);
   }
 }
 
@@ -1126,6 +1162,7 @@ function collectSideDml(
 function buildSideOutputQuery(
   node: ConstructNode,
   nodeIndex: Map<string, ConstructNode>,
+  pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
 ): string {
   const condition = node.props.condition as string;
 
@@ -1134,7 +1171,7 @@ function buildSideOutputQuery(
     (c) => c.component !== 'SideOutput.Sink',
   );
   const upstream = upstreamChildren.length > 0
-    ? getUpstream({ children: upstreamChildren } as ConstructNode, nodeIndex)
+    ? getUpstream({ children: upstreamChildren } as ConstructNode, nodeIndex, pluginSql)
     : { sql: 'SELECT * FROM unknown', sourceRef: 'unknown', isSimple: false };
 
   if (upstream.isSimple) {
@@ -1147,6 +1184,7 @@ function collectSideOutputDml(
   sideOutputNode: ConstructNode,
   nodeIndex: Map<string, ConstructNode>,
   statements: string[],
+  pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
 ): void {
   const condition = sideOutputNode.props.condition as string;
   const tag = sideOutputNode.props.tag as string | undefined;
@@ -1162,7 +1200,7 @@ function collectSideOutputDml(
   );
 
   const upstream = upstreamChildren.length > 0
-    ? getUpstream({ children: upstreamChildren } as ConstructNode, nodeIndex)
+    ? getUpstream({ children: upstreamChildren } as ConstructNode, nodeIndex, pluginSql)
     : { sql: 'SELECT * FROM unknown', sourceRef: 'unknown', isSimple: false };
 
   const fromClause = upstream.isSimple ? upstream.sourceRef : `(\n${upstream.sql}\n)`;
@@ -1197,6 +1235,7 @@ function collectSideOutputDml(
 function buildValidateQuery(
   node: ConstructNode,
   nodeIndex: Map<string, ConstructNode>,
+  pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
 ): string {
   const rules = node.props.rules as {
     notNull?: readonly string[];
@@ -1209,7 +1248,7 @@ function buildValidateQuery(
     (c) => c.component !== 'Validate.Reject',
   );
   const upstream = upstreamChildren.length > 0
-    ? getUpstream({ children: upstreamChildren } as ConstructNode, nodeIndex)
+    ? getUpstream({ children: upstreamChildren } as ConstructNode, nodeIndex, pluginSql)
     : { sql: 'SELECT * FROM unknown', sourceRef: 'unknown', isSimple: false };
 
   const validCondition = buildValidateCondition(rules);
@@ -1278,6 +1317,7 @@ function collectValidateDml(
   validateNode: ConstructNode,
   nodeIndex: Map<string, ConstructNode>,
   statements: string[],
+  pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
 ): void {
   const rules = validateNode.props.rules as {
     notNull?: readonly string[];
@@ -1296,7 +1336,7 @@ function collectValidateDml(
   );
 
   const upstream = upstreamChildren.length > 0
-    ? getUpstream({ children: upstreamChildren } as ConstructNode, nodeIndex)
+    ? getUpstream({ children: upstreamChildren } as ConstructNode, nodeIndex, pluginSql)
     : { sql: 'SELECT * FROM unknown', sourceRef: 'unknown', isSimple: false };
 
   const fromClause = upstream.isSimple ? upstream.sourceRef : `(\n${upstream.sql}\n)`;
@@ -1321,12 +1361,12 @@ function collectValidateDml(
 
 // ── View ────────────────────────────────────────────────────────────
 
-function generateViewDdl(node: ConstructNode, nodeIndex: Map<string, ConstructNode>): string {
+function generateViewDdl(node: ConstructNode, nodeIndex: Map<string, ConstructNode>, pluginSql?: ReadonlyMap<string, PluginSqlGenerator>): string {
   const name = node.props.name as string;
 
   // The view's children define the upstream query
   const upstream = node.children.length > 0
-    ? buildQuery(node.children[0], nodeIndex)
+    ? buildQuery(node.children[0], nodeIndex, pluginSql)
     : 'SELECT * FROM unknown';
 
   return `CREATE VIEW ${q(name)} AS\n${upstream};`;
