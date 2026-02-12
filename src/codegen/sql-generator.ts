@@ -583,6 +583,8 @@ function buildQuery(
       return buildWindowQuery(node, nodeIndex);
 
     // Escape hatches
+    case 'Query':
+      return buildQueryComponentQuery(node, nodeIndex);
     case 'RawSQL':
       return buildRawSqlQuery(node);
 
@@ -876,6 +878,129 @@ function buildWindowTvf(node: ConstructNode, sourceRef: string, windowCol: strin
     default:
       return `UNKNOWN_WINDOW(TABLE ${sourceRef})`;
   }
+}
+
+// ── Query component ─────────────────────────────────────────────────
+
+const QUERY_CLAUSE_TYPES = new Set([
+  'Query.Select',
+  'Query.Where',
+  'Query.GroupBy',
+  'Query.Having',
+  'Query.OrderBy',
+]);
+
+function buildQueryComponentQuery(
+  node: ConstructNode,
+  nodeIndex: Map<string, ConstructNode>,
+): string {
+  // Separate clause children from upstream data children
+  const clauses = node.children.filter((c) => QUERY_CLAUSE_TYPES.has(c.component));
+  const upstreamChildren = node.children.filter((c) => !QUERY_CLAUSE_TYPES.has(c.component));
+
+  // Resolve upstream
+  const upstream = upstreamChildren.length > 0
+    ? getUpstream({ children: upstreamChildren } as ConstructNode, nodeIndex)
+    : { sql: 'SELECT * FROM unknown', sourceRef: 'unknown', isSimple: false };
+
+  const fromClause = upstream.isSimple ? upstream.sourceRef : `(\n${upstream.sql}\n)`;
+
+  // Find clause nodes
+  const selectNode = clauses.find((c) => c.component === 'Query.Select');
+  const whereNode = clauses.find((c) => c.component === 'Query.Where');
+  const groupByNode = clauses.find((c) => c.component === 'Query.GroupBy');
+  const havingNode = clauses.find((c) => c.component === 'Query.Having');
+  const orderByNode = clauses.find((c) => c.component === 'Query.OrderBy');
+
+  // Build SELECT projections
+  const columns = selectNode!.props.columns as Record<string, string | { func: string; args?: readonly (string | number)[]; window?: string; over?: { partitionBy?: readonly string[]; orderBy?: Record<string, 'ASC' | 'DESC'> } }>;
+  const windows = selectNode!.props.windows as Record<string, { partitionBy?: readonly string[]; orderBy?: Record<string, 'ASC' | 'DESC'> }> | undefined;
+
+  const projections = Object.entries(columns)
+    .map(([alias, expr]) => {
+      if (typeof expr === 'string') {
+        return `${expr} AS ${q(alias)}`;
+      }
+      return `${buildWindowFunctionExpr(expr)} AS ${q(alias)}`;
+    })
+    .join(', ');
+
+  const parts: string[] = [`SELECT ${projections} FROM ${fromClause}`];
+
+  // WHERE
+  if (whereNode) {
+    parts.push(`WHERE ${whereNode.props.condition as string}`);
+  }
+
+  // GROUP BY
+  if (groupByNode) {
+    const groupCols = (groupByNode.props.columns as readonly string[]).map(q).join(', ');
+    parts.push(`GROUP BY ${groupCols}`);
+  }
+
+  // HAVING
+  if (havingNode) {
+    parts.push(`HAVING ${havingNode.props.condition as string}`);
+  }
+
+  // ORDER BY
+  if (orderByNode) {
+    const orderCols = orderByNode.props.columns as Record<string, 'ASC' | 'DESC'>;
+    const orderClause = Object.entries(orderCols)
+      .map(([col, dir]) => `${q(col)} ${dir}`)
+      .join(', ');
+    parts.push(`ORDER BY ${orderClause}`);
+  }
+
+  // WINDOW clause (named windows)
+  if (windows && Object.keys(windows).length > 0) {
+    const windowDefs = Object.entries(windows)
+      .map(([name, spec]) => `${q(name)} AS (${buildWindowSpecSql(spec)})`)
+      .join(', ');
+    parts.push(`WINDOW ${windowDefs}`);
+  }
+
+  return parts.join('\n');
+}
+
+function buildWindowFunctionExpr(expr: {
+  func: string;
+  args?: readonly (string | number)[];
+  window?: string;
+  over?: { partitionBy?: readonly string[]; orderBy?: Record<string, 'ASC' | 'DESC'> };
+}): string {
+  const args = expr.args ? expr.args.join(', ') : '';
+  const funcCall = `${expr.func}(${args})`;
+
+  if (expr.window) {
+    return `${funcCall} OVER ${q(expr.window)}`;
+  }
+
+  if (expr.over) {
+    return `${funcCall} OVER (${buildWindowSpecSql(expr.over)})`;
+  }
+
+  return funcCall;
+}
+
+function buildWindowSpecSql(spec: {
+  partitionBy?: readonly string[];
+  orderBy?: Record<string, 'ASC' | 'DESC'>;
+}): string {
+  const parts: string[] = [];
+
+  if (spec.partitionBy && spec.partitionBy.length > 0) {
+    parts.push(`PARTITION BY ${spec.partitionBy.map(q).join(', ')}`);
+  }
+
+  if (spec.orderBy) {
+    const orderClause = Object.entries(spec.orderBy)
+      .map(([col, dir]) => `${q(col)} ${dir}`)
+      .join(', ');
+    parts.push(`ORDER BY ${orderClause}`);
+  }
+
+  return parts.join(' ');
 }
 
 // ── RawSQL ──────────────────────────────────────────────────────────

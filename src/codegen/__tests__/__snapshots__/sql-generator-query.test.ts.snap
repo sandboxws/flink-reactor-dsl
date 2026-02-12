@@ -1,0 +1,161 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Query: WHERE + GROUP BY + HAVING combined > produces all clauses in correct order 1`] = `
+"CREATE TABLE \`KafkaSource_0\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSink_6\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'filtered-agg',
+  'format' = 'json'
+);
+
+INSERT INTO \`KafkaSink_6\`
+SELECT user_id AS \`user_id\`, SUM(amount) AS \`total\` FROM \`KafkaSource_0\`
+WHERE amount > 0
+GROUP BY \`user_id\`
+HAVING SUM(amount) > 500;
+"
+`;
+
+exports[`Query: aggregation with HAVING > produces correct SQL 1`] = `
+"CREATE TABLE \`KafkaSource_0\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSink_5\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'high-spenders',
+  'format' = 'json'
+);
+
+INSERT INTO \`KafkaSink_5\`
+SELECT user_id AS \`user_id\`, SUM(amount) AS \`total\` FROM \`KafkaSource_0\`
+GROUP BY \`user_id\`
+HAVING SUM(amount) > 1000;
+"
+`;
+
+exports[`Query: chained with upstream Filter > wraps the upstream filter in a subquery 1`] = `
+"CREATE TABLE \`KafkaSource_0\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSink_5\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'user-totals',
+  'format' = 'json'
+);
+
+INSERT INTO \`KafkaSink_5\`
+SELECT user_id AS \`user_id\`, SUM(amount) AS \`total\` FROM (
+SELECT * FROM \`KafkaSource_0\` WHERE user_id <> 'bot'
+)
+GROUP BY \`user_id\`;
+"
+`;
+
+exports[`Query: multiple window functions sharing a named window > produces correct SQL with shared WINDOW clause 1`] = `
+"CREATE TABLE \`KafkaSource_0\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSink_3\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'multi-window-output',
+  'format' = 'json'
+);
+
+INSERT INTO \`KafkaSink_3\`
+SELECT user_id AS \`user_id\`, amount AS \`amount\`, LAG(amount, 1) OVER \`w\` AS \`prev_amount\`, LEAD(amount, 1) OVER \`w\` AS \`next_amount\`, ROW_NUMBER() OVER \`w\` AS \`row_num\` FROM \`KafkaSource_0\`
+WINDOW \`w\` AS (PARTITION BY \`user_id\` ORDER BY \`event_time\` ASC);
+"
+`;
+
+exports[`Query: window function with inline OVER > produces correct SQL for RANK with inline window spec 1`] = `
+"CREATE TABLE \`KafkaSource_0\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSink_3\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'ranked-orders',
+  'format' = 'json'
+);
+
+INSERT INTO \`KafkaSink_3\`
+SELECT user_id AS \`user_id\`, amount AS \`amount\`, RANK() OVER (PARTITION BY \`user_id\` ORDER BY \`amount\` DESC) AS \`rank_num\` FROM \`KafkaSource_0\`;
+"
+`;
+
+exports[`Query: window function with named window > produces correct SQL for LAG and ROW_NUMBER with named window 1`] = `
+"CREATE TABLE \`KafkaSource_0\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`KafkaSink_3\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'windowed-orders',
+  'format' = 'json'
+);
+
+INSERT INTO \`KafkaSink_3\`
+SELECT user_id AS \`user_id\`, amount AS \`amount\`, LAG(amount, 1) OVER \`w\` AS \`prev_amount\`, ROW_NUMBER() OVER \`w\` AS \`row_num\` FROM \`KafkaSource_0\`
+WINDOW \`w\` AS (PARTITION BY \`user_id\` ORDER BY \`event_time\` ASC);
+"
+`;
