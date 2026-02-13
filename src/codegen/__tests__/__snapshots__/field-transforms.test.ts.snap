@@ -1,0 +1,331 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`AddField (reverse-nesting) > generates SELECT *, expr AS alias 1`] = `
+"CREATE TABLE \`products\` (
+  \`id\` INT,
+  \`name\` STRING,
+  \`price\` DOUBLE,
+  \`internal_id\` STRING,
+  \`debug_flag\` BOOLEAN,
+  PRIMARY KEY (\`id\`) NOT ENFORCED
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'products',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`output\` (
+  \`id\` INT,
+  \`name\` STRING,
+  \`price\` DOUBLE,
+  \`internal_id\` STRING,
+  \`debug_flag\` BOOLEAN,
+  \`total\` STRING,
+  \`processed_at\` STRING
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'output',
+  'format' = 'json'
+);
+
+INSERT INTO \`output\`
+SELECT *, price * 2 AS \`total\`, CURRENT_TIMESTAMP AS \`processed_at\` FROM \`products\`;
+"
+`;
+
+exports[`Cast (reverse-nesting) > generates CAST for targeted fields 1`] = `
+"CREATE TABLE \`products\` (
+  \`id\` INT,
+  \`name\` STRING,
+  \`price\` DOUBLE,
+  \`internal_id\` STRING,
+  \`debug_flag\` BOOLEAN,
+  PRIMARY KEY (\`id\`) NOT ENFORCED
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'products',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`output\` (
+  \`id\` BIGINT,
+  \`name\` STRING,
+  \`price\` DECIMAL(10, 2),
+  \`internal_id\` STRING,
+  \`debug_flag\` BOOLEAN
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'output',
+  'format' = 'json'
+);
+
+INSERT INTO \`output\`
+SELECT CAST(\`id\` AS BIGINT) AS \`id\`, \`name\`, CAST(\`price\` AS DECIMAL(10, 2)) AS \`price\`, \`internal_id\`, \`debug_flag\` FROM \`products\`;
+"
+`;
+
+exports[`Cast (reverse-nesting) > generates TRY_CAST when safe=true 1`] = `
+"CREATE TABLE \`products\` (
+  \`id\` INT,
+  \`name\` STRING,
+  \`price\` DOUBLE,
+  \`internal_id\` STRING,
+  \`debug_flag\` BOOLEAN,
+  PRIMARY KEY (\`id\`) NOT ENFORCED
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'products',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`output\` (
+  \`id\` BIGINT,
+  \`name\` STRING,
+  \`price\` DOUBLE,
+  \`internal_id\` STRING,
+  \`debug_flag\` BOOLEAN
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'output',
+  'format' = 'json'
+);
+
+INSERT INTO \`output\`
+SELECT TRY_CAST(\`id\` AS BIGINT) AS \`id\`, \`name\`, \`price\`, \`internal_id\`, \`debug_flag\` FROM \`products\`;
+"
+`;
+
+exports[`Coalesce (reverse-nesting) > generates COALESCE for targeted fields 1`] = `
+"CREATE TABLE \`products\` (
+  \`id\` INT,
+  \`name\` STRING,
+  \`price\` DOUBLE,
+  \`internal_id\` STRING,
+  \`debug_flag\` BOOLEAN,
+  PRIMARY KEY (\`id\`) NOT ENFORCED
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'products',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`output\` (
+  \`id\` INT,
+  \`name\` STRING,
+  \`price\` DOUBLE,
+  \`internal_id\` STRING,
+  \`debug_flag\` BOOLEAN
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'output',
+  'format' = 'json'
+);
+
+INSERT INTO \`output\`
+SELECT \`id\`, COALESCE(\`name\`, 'unknown') AS \`name\`, COALESCE(\`price\`, 0) AS \`price\`, \`internal_id\`, \`debug_flag\` FROM \`products\`;
+"
+`;
+
+exports[`Drop (reverse-nesting) > generates SELECT excluding dropped fields 1`] = `
+"CREATE TABLE \`products\` (
+  \`id\` INT,
+  \`name\` STRING,
+  \`price\` DOUBLE,
+  \`internal_id\` STRING,
+  \`debug_flag\` BOOLEAN,
+  PRIMARY KEY (\`id\`) NOT ENFORCED
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'products',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`output\` (
+  \`id\` INT,
+  \`name\` STRING,
+  \`price\` DOUBLE
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'output',
+  'format' = 'json'
+);
+
+INSERT INTO \`output\`
+SELECT \`id\`, \`name\`, \`price\` FROM \`products\`;
+"
+`;
+
+exports[`Rename (reverse-nesting) > generates aliased SELECT for renamed fields 1`] = `
+"CREATE TABLE \`products\` (
+  \`id\` INT,
+  \`name\` STRING,
+  \`price\` DOUBLE,
+  \`internal_id\` STRING,
+  \`debug_flag\` BOOLEAN,
+  PRIMARY KEY (\`id\`) NOT ENFORCED
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'products',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`output\` (
+  \`product_id\` INT,
+  \`name\` STRING,
+  \`price\` DOUBLE,
+  \`internal_id\` STRING,
+  \`debug_flag\` BOOLEAN
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'output',
+  'format' = 'json'
+);
+
+INSERT INTO \`output\`
+SELECT \`id\` AS \`product_id\`, \`name\`, \`price\`, \`internal_id\`, \`debug_flag\` FROM \`products\`;
+"
+`;
+
+exports[`chained field transforms > Drop → Rename → Cast → AddField produces nested SQL 1`] = `
+"CREATE TABLE \`products\` (
+  \`id\` INT,
+  \`name\` STRING,
+  \`price\` DOUBLE,
+  \`internal_id\` STRING,
+  \`debug_flag\` BOOLEAN,
+  PRIMARY KEY (\`id\`) NOT ENFORCED
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'products',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`output\` (
+  \`id\` BIGINT,
+  \`product_name\` STRING,
+  \`price\` DOUBLE,
+  \`internal_id\` STRING,
+  \`discounted\` STRING
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'output',
+  'format' = 'json'
+);
+
+INSERT INTO \`output\`
+SELECT *, price * 0.9 AS \`discounted\` FROM (
+SELECT CAST(\`id\` AS BIGINT) AS \`id\`, \`product_name\`, \`price\`, \`internal_id\` FROM (
+SELECT \`id\`, \`name\` AS \`product_name\`, \`price\`, \`internal_id\` FROM (
+SELECT \`id\`, \`name\`, \`price\`, \`internal_id\` FROM \`products\`
+)
+)
+);
+"
+`;
+
+exports[`chained field transforms > chained field transforms in forward-reading JSX pattern 1`] = `
+"CREATE TABLE \`products\` (
+  \`id\` INT,
+  \`name\` STRING,
+  \`price\` DOUBLE,
+  \`internal_id\` STRING,
+  \`debug_flag\` BOOLEAN,
+  PRIMARY KEY (\`id\`) NOT ENFORCED
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'products',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`output\` (
+  \`id\` BIGINT,
+  \`product_name\` STRING,
+  \`price\` DOUBLE,
+  \`internal_id\` STRING,
+  \`discounted\` STRING
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'output',
+  'format' = 'json'
+);
+
+INSERT INTO \`output\`
+SELECT *, price * 0.9 AS \`discounted\` FROM (
+SELECT CAST(\`id\` AS BIGINT) AS \`id\`, \`product_name\`, \`price\`, \`internal_id\` FROM (
+SELECT \`id\`, \`name\` AS \`product_name\`, \`price\`, \`internal_id\` FROM (
+SELECT \`id\`, \`name\`, \`price\`, \`internal_id\` FROM \`products\`
+)
+)
+);
+"
+`;
+
+exports[`field transforms (forward-reading JSX) > Drop works as a sibling between source and sink 1`] = `
+"CREATE TABLE \`products\` (
+  \`id\` INT,
+  \`name\` STRING,
+  \`price\` DOUBLE,
+  \`internal_id\` STRING,
+  \`debug_flag\` BOOLEAN,
+  PRIMARY KEY (\`id\`) NOT ENFORCED
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'products',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`output\` (
+  \`id\` INT,
+  \`name\` STRING,
+  \`price\` DOUBLE
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'output',
+  'format' = 'json'
+);
+
+INSERT INTO \`output\`
+SELECT \`id\`, \`name\`, \`price\` FROM \`products\`;
+"
+`;
+
+exports[`field transforms (forward-reading JSX) > Rename works as a sibling between source and sink 1`] = `
+"CREATE TABLE \`products\` (
+  \`id\` INT,
+  \`name\` STRING,
+  \`price\` DOUBLE,
+  \`internal_id\` STRING,
+  \`debug_flag\` BOOLEAN,
+  PRIMARY KEY (\`id\`) NOT ENFORCED
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'products',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+CREATE TABLE \`output\` (
+  \`product_id\` INT,
+  \`product_name\` STRING,
+  \`price\` DOUBLE,
+  \`internal_id\` STRING,
+  \`debug_flag\` BOOLEAN
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'output',
+  'format' = 'json'
+);
+
+INSERT INTO \`output\`
+SELECT \`id\` AS \`product_id\`, \`name\` AS \`product_name\`, \`price\`, \`internal_id\`, \`debug_flag\` FROM \`products\`;
+"
+`;

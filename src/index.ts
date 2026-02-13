@@ -67,6 +67,10 @@ export type { KafkaSinkProps, JdbcSinkProps, FileSystemSinkProps, GenericSinkPro
 export { Filter, Map, FlatMap, Aggregate, Union, Deduplicate, TopN } from './components/transforms.js';
 export type { FilterProps, MapProps, FlatMapProps, AggregateProps, UnionProps, DeduplicateProps, TopNProps } from './components/transforms.js';
 
+// Components: field transforms
+export { Rename, Drop, Cast, Coalesce, AddField } from './components/field-transforms.js';
+export type { RenameProps, DropProps, CastProps, CoalesceProps, AddFieldProps } from './components/field-transforms.js';
+
 // Components: route
 export { Route } from './components/route.js';
 export type { RouteProps, RouteBranchProps, RouteDefaultProps } from './components/route.js';
