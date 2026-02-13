@@ -108,7 +108,6 @@ export function getMonorepoTemplates(opts: ScaffoldOptions): TemplateFile[] {
 
 export default defineEnvironment({
   name: 'dev',
-  flinkVersion: '${opts.flinkVersion}',
 });
 `,
     },

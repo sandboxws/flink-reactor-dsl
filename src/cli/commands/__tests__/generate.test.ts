@@ -78,7 +78,7 @@ describe('generate commands', () => {
 
       const content = readFileSync(filePath, 'utf-8');
       expect(content).toContain('UserEventsSchema');
-      expect(content).toContain("Schema('user_events'");
+      expect(content).toContain('Schema({');
     });
   });
 

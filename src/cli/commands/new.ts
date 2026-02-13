@@ -22,6 +22,7 @@ export interface ScaffoldOptions {
   flinkVersion: FlinkVersion;
   gitInit: boolean;
   installDeps: boolean;
+  registry?: string;
 }
 
 export interface TemplateFile {
@@ -57,6 +58,7 @@ export function registerNewCommand(program: Command): void {
     .option('-y, --yes', 'Use defaults, skip prompts')
     .option('--no-git', 'Skip git initialization')
     .option('--no-install', 'Skip dependency installation')
+    .option('--registry <url>', 'npm registry URL (writes .npmrc in project)')
     .description('Create a new FlinkReactor project')
     .action(async (projectName: string, opts: Record<string, unknown>) => {
       await runNewCommand(projectName, opts);
@@ -84,9 +86,10 @@ export async function runNewCommand(
       projectName,
       template: validateTemplate(opts.template as string) ?? 'starter',
       pm: validatePm(opts.pm as string) ?? 'pnpm',
-      flinkVersion: validateFlinkVersion(opts.flinkVersion as string) ?? '1.20',
+      flinkVersion: validateFlinkVersion(opts.flinkVersion as string) ?? '2.0',
       gitInit: opts.git !== false,
       installDeps: opts.install !== false,
+      registry: opts.registry as string | undefined,
     };
   } else {
     const collected = await collectOptions(projectName, opts);
@@ -146,7 +149,7 @@ async function collectOptions(
   }
 
   const flinkVersion = cliOpts.flinkVersion
-    ? validateFlinkVersion(cliOpts.flinkVersion as string) ?? '1.20'
+    ? validateFlinkVersion(cliOpts.flinkVersion as string) ?? '2.0'
     : await promptFlinkVersion();
 
   if (clack.isCancel(flinkVersion)) {
@@ -183,6 +186,7 @@ async function collectOptions(
     flinkVersion: flinkVersion as FlinkVersion,
     gitInit: gitInit as boolean,
     installDeps: installDeps as boolean,
+    registry: cliOpts.registry as string | undefined,
   };
 }
 
@@ -214,8 +218,8 @@ async function promptFlinkVersion(): Promise<FlinkVersion | symbol> {
   return clack.select({
     message: 'Target Flink version?',
     options: [
-      { value: '1.20', label: 'Flink 1.20 LTS', hint: 'recommended' },
-      { value: '2.0', label: 'Flink 2.0' },
+      { value: '2.0', label: 'Flink 2.0', hint: 'recommended' },
+      { value: '1.20', label: 'Flink 1.20 LTS' },
       { value: '2.1', label: 'Flink 2.1' },
       { value: '2.2', label: 'Flink 2.2' },
     ],

@@ -50,7 +50,7 @@ export function makeConfig(opts: ScaffoldOptions): string {
   return `import { defineConfig } from 'flink-reactor';
 
 export default defineConfig({
-  flinkVersion: '${opts.flinkVersion}',
+  flink: { version: '${opts.flinkVersion}' },
 });
 `;
 }
@@ -70,18 +70,25 @@ export function makeDevEnv(opts: ScaffoldOptions): string {
 
 export default defineEnvironment({
   name: 'dev',
-  flinkVersion: '${opts.flinkVersion}',
   // Override pipeline defaults for local development
 });
 `;
 }
 
+export function makeNpmrc(registry: string): string {
+  return `registry=${registry}\n`;
+}
+
 export function sharedFiles(opts: ScaffoldOptions): TemplateFile[] {
-  return [
+  const files: TemplateFile[] = [
     { path: 'package.json', content: makePackageJson(opts) },
     { path: 'tsconfig.json', content: makeTsconfig(opts) },
     { path: 'flink-reactor.config.ts', content: makeConfig(opts) },
     { path: '.gitignore', content: makeGitignore() },
     { path: 'env/dev.ts', content: makeDevEnv(opts) },
   ];
+  if (opts.registry) {
+    files.push({ path: '.npmrc', content: makeNpmrc(opts.registry) });
+  }
+  return files;
 }

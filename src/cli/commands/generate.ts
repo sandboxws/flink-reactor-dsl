@@ -99,12 +99,12 @@ export default (
     <KafkaSource
       topic="input-topic"
       schema={/* TODO: import schema */}
-      properties={{ 'bootstrap.servers': 'localhost:9092', 'group.id': '${name}' }}
+      bootstrapServers="localhost:9092"
+      consumerGroup="${name}"
     />
     <KafkaSink
       topic="output-topic"
-      schema={/* TODO: import schema */}
-      properties={{ 'bootstrap.servers': 'localhost:9092' }}
+      bootstrapServers="localhost:9092"
     />
   </Pipeline>
 );
@@ -119,13 +119,12 @@ export default (
     <KafkaSource
       topic="input-topic"
       schema={/* TODO: import schema */}
-      properties={{ 'bootstrap.servers': 'localhost:9092', 'group.id': '${name}' }}
+      bootstrapServers="localhost:9092"
+      consumerGroup="${name}"
     />
     <JdbcSink
       table="${name.replace(/-/g, '_')}"
-      schema={/* TODO: import schema */}
       url="jdbc:postgresql://localhost:5432/mydb"
-      driver="org.postgresql.Driver"
     />
   </Pipeline>
 );
@@ -161,10 +160,12 @@ export function generateSchema(name: string): void {
 
   const content = `import { Schema, Field } from 'flink-reactor';
 
-export const ${pascalName}Schema = Schema('${name.replace(/-/g, '_')}', {
-  id: Field.BIGINT(),
-  // TODO: add fields
-  createdAt: Field.TIMESTAMP(3),
+export const ${pascalName}Schema = Schema({
+  fields: {
+    id: Field.BIGINT(),
+    // TODO: add fields
+    createdAt: Field.TIMESTAMP(3),
+  },
 });
 `;
 

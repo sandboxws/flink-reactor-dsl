@@ -8,31 +8,37 @@ export function getRealtimeAnalyticsTemplates(opts: ScaffoldOptions): TemplateFi
       path: 'schemas/page-views.ts',
       content: `import { Schema, Field } from 'flink-reactor';
 
-export const PageViewSchema = Schema('page_views', {
-  userId: Field.STRING(),
-  pageUrl: Field.STRING(),
-  viewTimestamp: Field.TIMESTAMP(3),
+export const PageViewSchema = Schema({
+  fields: {
+    userId: Field.STRING(),
+    pageUrl: Field.STRING(),
+    viewTimestamp: Field.TIMESTAMP(3),
+  },
+  watermark: { column: 'viewTimestamp', expression: 'viewTimestamp - INTERVAL \\'5\\' SECOND' },
 });
 
-export const PageViewStatsSchema = Schema('page_view_stats', {
-  pageUrl: Field.STRING(),
-  viewCount: Field.BIGINT(),
-  windowStart: Field.TIMESTAMP(3),
-  windowEnd: Field.TIMESTAMP(3),
+export const PageViewStatsSchema = Schema({
+  fields: {
+    pageUrl: Field.STRING(),
+    viewCount: Field.BIGINT(),
+    windowStart: Field.TIMESTAMP(3),
+    windowEnd: Field.TIMESTAMP(3),
+  },
 });
 `,
     },
     {
       path: 'pipelines/page-view-analytics/index.tsx',
       content: `import { createElement, Pipeline, KafkaSource, TumbleWindow, Aggregate, JdbcSink } from 'flink-reactor';
-import { PageViewSchema, PageViewStatsSchema } from '../../schemas/page-views';
+import { PageViewSchema } from '../../schemas/page-views';
 
 export default (
   <Pipeline name="page-view-analytics">
     <KafkaSource
       topic="page-views"
       schema={PageViewSchema}
-      properties={{ 'bootstrap.servers': 'localhost:9092', 'group.id': 'analytics' }}
+      bootstrapServers="localhost:9092"
+      consumerGroup="analytics"
     />
     <TumbleWindow size="1 MINUTE" on="viewTimestamp" />
     <Aggregate
@@ -46,9 +52,7 @@ export default (
     />
     <JdbcSink
       table="page_view_stats"
-      schema={PageViewStatsSchema}
       url="jdbc:postgresql://localhost:5432/analytics"
-      driver="org.postgresql.Driver"
     />
   </Pipeline>
 );

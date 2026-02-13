@@ -10,7 +10,7 @@ function makeOptions(overrides?: Partial<ScaffoldOptions>): ScaffoldOptions {
     projectName: 'test-project',
     template: 'starter',
     pm: 'pnpm',
-    flinkVersion: '1.20',
+    flinkVersion: '2.0',
     gitInit: false,
     installDeps: false,
     ...overrides,
@@ -126,6 +126,21 @@ describe('scaffoldProject', () => {
         readFileSync(join(projectDir, 'packages', 'patterns', 'package.json'), 'utf-8'),
       );
       expect(patternsPkg.dependencies['@test-project/schemas']).toBe('workspace:*');
+    });
+  });
+
+  describe('registry option', () => {
+    it('creates .npmrc when registry is provided', () => {
+      scaffoldProject(projectDir, makeOptions({ registry: 'http://localhost:4873' }));
+
+      const npmrc = readFileSync(join(projectDir, '.npmrc'), 'utf-8');
+      expect(npmrc).toBe('registry=http://localhost:4873\n');
+    });
+
+    it('does not create .npmrc when registry is not provided', () => {
+      scaffoldProject(projectDir, makeOptions());
+
+      expect(existsSync(join(projectDir, '.npmrc'))).toBe(false);
     });
   });
 });

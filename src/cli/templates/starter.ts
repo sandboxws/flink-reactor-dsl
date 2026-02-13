@@ -8,12 +8,14 @@ export function getStarterTemplates(opts: ScaffoldOptions): TemplateFile[] {
       path: 'schemas/events.ts',
       content: `import { Schema, Field } from 'flink-reactor';
 
-export const EventSchema = Schema('events', {
-  id: Field.BIGINT(),
-  userId: Field.STRING(),
-  eventType: Field.STRING(),
-  payload: Field.STRING(),
-  timestamp: Field.TIMESTAMP(3),
+export const EventSchema = Schema({
+  fields: {
+    id: Field.BIGINT(),
+    userId: Field.STRING(),
+    eventType: Field.STRING(),
+    payload: Field.STRING(),
+    timestamp: Field.TIMESTAMP(3),
+  },
 });
 `,
     },
@@ -27,13 +29,13 @@ export default (
     <KafkaSource
       topic="events"
       schema={EventSchema}
-      properties={{ 'bootstrap.servers': 'localhost:9092', 'group.id': 'hello-world' }}
+      bootstrapServers="localhost:9092"
+      consumerGroup="hello-world"
     />
     <Filter condition="eventType <> 'internal'" />
     <KafkaSink
       topic="filtered-events"
-      schema={EventSchema}
-      properties={{ 'bootstrap.servers': 'localhost:9092' }}
+      bootstrapServers="localhost:9092"
     />
   </Pipeline>
 );

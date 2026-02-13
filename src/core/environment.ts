@@ -88,3 +88,14 @@ export function discoverEnvironments(
       path: `${envDir}/${f}`,
     }));
 }
+
+// ── defineEnvironment ───────────────────────────────────────────────
+
+/**
+ * Helper for creating a typed environment config file (env/*.ts).
+ *
+ * Returns a frozen EnvironmentConfig.
+ */
+export function defineEnvironment(config: EnvironmentConfig): EnvironmentConfig {
+  return Object.freeze(config);
+}

@@ -8,32 +8,41 @@ export function getCdcLakehouseTemplates(opts: ScaffoldOptions): TemplateFile[] 
       path: 'schemas/orders.ts',
       content: `import { Schema, Field } from 'flink-reactor';
 
-export const OrderSchema = Schema('orders', {
-  orderId: Field.BIGINT(),
-  customerId: Field.BIGINT(),
-  product: Field.STRING(),
-  amount: Field.DECIMAL(10, 2),
-  status: Field.STRING(),
-  createdAt: Field.TIMESTAMP(3),
-  updatedAt: Field.TIMESTAMP(3),
+export const OrderSchema = Schema({
+  fields: {
+    orderId: Field.BIGINT(),
+    customerId: Field.BIGINT(),
+    product: Field.STRING(),
+    amount: Field.DECIMAL(10, 2),
+    status: Field.STRING(),
+    createdAt: Field.TIMESTAMP(3),
+    updatedAt: Field.TIMESTAMP(3),
+  },
+  primaryKey: { columns: ['orderId'] },
 });
 `,
     },
     {
       path: 'pipelines/cdc-to-lakehouse/index.tsx',
-      content: `import { createElement, Pipeline, KafkaSource, PaimonSink } from 'flink-reactor';
+      content: `import { createElement, Pipeline, KafkaSource, PaimonCatalog, PaimonSink } from 'flink-reactor';
 import { OrderSchema } from '../../schemas/orders';
+
+const lakehouse = PaimonCatalog({ name: 'lakehouse', warehouse: 's3://my-bucket/warehouse' });
 
 export default (
   <Pipeline name="cdc-to-lakehouse">
+    {lakehouse.node}
     <KafkaSource
       topic="dbserver1.inventory.orders"
       schema={OrderSchema}
       format="debezium-json"
-      properties={{ 'bootstrap.servers': 'localhost:9092', 'group.id': 'cdc-lakehouse' }}
+      bootstrapServers="localhost:9092"
+      consumerGroup="cdc-lakehouse"
     />
     <PaimonSink
-      table="lakehouse.orders"
+      catalog={lakehouse.handle}
+      database="inventory"
+      table="orders"
       primaryKey={['orderId']}
     />
   </Pipeline>
