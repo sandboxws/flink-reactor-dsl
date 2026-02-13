@@ -3,7 +3,7 @@
 exports[`5.5: synth() test helper > works with toMatchSnapshot() 1`] = `
 "SET 'parallelism.default' = '1';
 
-CREATE TABLE \`KafkaSource_0\` (
+CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
@@ -15,14 +15,19 @@ CREATE TABLE \`KafkaSource_0\` (
   'format' = 'json'
 );
 
-CREATE TABLE \`KafkaSink_1\` WITH (
+CREATE TABLE \`output\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`event_time\` TIMESTAMP(3)
+) WITH (
   'connector' = 'kafka',
   'topic' = 'output',
   'format' = 'json'
 );
 
-INSERT INTO \`KafkaSink_1\`
-SELECT * FROM \`KafkaSource_0\`;
+INSERT INTO \`output\`
+SELECT * FROM \`orders\`;
 "
 `;
 

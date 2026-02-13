@@ -75,15 +75,16 @@ export function generateSql(
     }
   }
 
-  // 4. CREATE TABLE (sinks) — check plugin DDL generators first
+  // 4. CREATE TABLE (sinks) — resolve schemas then generate DDL
   const sinks = ctx.getNodesByKind('Sink');
+  const sinkMeta = resolveSinkMetadata(pipelineNode, nodeIndex);
   for (const sink of sinks) {
     const pluginGen = pluginDdl?.get(sink.component);
     if (pluginGen) {
       const ddl = pluginGen(sink);
       if (ddl) statements.push(ddl);
     } else {
-      statements.push(generateSinkDdl(sink));
+      statements.push(generateSinkDdl(sink, sinkMeta.get(sink.id)));
     }
   }
 
@@ -393,7 +394,7 @@ function generateSourceWithClause(node: ConstructNode): string {
 
 // ── CREATE TABLE DDL (Sinks) ────────────────────────────────────────
 
-function generateSinkDdl(node: ConstructNode): string {
+function generateSinkDdl(node: ConstructNode, metadata?: SinkMetadata): string {
   const props = node.props;
   const tableName = node.id;
 
@@ -401,20 +402,62 @@ function generateSinkDdl(node: ConstructNode): string {
     return `-- ${node.component} ${q(String(props.catalogName))}.${q(String(props.database))}.${q(String(props.table))} (catalog-managed)`;
   }
 
-  const withClause = generateSinkWithClause(node);
+  const withClause = generateSinkWithClause(node, metadata);
   const parts: string[] = [];
+
+  // Build column definitions from resolved schema
+  const columnDefs = metadata?.schema
+    ? metadata.schema.map((c) => `  ${q(c.name)} ${c.type}`).join(',\n')
+    : null;
+
+  // Determine if we need a PRIMARY KEY (for upsert-kafka sinks)
+  const needsUpsertPk = metadata?.changelogMode === 'retract'
+    && node.component === 'KafkaSink'
+    && metadata.primaryKey
+    && metadata.primaryKey.length > 0;
 
   if (node.component === 'JdbcSink' && props.upsertMode && props.keyFields) {
     const cols = (props.keyFields as readonly string[]).map(q).join(', ');
-    parts.push(
-      `CREATE TABLE ${q(tableName)} (`,
-      `  PRIMARY KEY (${cols}) NOT ENFORCED`,
-      `) WITH (\n${withClause}\n);`,
-    );
+    if (columnDefs) {
+      parts.push(
+        `CREATE TABLE ${q(tableName)} (`,
+        columnDefs + ',',
+        `  PRIMARY KEY (${cols}) NOT ENFORCED`,
+        `) WITH (\n${withClause}\n);`,
+      );
+    } else {
+      parts.push(
+        `CREATE TABLE ${q(tableName)} (`,
+        `  PRIMARY KEY (${cols}) NOT ENFORCED`,
+        `) WITH (\n${withClause}\n);`,
+      );
+    }
   } else if (node.component === 'FileSystemSink' && props.partitionBy) {
     const partCols = (props.partitionBy as readonly string[]).join(', ');
+    if (columnDefs) {
+      parts.push(
+        `CREATE TABLE ${q(tableName)} (`,
+        columnDefs,
+        `) PARTITIONED BY (${partCols}) WITH (\n${withClause}\n);`,
+      );
+    } else {
+      parts.push(
+        `CREATE TABLE ${q(tableName)} PARTITIONED BY (${partCols}) WITH (\n${withClause}\n);`,
+      );
+    }
+  } else if (needsUpsertPk && columnDefs) {
+    const pkCols = metadata!.primaryKey!.map(q).join(', ');
     parts.push(
-      `CREATE TABLE ${q(tableName)} PARTITIONED BY (${partCols}) WITH (\n${withClause}\n);`,
+      `CREATE TABLE ${q(tableName)} (`,
+      columnDefs + ',',
+      `  PRIMARY KEY (${pkCols}) NOT ENFORCED`,
+      `) WITH (\n${withClause}\n);`,
+    );
+  } else if (columnDefs) {
+    parts.push(
+      `CREATE TABLE ${q(tableName)} (`,
+      columnDefs,
+      `) WITH (\n${withClause}\n);`,
     );
   } else {
     parts.push(`CREATE TABLE ${q(tableName)} WITH (\n${withClause}\n);`);
@@ -423,19 +466,30 @@ function generateSinkDdl(node: ConstructNode): string {
   return parts.join('\n');
 }
 
-function generateSinkWithClause(node: ConstructNode): string {
+function generateSinkWithClause(node: ConstructNode, metadata?: SinkMetadata): string {
   const props = node.props;
   const withProps: Record<string, string> = {};
 
   switch (node.component) {
-    case 'KafkaSink':
-      withProps['connector'] = 'kafka';
-      withProps['topic'] = props.topic as string;
-      withProps['format'] = (props.format as string) ?? 'json';
+    case 'KafkaSink': {
+      const needsUpsert = metadata?.changelogMode === 'retract'
+        && metadata.primaryKey
+        && metadata.primaryKey.length > 0;
+      if (needsUpsert) {
+        withProps['connector'] = 'upsert-kafka';
+        withProps['topic'] = props.topic as string;
+        withProps['key.format'] = 'json';
+        withProps['value.format'] = (props.format as string) ?? 'json';
+      } else {
+        withProps['connector'] = 'kafka';
+        withProps['topic'] = props.topic as string;
+        withProps['format'] = (props.format as string) ?? 'json';
+      }
       if (props.bootstrapServers) {
         withProps['properties.bootstrap.servers'] = props.bootstrapServers as string;
       }
       break;
+    }
     case 'JdbcSink':
       withProps['connector'] = 'jdbc';
       withProps['url'] = props.url as string;
@@ -457,6 +511,407 @@ function generateSinkWithClause(node: ConstructNode): string {
   return Object.entries(withProps)
     .map(([k, v]) => `  '${k}' = '${v}'`)
     .join(',\n');
+}
+
+// ── Sink schema resolution ──────────────────────────────────────────
+
+interface ResolvedColumn {
+  readonly name: string;
+  readonly type: string;
+}
+
+type ChangelogMode = 'append-only' | 'retract';
+
+interface SinkMetadata {
+  readonly schema: ResolvedColumn[];
+  readonly changelogMode: ChangelogMode;
+  readonly primaryKey?: readonly string[];
+}
+
+/**
+ * Resolve the output schema of a node by tracing upstream through transforms.
+ * Returns column definitions or null if schema cannot be inferred.
+ */
+function resolveNodeSchema(node: ConstructNode, nodeIndex: Map<string, ConstructNode>): ResolvedColumn[] | null {
+  switch (node.component) {
+    case 'KafkaSource':
+    case 'JdbcSource':
+    case 'GenericSource': {
+      const schema = node.props.schema as SchemaDefinition | undefined;
+      if (!schema) return null;
+      return Object.entries(schema.fields).map(([name, type]) => ({
+        name,
+        type: type as string,
+      }));
+    }
+
+    // Passthrough transforms — same schema as upstream
+    case 'Filter':
+    case 'Deduplicate':
+    case 'TopN':
+      return node.children.length > 0
+        ? resolveNodeSchema(node.children[0], nodeIndex)
+        : null;
+
+    // Map — output columns from `select` keys, types inferred from upstream
+    case 'Map': {
+      const select = node.props.select as Record<string, string>;
+      const upstreamSchema = node.children.length > 0
+        ? resolveNodeSchema(node.children[0], nodeIndex)
+        : null;
+      const upstreamFields = new Map(
+        upstreamSchema?.map((c) => [c.name, c.type]) ?? [],
+      );
+      return Object.entries(select).map(([alias, expr]) => ({
+        name: alias,
+        type: inferExpressionType(expr, upstreamFields),
+      }));
+    }
+
+    // Aggregate — groupBy fields + select aggregates
+    case 'Aggregate': {
+      const groupBy = node.props.groupBy as readonly string[];
+      const select = node.props.select as Record<string, string>;
+      const groupBySet = new Set(groupBy);
+      const upstreamSchema = node.children.length > 0
+        ? resolveNodeSchema(node.children[0], nodeIndex)
+        : null;
+      const upstreamFields = new Map(
+        upstreamSchema?.map((c) => [c.name, c.type]) ?? [],
+      );
+
+      const columns: ResolvedColumn[] = [];
+      // Add groupBy columns with original types
+      for (const col of groupBy) {
+        columns.push({
+          name: col,
+          type: upstreamFields.get(col) ?? 'STRING',
+        });
+      }
+      // Add aggregate select columns, skipping duplicates of groupBy columns
+      for (const [alias, expr] of Object.entries(select)) {
+        if (!groupBySet.has(alias)) {
+          columns.push({
+            name: alias,
+            type: inferExpressionType(expr, upstreamFields),
+          });
+        }
+      }
+      return columns;
+    }
+
+    // VirtualRef — internal node used by Route branch chaining
+    case 'VirtualRef':
+      return null;
+
+    default:
+      // Try first child
+      return node.children.length > 0
+        ? resolveNodeSchema(node.children[0], nodeIndex)
+        : null;
+  }
+}
+
+/**
+ * Infer the Flink SQL output type of an expression given upstream field types.
+ *
+ * Handles common aggregate functions (SUM, COUNT, AVG, MIN, MAX) and
+ * simple column references. Falls back to STRING for complex expressions.
+ */
+function inferExpressionType(expr: string, upstreamFields: Map<string, string>): string {
+  const trimmed = expr.trim();
+
+  // Simple column reference (possibly backtick-quoted)
+  const colName = trimmed.replace(/^`|`$/g, '');
+  if (upstreamFields.has(colName)) {
+    return upstreamFields.get(colName)!;
+  }
+
+  // COUNT(*) / COUNT(col)
+  if (/^COUNT\s*\(/i.test(trimmed)) {
+    return 'BIGINT';
+  }
+
+  // SUM(col) — promote INT to BIGINT, keep DOUBLE/DECIMAL
+  const sumMatch = trimmed.match(/^SUM\s*\(\s*`?(\w+)`?\s*\)/i);
+  if (sumMatch) {
+    const fieldType = upstreamFields.get(sumMatch[1]) ?? 'BIGINT';
+    if (fieldType === 'INT' || fieldType === 'SMALLINT' || fieldType === 'TINYINT') return 'BIGINT';
+    return fieldType;
+  }
+
+  // AVG(col) — always DOUBLE for integer types, keep DECIMAL
+  const avgMatch = trimmed.match(/^AVG\s*\(\s*`?(\w+)`?\s*\)/i);
+  if (avgMatch) {
+    const fieldType = upstreamFields.get(avgMatch[1]) ?? 'DOUBLE';
+    if (fieldType.startsWith('DECIMAL')) return fieldType;
+    return 'DOUBLE';
+  }
+
+  // MIN/MAX(col) — same type as source
+  const minMaxMatch = trimmed.match(/^(?:MIN|MAX)\s*\(\s*`?(\w+)`?\s*\)/i);
+  if (minMaxMatch) {
+    return upstreamFields.get(minMaxMatch[1]) ?? 'STRING';
+  }
+
+  // Fallback
+  return 'STRING';
+}
+
+/**
+ * Walk the pipeline tree to resolve metadata (schema, changelog mode, primary key) for all sinks.
+ *
+ * Handles both patterns:
+ * - Reverse-nesting (Sink → Transform → Source): sink's children are its upstream
+ * - Forward-reading with Route (Pipeline → Source, Route → Branch → Transform, Sink):
+ *   sink's upstream comes from the Route's source via branch transforms
+ */
+function resolveSinkMetadata(
+  pipelineNode: ConstructNode,
+  nodeIndex: Map<string, ConstructNode>,
+): Map<string, SinkMetadata> {
+  const result = new Map<string, SinkMetadata>();
+
+  function resolveSourceChangelogMode(source: ConstructNode): ChangelogMode {
+    const mode = source.props.changelogMode as string | undefined;
+    return mode === 'retract' ? 'retract' : 'append-only';
+  }
+
+  function resolveSourcePrimaryKey(source: ConstructNode): readonly string[] | undefined {
+    const schema = source.props.schema as { primaryKey?: { columns: readonly string[] } } | undefined;
+    return schema?.primaryKey?.columns;
+  }
+
+  /**
+   * Propagate changelog mode through a transform chain.
+   *
+   * - Unbounded Aggregate (no window) → retract (emits updates as values change)
+   * - Windowed Aggregate (inside TumbleWindow/SlideWindow/SessionWindow) → append-only
+   *   (each window fires a single final result)
+   * - Other transforms preserve the upstream changelog mode.
+   */
+  function propagateChangelogMode(transforms: readonly ConstructNode[], upstreamMode: ChangelogMode): ChangelogMode {
+    let mode = upstreamMode;
+    const hasWindow = transforms.some((t) => t.kind === 'Window');
+    for (const t of transforms) {
+      // Only unbounded aggregation produces retract; windowed aggregation is append-only
+      if (t.component === 'Aggregate' && !hasWindow) {
+        mode = 'retract';
+      }
+    }
+    return mode;
+  }
+
+  /**
+   * Propagate primary key through a transform chain.
+   * - Filter/Map/Deduplicate/TopN: PK preserved from upstream
+   * - Aggregate: PK becomes the groupBy columns
+   */
+  function propagatePrimaryKey(
+    transforms: readonly ConstructNode[],
+    upstreamPk: readonly string[] | undefined,
+  ): readonly string[] | undefined {
+    let pk = upstreamPk;
+    for (const t of transforms) {
+      if (t.component === 'Aggregate') {
+        pk = t.props.groupBy as readonly string[];
+      }
+    }
+    return pk;
+  }
+
+  function walk(node: ConstructNode, parent?: ConstructNode): void {
+    if (node.kind === 'Sink') {
+      // Pattern 1: sink has children (reverse-nesting)
+      if (node.children.length > 0) {
+        const upstream = node.children[0];
+        const schema = resolveNodeSchema(upstream, nodeIndex);
+        // Walk to source to get changelog mode
+        const sourceNode = findDeepestSource(upstream);
+        const changelogMode = sourceNode
+          ? propagateChangelogMode(collectTransformChain(node.children[0]), resolveSourceChangelogMode(sourceNode))
+          : 'append-only';
+        const primaryKey = sourceNode
+          ? propagatePrimaryKey(collectTransformChain(node.children[0]), resolveSourcePrimaryKey(sourceNode))
+          : undefined;
+        if (schema) result.set(node.id, { schema, changelogMode, primaryKey });
+        return;
+      }
+      // Pattern 2: forward-reading JSX — resolve from preceding siblings
+      if (parent) {
+        const sinkIndex = parent.children.indexOf(node);
+        let schema: ResolvedColumn[] | null = null;
+        let changelogMode: ChangelogMode = 'append-only';
+        let primaryKey: readonly string[] | undefined;
+        for (let i = sinkIndex - 1; i >= 0; i--) {
+          const sibling = parent.children[i];
+          if (sibling.kind === 'Source') {
+            schema = resolveNodeSchema(sibling, nodeIndex);
+            changelogMode = resolveSourceChangelogMode(sibling);
+            primaryKey = resolveSourcePrimaryKey(sibling);
+            // Propagate through intermediate transforms
+            const transforms: ConstructNode[] = [];
+            for (let j = i + 1; j < sinkIndex; j++) {
+              const transform = parent.children[j];
+              if (transform.kind === 'Transform') {
+                transforms.push(transform);
+                if (schema) schema = resolveTransformSchema(transform, schema);
+              }
+            }
+            changelogMode = propagateChangelogMode(transforms, changelogMode);
+            primaryKey = propagatePrimaryKey(transforms, primaryKey);
+            break;
+          }
+        }
+        if (schema) result.set(node.id, { schema, changelogMode, primaryKey });
+      }
+      return;
+    }
+
+    if (node.component === 'Route') {
+      // Find upstream source for the Route
+      const routeUpstreamNode = findRouteUpstreamNode(node, parent);
+      const routeSchema = routeUpstreamNode
+        ? resolveNodeSchema(routeUpstreamNode, nodeIndex)
+        : null;
+      const upstreamSource = routeUpstreamNode?.kind === 'Source'
+        ? routeUpstreamNode
+        : routeUpstreamNode ? findDeepestSource(routeUpstreamNode) : null;
+      const baseChangelogMode = upstreamSource
+        ? resolveSourceChangelogMode(upstreamSource)
+        : 'append-only' as ChangelogMode;
+      const basePk = upstreamSource ? resolveSourcePrimaryKey(upstreamSource) : undefined;
+
+      // Resolve metadata for each sink in each branch
+      const branches = node.children.filter(
+        (c) => c.component === 'Route.Branch' || c.component === 'Route.Default',
+      );
+      for (const branch of branches) {
+        const transforms = branch.children.filter((c) => c.kind !== 'Sink');
+        const sinks = branch.children.filter((c) => c.kind === 'Sink');
+
+        // Propagate schema through transforms
+        let schema = routeSchema;
+        for (const transform of transforms) {
+          if (!schema) break;
+          schema = resolveTransformSchema(transform, schema);
+        }
+
+        const changelogMode = propagateChangelogMode(transforms, baseChangelogMode);
+        const primaryKey = propagatePrimaryKey(transforms, basePk);
+
+        if (schema) {
+          for (const sink of sinks) {
+            result.set(sink.id, { schema, changelogMode, primaryKey });
+          }
+        }
+      }
+      return;
+    }
+
+    // Recurse
+    for (const child of node.children) {
+      walk(child, node);
+    }
+  }
+
+  walk(pipelineNode);
+  return result;
+}
+
+/**
+ * Find the deepest source node by walking down children.
+ */
+function findDeepestSource(node: ConstructNode): ConstructNode | null {
+  if (node.kind === 'Source') return node;
+  for (const child of node.children) {
+    const found = findDeepestSource(child);
+    if (found) return found;
+  }
+  return null;
+}
+
+/**
+ * Collect the transform/window chain from a node down to (but not including) the source.
+ * Includes both Transform and Window nodes so changelog mode propagation can
+ * distinguish windowed vs unbounded aggregations.
+ */
+function collectTransformChain(node: ConstructNode): ConstructNode[] {
+  const chain: ConstructNode[] = [];
+  let current: ConstructNode | undefined = node;
+  while (current && current.kind !== 'Source') {
+    if (current.kind === 'Transform' || current.kind === 'Window') chain.push(current);
+    current = current.children[0];
+  }
+  return chain;
+}
+
+/**
+ * Find the upstream source/transform node for a Route by looking at preceding siblings.
+ */
+function findRouteUpstreamNode(routeNode: ConstructNode, parent?: ConstructNode): ConstructNode | null {
+  // Check non-Branch children first (programmatic pattern)
+  const upstreamChildren = routeNode.children.filter(
+    (c) => c.component !== 'Route.Branch' && c.component !== 'Route.Default',
+  );
+  if (upstreamChildren.length > 0) return upstreamChildren[0];
+
+  // Look at preceding siblings in parent (JSX pattern)
+  if (parent) {
+    const routeIndex = parent.children.indexOf(routeNode);
+    for (let i = routeIndex - 1; i >= 0; i--) {
+      const sibling = parent.children[i];
+      if (sibling.kind === 'Source' || sibling.kind === 'Transform') {
+        return sibling;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Apply a transform to a schema, returning the output schema.
+ */
+function resolveTransformSchema(
+  transform: ConstructNode,
+  inputSchema: ResolvedColumn[],
+): ResolvedColumn[] | null {
+  const upstreamFields = new Map(inputSchema.map((c) => [c.name, c.type]));
+
+  switch (transform.component) {
+    case 'Filter':
+    case 'Deduplicate':
+    case 'TopN':
+      return inputSchema; // passthrough
+
+    case 'Map': {
+      const select = transform.props.select as Record<string, string>;
+      return Object.entries(select).map(([alias, expr]) => ({
+        name: alias,
+        type: inferExpressionType(expr, upstreamFields),
+      }));
+    }
+
+    case 'Aggregate': {
+      const groupBy = transform.props.groupBy as readonly string[];
+      const select = transform.props.select as Record<string, string>;
+      const groupBySet = new Set(groupBy);
+      const columns: ResolvedColumn[] = [];
+      for (const col of groupBy) {
+        columns.push({ name: col, type: upstreamFields.get(col) ?? 'STRING' });
+      }
+      // Skip select entries that duplicate a groupBy column
+      for (const [alias, expr] of Object.entries(select)) {
+        if (!groupBySet.has(alias)) {
+          columns.push({ name: alias, type: inferExpressionType(expr, upstreamFields) });
+        }
+      }
+      return columns;
+    }
+
+    default:
+      return inputSchema; // assume passthrough for unknown transforms
+  }
 }
 
 // ── DML generation ──────────────────────────────────────────────────
@@ -487,18 +942,95 @@ function generateDml(
   return statements;
 }
 
+/**
+ * Build a query by chaining preceding siblings in forward-reading JSX order.
+ *
+ * In `<Pipeline><Source/><Filter/><KafkaSink/></Pipeline>`, the siblings
+ * before the sink form a linear chain: Source → Filter → (sink).
+ * Each transform operates on the output of the preceding sibling.
+ * We use VirtualRef to temporarily inject upstream into childless transforms.
+ */
+function buildSiblingChainQuery(
+  parent: ConstructNode,
+  sinkIndex: number,
+  nodeIndex: Map<string, ConstructNode>,
+  pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
+): string {
+  // Collect preceding siblings that form the data chain
+  const chain: ConstructNode[] = [];
+  for (let i = 0; i < sinkIndex; i++) {
+    const sibling = parent.children[i];
+    if (sibling.kind === 'Source' || sibling.kind === 'Transform') {
+      chain.push(sibling);
+    }
+  }
+
+  if (chain.length === 0) return 'SELECT * FROM unknown';
+
+  // If only a source, just reference it
+  if (chain.length === 1 && chain[0].kind === 'Source') {
+    return buildQuery(chain[0], nodeIndex, pluginSql);
+  }
+
+  // Chain: first element is the source, rest are transforms
+  let currentUpstream: { sql: string; sourceRef: string; isSimple: boolean } = {
+    sql: buildQuery(chain[0], nodeIndex, pluginSql),
+    sourceRef: chain[0].kind === 'Source' ? q(chain[0].id) : chain[0].id,
+    isSimple: chain[0].kind === 'Source',
+  };
+
+  for (let i = 1; i < chain.length; i++) {
+    const transform = chain[i];
+
+    // Only inject VirtualRef if the transform has no children (forward-reading pattern)
+    if (transform.children.length > 0) {
+      // Transform already has children (reverse-nesting) — just build it normally
+      currentUpstream = {
+        sql: buildQuery(transform, nodeIndex, pluginSql),
+        sourceRef: transform.id,
+        isSimple: false,
+      };
+      continue;
+    }
+
+    const savedChildren = transform.children;
+    const rawRef = currentUpstream.sourceRef.replace(/^`|`$/g, '');
+
+    const virtualSource: ConstructNode = currentUpstream.isSimple
+      ? { id: rawRef, kind: 'Source', component: 'VirtualRef', props: {}, children: [] }
+      : { id: `_subquery_${transform.id}`, kind: 'Source', component: 'VirtualRef', props: { _sql: currentUpstream.sql }, children: [] };
+
+    (transform as { children: ConstructNode[] }).children = [virtualSource];
+    const sql = buildQuery(transform, nodeIndex, pluginSql);
+    (transform as { children: ConstructNode[] }).children = savedChildren;
+
+    currentUpstream = { sql, sourceRef: transform.id, isSimple: false };
+  }
+
+  return currentUpstream.sql;
+}
+
 function collectSinkDml(
   node: ConstructNode,
   nodeIndex: Map<string, ConstructNode>,
   statements: string[],
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
+  parent?: ConstructNode,
 ): void {
   if (node.kind === 'Sink') {
     const sinkRef = resolveSinkRef(node);
-    // The sink's children are its upstream (transforms/sources)
-    const upstream = node.children.length > 0
-      ? buildQuery(node.children[0], nodeIndex, pluginSql)
-      : 'SELECT * FROM unknown';
+    let upstream: string;
+    if (node.children.length > 0) {
+      // Pattern 1: reverse-nesting — sink wraps its upstream as children
+      upstream = buildQuery(node.children[0], nodeIndex, pluginSql);
+    } else if (parent) {
+      // Pattern 2: forward-reading JSX — sink is a sibling of its upstream
+      // Collect preceding siblings (sources + transforms) in reading order and chain them
+      const sinkIndex = parent.children.indexOf(node);
+      upstream = buildSiblingChainQuery(parent, sinkIndex, nodeIndex, pluginSql);
+    } else {
+      upstream = 'SELECT * FROM unknown';
+    }
     statements.push(`INSERT INTO ${sinkRef}\n${upstream};`);
     // Recurse into upstream to find SideOutput/Validate side-path DML
     for (const child of node.children) {
@@ -509,7 +1041,7 @@ function collectSinkDml(
 
   // Route generates multiple INSERT statements (one per branch)
   if (node.component === 'Route') {
-    collectRouteDml(node, nodeIndex, statements, pluginSql);
+    collectRouteDml(node, nodeIndex, statements, pluginSql, parent);
     return;
   }
 
@@ -527,8 +1059,122 @@ function collectSinkDml(
 
   // Recurse into children to find sinks
   for (const child of node.children) {
-    collectSinkDml(child, nodeIndex, statements, pluginSql);
+    collectSinkDml(child, nodeIndex, statements, pluginSql, node);
   }
+}
+
+/**
+ * Find Route's upstream data source.
+ *
+ * Strategy:
+ * 1. Look for non-Branch/Default children of Route (programmatic API pattern)
+ * 2. If none found, look at preceding siblings in the parent (JSX forward-reading pattern)
+ */
+function resolveRouteUpstream(
+  routeNode: ConstructNode,
+  nodeIndex: Map<string, ConstructNode>,
+  pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
+  parent?: ConstructNode,
+): { sql: string; sourceRef: string; isSimple: boolean } {
+  // Pattern 1: upstream is a direct non-Branch child of Route
+  const upstreamChildren = routeNode.children.filter(
+    (c) => c.component !== 'Route.Branch' && c.component !== 'Route.Default',
+  );
+  if (upstreamChildren.length > 0) {
+    const up = getUpstream({ children: upstreamChildren } as ConstructNode, nodeIndex, pluginSql);
+    return up;
+  }
+
+  // Pattern 2: upstream is a preceding sibling in parent (JSX forward-reading)
+  if (parent) {
+    const routeIndex = parent.children.indexOf(routeNode);
+    for (let i = routeIndex - 1; i >= 0; i--) {
+      const sibling = parent.children[i];
+      if (sibling.kind === 'Source' || sibling.kind === 'Transform') {
+        const up = getUpstream({ children: [sibling] } as ConstructNode, nodeIndex, pluginSql);
+        return up;
+      }
+    }
+  }
+
+  return { sql: 'SELECT * FROM unknown', sourceRef: 'unknown', isSimple: false };
+}
+
+/**
+ * Build a query chain through transforms within a Route.Branch.
+ *
+ * Branch children are in forward reading order: [Transform1, Transform2, ..., Sink].
+ * Data flow: source → (branch condition) → Transform1 → Transform2 → ... → Sink
+ *
+ * When the first transform is a Filter, the branch condition is merged into
+ * the Filter's WHERE clause with AND for cleaner output. For aggregation
+ * branches, the branch condition becomes a WHERE before the GROUP BY.
+ */
+function buildBranchQuery(
+  transforms: readonly ConstructNode[],
+  upstream: { sql: string; sourceRef: string; isSimple: boolean },
+  branchCondition: string | undefined,
+  nodeIndex: Map<string, ConstructNode>,
+  pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
+): string {
+  // No transforms, no condition: just reference the source
+  if (transforms.length === 0 && !branchCondition) {
+    return upstream.isSimple
+      ? `SELECT * FROM ${upstream.sourceRef}`
+      : upstream.sql;
+  }
+
+  // No transforms, just branch condition
+  if (transforms.length === 0 && branchCondition) {
+    return upstream.isSimple
+      ? `SELECT * FROM ${upstream.sourceRef}\nWHERE ${branchCondition}`
+      : `SELECT * FROM (\n${upstream.sql}\n)\nWHERE ${branchCondition}`;
+  }
+
+  // Has transforms — chain them with the source as starting point.
+  // The branch condition applies BEFORE transforms (it selects which rows go to this branch).
+
+  // Optimization: if first transform is Filter, merge branch condition into Filter's WHERE
+  const firstTransform = transforms[0];
+  let startIndex = 0;
+  let currentUpstream = upstream;
+
+  if (branchCondition && firstTransform.component === 'Filter') {
+    // Merge: Filter WHERE <filterCondition> AND <branchCondition>
+    const filterCondition = firstTransform.props.condition as string;
+    const mergedSql = upstream.isSimple
+      ? `SELECT * FROM ${upstream.sourceRef}\nWHERE ${filterCondition} AND ${branchCondition}`
+      : `SELECT * FROM (\n${upstream.sql}\n)\nWHERE ${filterCondition} AND ${branchCondition}`;
+    currentUpstream = { sql: mergedSql, sourceRef: upstream.sourceRef, isSimple: false };
+    startIndex = 1; // skip the first Filter since we already applied it
+  } else if (branchCondition) {
+    // Apply branch condition as a WHERE on the source, before transforms
+    const filteredSql = upstream.isSimple
+      ? `SELECT * FROM ${upstream.sourceRef}\nWHERE ${branchCondition}`
+      : `SELECT * FROM (\n${upstream.sql}\n)\nWHERE ${branchCondition}`;
+    currentUpstream = { sql: filteredSql, sourceRef: upstream.sourceRef, isSimple: false };
+  }
+
+  // Chain remaining transforms using VirtualRef for temporary child injection
+  for (let i = startIndex; i < transforms.length; i++) {
+    const transform = transforms[i];
+    const savedChildren = transform.children;
+
+    // Strip backticks from sourceRef to avoid double-quoting when q() is applied
+    const rawRef = currentUpstream.sourceRef.replace(/^`|`$/g, '');
+
+    const virtualSource: ConstructNode = currentUpstream.isSimple
+      ? { id: rawRef, kind: 'Source', component: 'VirtualRef', props: {}, children: [] }
+      : { id: `_subquery_${transform.id}`, kind: 'Source', component: 'VirtualRef', props: { _sql: currentUpstream.sql }, children: [] };
+
+    (transform as { children: ConstructNode[] }).children = [virtualSource];
+    const sql = buildQuery(transform, nodeIndex, pluginSql);
+    (transform as { children: ConstructNode[] }).children = savedChildren;
+
+    currentUpstream = { sql, sourceRef: transform.id, isSimple: false };
+  }
+
+  return currentUpstream.sql;
 }
 
 function collectRouteDml(
@@ -536,34 +1182,29 @@ function collectRouteDml(
   nodeIndex: Map<string, ConstructNode>,
   statements: string[],
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
+  parent?: ConstructNode,
 ): void {
-  // Route's upstream is found by looking at its own children that are
-  // NOT Route.Branch / Route.Default
-  const upstreamChildren = routeNode.children.filter(
-    (c) => c.component !== 'Route.Branch' && c.component !== 'Route.Default',
-  );
   const branches = routeNode.children.filter(
     (c) => c.component === 'Route.Branch' || c.component === 'Route.Default',
   );
 
-  // Find the source upstream of the route
-  const sourceQuery = upstreamChildren.length > 0
-    ? buildQuery(upstreamChildren[0], nodeIndex, pluginSql)
-    : 'SELECT * FROM unknown';
+  const upstream = resolveRouteUpstream(routeNode, nodeIndex, pluginSql, parent);
 
   for (const branch of branches) {
-    const condition = branch.props.condition as string | undefined;
+    // Normalize: treat condition "true" as no condition (it selects all rows)
+    const rawCondition = branch.props.condition as string | undefined;
+    const condition = rawCondition?.trim().toLowerCase() === 'true' ? undefined : rawCondition;
 
-    // Find sinks inside the branch
-    for (const child of branch.children) {
-      if (child.kind === 'Sink') {
-        const sinkRef = resolveSinkRef(child);
-        if (condition) {
-          statements.push(`INSERT INTO ${sinkRef}\n${sourceQuery} WHERE ${condition};`);
-        } else {
-          statements.push(`INSERT INTO ${sinkRef}\n${sourceQuery};`);
-        }
-      }
+    // Separate transforms and sinks within the branch
+    const transforms = branch.children.filter((c) => c.kind !== 'Sink');
+    const sinks = branch.children.filter((c) => c.kind === 'Sink');
+
+    // Build query chain: source → transforms → (branch condition)
+    const query = buildBranchQuery(transforms, upstream, condition, nodeIndex, pluginSql);
+
+    for (const sink of sinks) {
+      const sinkRef = resolveSinkRef(sink);
+      statements.push(`INSERT INTO ${sinkRef}\n${query};`);
     }
   }
 }
@@ -595,6 +1236,11 @@ function buildQuery(
   }
 
   switch (node.component) {
+    // Virtual reference (used internally by Route branch chaining)
+    case 'VirtualRef':
+      if (node.props._sql) return node.props._sql as string;
+      return `SELECT * FROM ${q(node.id)}`;
+
     // Sources — terminal nodes
     case 'KafkaSource':
     case 'JdbcSource':
@@ -688,6 +1334,14 @@ function getUpstream(
 
   const child = node.children[0];
 
+  // VirtualRef: either a simple table reference or an embedded subquery
+  if (child.component === 'VirtualRef') {
+    if (child.props._sql) {
+      return { sql: child.props._sql as string, sourceRef: child.id, isSimple: false };
+    }
+    return { sql: `SELECT * FROM ${q(child.id)}`, sourceRef: q(child.id), isSimple: true };
+  }
+
   // If the child is a source and no plugin overrides it, return a simple reference
   if (child.kind === 'Source' && !pluginSql?.has(child.component)) {
     const ref = child.component === 'CatalogSource'
@@ -747,11 +1401,15 @@ function buildFlatMapQuery(node: ConstructNode, nodeIndex: Map<string, Construct
 function buildAggregateQuery(node: ConstructNode, nodeIndex: Map<string, ConstructNode>, pluginSql?: ReadonlyMap<string, PluginSqlGenerator>): string {
   const groupBy = node.props.groupBy as readonly string[];
   const select = node.props.select as Record<string, string>;
+  const groupBySet = new Set(groupBy);
 
   const groupCols = groupBy.map(q).join(', ');
   const projections = [
     ...groupBy.map(q),
-    ...Object.entries(select).map(([alias, expr]) => `${expr} AS ${q(alias)}`),
+    // Skip select entries that duplicate a groupBy column
+    ...Object.entries(select)
+      .filter(([alias]) => !groupBySet.has(alias))
+      .map(([alias, expr]) => `${expr} AS ${q(alias)}`),
   ].join(', ');
 
   const upstream = getUpstream(node, nodeIndex, pluginSql);

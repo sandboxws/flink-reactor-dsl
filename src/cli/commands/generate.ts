@@ -92,7 +92,7 @@ export function generatePipeline(name: string, template: string): void {
 
   switch (template) {
     case 'kafka':
-      content = `import { createElement, Pipeline, KafkaSource, KafkaSink } from 'flink-reactor';
+      content = `import { Pipeline, KafkaSource, KafkaSink } from 'flink-reactor';
 
 export default (
   <Pipeline name="${name}">
@@ -112,7 +112,7 @@ export default (
       break;
 
     case 'jdbc':
-      content = `import { createElement, Pipeline, KafkaSource, JdbcSink } from 'flink-reactor';
+      content = `import { Pipeline, KafkaSource, JdbcSink } from 'flink-reactor';
 
 export default (
   <Pipeline name="${name}">
@@ -132,7 +132,7 @@ export default (
       break;
 
     default: // blank
-      content = `import { createElement, Pipeline } from 'flink-reactor';
+      content = `import { Pipeline } from 'flink-reactor';
 
 export default (
   <Pipeline name="${name}">
@@ -190,9 +190,7 @@ export function generatePattern(name: string): void {
   const filePath = join(process.cwd(), 'patterns', `${name}.ts`);
   const pascalName = toPascalCase(name);
 
-  const content = `import { createElement } from 'flink-reactor';
-
-/**
+  const content = `/**
  * ${pascalName} pattern
  * A reusable pipeline pattern.
  */

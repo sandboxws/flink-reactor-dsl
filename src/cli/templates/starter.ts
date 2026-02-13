@@ -21,7 +21,7 @@ export const EventSchema = Schema({
     },
     {
       path: 'pipelines/hello-world/index.tsx',
-      content: `import { createElement, Pipeline, KafkaSource, KafkaSink, Filter } from 'flink-reactor';
+      content: `import { Pipeline, KafkaSource, KafkaSink, Filter } from 'flink-reactor';
 import { EventSchema } from '../../schemas/events';
 
 export default (

@@ -1,6 +1,6 @@
 import type { BaseComponentProps, ConstructNode } from '../core/types.js';
 import type { CatalogHandle } from './catalogs.js';
-import { createElement } from '../core/jsx-runtime.js';
+import { createElement, toSqlIdentifier } from '../core/jsx-runtime.js';
 
 // ── Shared sink types ───────────────────────────────────────────────
 
@@ -16,6 +16,8 @@ export interface RollingPolicy {
 // ── KafkaSink ───────────────────────────────────────────────────────
 
 export interface KafkaSinkProps extends BaseComponentProps {
+  /** Optional SQL table name. Defaults to topic name normalized as a SQL identifier. */
+  readonly name?: string;
   readonly topic: string;
   readonly format?: SinkFormat;
   readonly bootstrapServers?: string;
@@ -29,19 +31,23 @@ export interface KafkaSinkProps extends BaseComponentProps {
  * pipeline-level config if not specified here.
  */
 export function KafkaSink(props: KafkaSinkProps): ConstructNode {
-  const { children, ...rest } = props;
+  const { children, name, ...rest } = props;
   const childArray = children == null
     ? []
     : Array.isArray(children)
       ? children
       : [children];
 
-  return createElement('KafkaSink', { ...rest }, ...childArray);
+  const _nameHint = name ?? toSqlIdentifier(props.topic);
+
+  return createElement('KafkaSink', { ...rest, _nameHint }, ...childArray);
 }
 
 // ── JdbcSink ────────────────────────────────────────────────────────
 
 export interface JdbcSinkProps extends BaseComponentProps {
+  /** Optional SQL table name. Defaults to the JDBC table name. */
+  readonly name?: string;
   readonly url: string;
   readonly table: string;
   readonly upsertMode?: boolean;
@@ -56,19 +62,23 @@ export interface JdbcSinkProps extends BaseComponentProps {
  * identify the primary key columns for upsert semantics.
  */
 export function JdbcSink(props: JdbcSinkProps): ConstructNode {
-  const { children, ...rest } = props;
+  const { children, name, ...rest } = props;
   const childArray = children == null
     ? []
     : Array.isArray(children)
       ? children
       : [children];
 
-  return createElement('JdbcSink', { ...rest }, ...childArray);
+  const _nameHint = name ?? toSqlIdentifier(props.table);
+
+  return createElement('JdbcSink', { ...rest, _nameHint }, ...childArray);
 }
 
 // ── FileSystemSink ──────────────────────────────────────────────────
 
 export interface FileSystemSinkProps extends BaseComponentProps {
+  /** Optional SQL table name. Defaults to the last path segment. */
+  readonly name?: string;
   readonly path: string;
   readonly format?: FileFormat;
   readonly partitionBy?: readonly string[];
@@ -83,19 +93,25 @@ export interface FileSystemSinkProps extends BaseComponentProps {
  * for file rotation.
  */
 export function FileSystemSink(props: FileSystemSinkProps): ConstructNode {
-  const { children, ...rest } = props;
+  const { children, name, ...rest } = props;
   const childArray = children == null
     ? []
     : Array.isArray(children)
       ? children
       : [children];
 
-  return createElement('FileSystemSink', { ...rest }, ...childArray);
+  // Derive name from last path segment (e.g., "s3://bucket/output" → "output")
+  const pathSegments = props.path.replace(/\/+$/, '').split('/');
+  const _nameHint = name ?? toSqlIdentifier(pathSegments[pathSegments.length - 1]);
+
+  return createElement('FileSystemSink', { ...rest, _nameHint }, ...childArray);
 }
 
 // ── GenericSink ─────────────────────────────────────────────────────
 
 export interface GenericSinkProps extends BaseComponentProps {
+  /** Optional SQL table name. Defaults to the connector name. */
+  readonly name?: string;
   readonly connector: string;
   readonly options?: Record<string, string>;
   readonly children?: ConstructNode | ConstructNode[];
@@ -109,14 +125,16 @@ export interface GenericSinkProps extends BaseComponentProps {
  * to the WITH clause during code generation.
  */
 export function GenericSink(props: GenericSinkProps): ConstructNode {
-  const { children, ...rest } = props;
+  const { children, name, ...rest } = props;
   const childArray = children == null
     ? []
     : Array.isArray(children)
       ? children
       : [children];
 
-  return createElement('GenericSink', { ...rest }, ...childArray);
+  const _nameHint = name ?? toSqlIdentifier(props.connector);
+
+  return createElement('GenericSink', { ...rest, _nameHint }, ...childArray);
 }
 
 // ── PaimonSink ─────────────────────────────────────────────────────

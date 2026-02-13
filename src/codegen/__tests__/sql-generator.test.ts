@@ -4,6 +4,7 @@ import { Schema, Field } from '../../core/schema.js';
 import { KafkaSource, JdbcSource } from '../../components/sources.js';
 import { KafkaSink, JdbcSink, FileSystemSink } from '../../components/sinks.js';
 import { Filter, Map, Aggregate, Deduplicate, TopN, Union } from '../../components/transforms.js';
+import { Route } from '../../components/route.js';
 import { Join, TemporalJoin, LookupJoin, IntervalJoin } from '../../components/joins.js';
 import { TumbleWindow } from '../../components/windows.js';
 import { PaimonCatalog } from '../../components/catalogs.js';
@@ -917,5 +918,131 @@ describe('LateralJoin produces LATERAL TABLE', () => {
     const result = generateSql(pipeline);
     expect(result.sql).toMatchSnapshot();
     expect(result.sql).toContain('LEFT JOIN LATERAL TABLE');
+  });
+});
+
+// ── Route: conditional split with transforms in branches ─────────────
+
+describe('Route produces correct multi-branch SQL', () => {
+  it('generates STATEMENT SET with branch conditions and transforms (JSX forward-reading)', () => {
+    const ProductSchema = Schema({
+      fields: {
+        id: Field.INT(),
+        name: Field.STRING(),
+        category: Field.STRING(),
+        price: Field.DOUBLE(),
+        quantity: Field.INT(),
+      },
+    });
+
+    // JSX forward-reading pattern: Source and Route as siblings in Pipeline
+    const source = KafkaSource({
+      topic: 'cdc.inventory.products',
+      format: 'debezium-json',
+      bootstrapServers: 'kafka:9092',
+      schema: ProductSchema,
+      startupMode: 'earliest-offset',
+      consumerGroup: 'inventory-analytics',
+    });
+
+    const errorBranch = Route.Branch({
+      condition: '`quantity` < 10',
+      children: [
+        Filter({ condition: '`quantity` >= 0' }),
+        KafkaSink({ topic: 'low-stock-alerts', bootstrapServers: 'kafka:9092' }),
+      ],
+    });
+
+    const aggBranch = Route.Branch({
+      condition: 'true',
+      children: [
+        Aggregate({
+          groupBy: ['category'],
+          select: {
+            total_items: 'SUM(`quantity`)',
+            avg_price: 'AVG(`price`)',
+            product_count: 'COUNT(*)',
+          },
+        }),
+        KafkaSink({ topic: 'category-stats', bootstrapServers: 'kafka:9092' }),
+      ],
+    });
+
+    const route = Route({ children: [errorBranch, aggBranch] });
+
+    const pipeline = Pipeline({
+      name: 'inventory-analytics',
+      children: [source, route],
+    });
+
+    const result = generateSql(pipeline);
+
+    // Source should have meaningful name and column definitions
+    expect(result.sql).toContain('CREATE TABLE `cdc_inventory_products`');
+    expect(result.sql).toContain('`id` INT');
+
+    // Sinks should have column definitions
+    expect(result.sql).toContain('CREATE TABLE `low_stock_alerts`');
+    expect(result.sql).toContain('CREATE TABLE `category_stats`');
+
+    // DML should reference source, not "unknown"
+    expect(result.sql).not.toContain('unknown');
+
+    // Branch 1: Filter + branch condition merged into single WHERE
+    expect(result.sql).toContain('WHERE `quantity` >= 0 AND `quantity` < 10');
+
+    // Branch 2: Aggregate
+    expect(result.sql).toContain('GROUP BY `category`');
+    expect(result.sql).toContain('SUM(`quantity`)');
+    expect(result.sql).toContain('AVG(`price`)');
+    expect(result.sql).toContain('COUNT(*)');
+
+    // Multiple INSERT → STATEMENT SET
+    expect(result.sql).toContain('EXECUTE STATEMENT SET BEGIN');
+
+    expect(result.sql).toMatchSnapshot();
+  });
+
+  it('generates Route DML with programmatic reverse-nesting pattern', () => {
+    const LogSchema = Schema({
+      fields: {
+        message: Field.STRING(),
+        level: Field.STRING(),
+        timestamp: Field.TIMESTAMP(3),
+      },
+    });
+
+    const source = KafkaSource({
+      topic: 'logs',
+      schema: LogSchema,
+      bootstrapServers: 'kafka:9092',
+    });
+
+    const errorBranch = Route.Branch({
+      condition: "`level` = 'ERROR'",
+      children: KafkaSink({ topic: 'errors' }),
+    });
+    const warnBranch = Route.Branch({
+      condition: "`level` = 'WARN'",
+      children: KafkaSink({ topic: 'warnings' }),
+    });
+    const defaultBranch = Route.Default({
+      children: KafkaSink({ topic: 'other' }),
+    });
+
+    const route = Route({
+      children: [errorBranch, warnBranch, defaultBranch, source],
+    });
+
+    const pipeline = Pipeline({
+      name: 'log-router',
+      children: [route],
+    });
+
+    const result = generateSql(pipeline);
+    expect(result.sql).not.toContain('unknown');
+    expect(result.sql).toContain("WHERE `level` = 'ERROR'");
+    expect(result.sql).toContain("WHERE `level` = 'WARN'");
+    expect(result.sql).toMatchSnapshot();
   });
 });

@@ -288,8 +288,14 @@ async function seedPipelines(opts: { only?: 'streaming' | 'batch' | 'cdc'; domai
 
       try {
         const result = await client.submitSqlFile(filePath);
-        spinner.stop(`  ${pc.green('✓')} ${cat}/${name} → ${pc.dim(result.status)}`);
-        submitted++;
+        if (result.status === 'ERROR') {
+          const errMsg = result.errorMessage ?? 'Unknown error';
+          spinner.stop(`  ${pc.red('✗')} ${cat}/${name} → ${pc.dim(errMsg)}`);
+          failed++;
+        } else {
+          spinner.stop(`  ${pc.green('✓')} ${cat}/${name} → ${pc.dim(result.status)}`);
+          submitted++;
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         spinner.stop(`  ${pc.red('✗')} ${cat}/${name} → ${pc.dim(msg)}`);
@@ -408,12 +414,27 @@ export async function runClusterSubmit(sqlFile: string, sqlGatewayPort: number =
 
   try {
     const result = await client.submitSqlFile(filePath);
-    spinner.stop(pc.green('Statement submitted.'));
-    console.log('');
-    console.log(`  Status:    ${pc.green(result.status)}`);
-    console.log(`  Session:   ${pc.dim(result.sessionHandle)}`);
-    console.log(`  Operation: ${pc.dim(result.operationHandle)}`);
-    console.log('');
+
+    if (result.status === 'ERROR') {
+      spinner.stop(pc.red('Statement failed.'));
+      console.log('');
+      console.log(`  Status:    ${pc.red(result.status)}`);
+      console.log(`  Session:   ${pc.dim(result.sessionHandle)}`);
+      console.log(`  Operation: ${pc.dim(result.operationHandle)}`);
+      if (result.errorMessage) {
+        console.log('');
+        console.log(`  ${pc.red('Error:')} ${result.errorMessage}`);
+      }
+      console.log('');
+      process.exitCode = 1;
+    } else {
+      spinner.stop(pc.green('Statement submitted.'));
+      console.log('');
+      console.log(`  Status:    ${pc.green(result.status)}`);
+      console.log(`  Session:   ${pc.dim(result.sessionHandle)}`);
+      console.log(`  Operation: ${pc.dim(result.operationHandle)}`);
+      console.log('');
+    }
   } catch (err) {
     spinner.stop(pc.red('Submission failed.'));
     if (err instanceof Error) {

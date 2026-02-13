@@ -65,9 +65,8 @@ export function getMonorepoTemplates(opts: ScaffoldOptions): TemplateFile[] {
       skipLibCheck: true,
       forceConsistentCasingInFileNames: true,
       resolveJsonModule: true,
-      jsx: 'react',
-      jsxFactory: 'createElement',
-      jsxFragmentFactory: 'Fragment',
+      jsx: 'react-jsx',
+      jsxImportSource: 'flink-reactor',
     },
     include: ['apps/**/*', 'packages/**/*'],
   };

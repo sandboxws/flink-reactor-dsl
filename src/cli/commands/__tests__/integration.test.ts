@@ -57,19 +57,19 @@ describe('integration: new --template starter --yes', () => {
     // Validate tsconfig.json
     const tsconfig = JSON.parse(readFileSync(join(projectDir, 'tsconfig.json'), 'utf-8'));
     expect(tsconfig.compilerOptions.strict).toBe(true);
-    expect(tsconfig.compilerOptions.jsx).toBe('react');
-    expect(tsconfig.compilerOptions.jsxFactory).toBe('createElement');
+    expect(tsconfig.compilerOptions.jsx).toBe('react-jsx');
+    expect(tsconfig.compilerOptions.jsxImportSource).toBe('flink-reactor');
 
     // Validate config references correct Flink version
     const config = readFileSync(join(projectDir, 'flink-reactor.config.ts'), 'utf-8');
     expect(config).toContain("'1.20'");
 
-    // Validate pipeline content
+    // Validate pipeline content — automatic JSX runtime, no createElement import needed
     const pipeline = readFileSync(
       join(projectDir, 'pipelines', 'hello-world', 'index.tsx'),
       'utf-8',
     );
-    expect(pipeline).toContain('createElement');
+    expect(pipeline).not.toContain('createElement');
     expect(pipeline).toContain('Pipeline');
     expect(pipeline).toContain('KafkaSource');
     expect(pipeline).toContain('KafkaSink');

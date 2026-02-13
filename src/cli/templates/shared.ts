@@ -37,9 +37,8 @@ export function makeTsconfig(opts: ScaffoldOptions): string {
       skipLibCheck: true,
       forceConsistentCasingInFileNames: true,
       resolveJsonModule: true,
-      jsx: 'react',
-      jsxFactory: 'createElement',
-      jsxFragmentFactory: 'Fragment',
+      jsx: 'react-jsx',
+      jsxImportSource: 'flink-reactor',
     },
     include: ['pipelines/**/*', 'schemas/**/*', 'env/**/*', 'patterns/**/*'],
   };

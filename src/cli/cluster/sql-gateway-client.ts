@@ -3,6 +3,7 @@ export interface SubmitResult {
   operationHandle: string;
   status: 'RUNNING' | 'FINISHED' | 'ERROR';
   jobId?: string;
+  errorMessage?: string;
 }
 
 interface OpenSessionResponse {
@@ -74,6 +75,36 @@ export class SqlGatewayClient {
     return data.status as 'RUNNING' | 'FINISHED' | 'ERROR';
   }
 
+  /**
+   * Fetch the result of an operation, which may contain error details.
+   */
+  async fetchResult(
+    sessionHandle: string,
+    operationHandle: string,
+  ): Promise<{ error?: string }> {
+    const res = await fetch(
+      `${this.baseUrl}/sessions/${sessionHandle}/operations/${operationHandle}/result/0`,
+    );
+
+    if (!res.ok) {
+      return {};
+    }
+
+    const data = (await res.json()) as {
+      errors?: string[];
+      results?: { data?: Array<{ fields: unknown[] }> };
+    };
+
+    if (data.errors && data.errors.length > 0) {
+      // Extract the root cause from the Java exception chain
+      const fullError = data.errors.join('\n');
+      const causeMatch = fullError.match(/Caused by: [^\n]*TableException: ([^\n]+)/);
+      return { error: causeMatch ? causeMatch[1] : data.errors[0] };
+    }
+
+    return {};
+  }
+
   async closeSession(sessionHandle: string): Promise<void> {
     const res = await fetch(`${this.baseUrl}/sessions/${sessionHandle}`, {
       method: 'DELETE',
@@ -93,28 +124,46 @@ export class SqlGatewayClient {
 
     let lastOperationHandle = '';
     let lastStatus: 'RUNNING' | 'FINISHED' | 'ERROR' = 'RUNNING';
+    let errorMessage: string | undefined;
 
     for (const stmt of statements) {
       lastOperationHandle = await this.submitStatement(sessionHandle, stmt);
 
-      // Poll until the statement reaches a terminal or running state
-      const maxAttempts = 60;
-      for (let i = 0; i < maxAttempts; i++) {
-        lastStatus = await this.pollStatus(sessionHandle, lastOperationHandle);
-        if (lastStatus !== 'RUNNING' || isStreamingStatement(stmt)) {
-          break;
+      if (isStreamingStatement(stmt)) {
+        // Streaming statements stay RUNNING indefinitely when healthy.
+        // Poll a few times to catch fast failures (e.g. changelog mode errors,
+        // missing connectors, schema mismatches) that happen within seconds.
+        const settleAttempts = 5;
+        for (let i = 0; i < settleAttempts; i++) {
+          await sleep(1000);
+          lastStatus = await this.pollStatus(sessionHandle, lastOperationHandle);
+          if (lastStatus === 'ERROR' || lastStatus === 'FINISHED') {
+            break;
+          }
         }
-        await sleep(1000);
+      } else {
+        // DDL/batch statements: poll until terminal state
+        const maxAttempts = 60;
+        for (let i = 0; i < maxAttempts; i++) {
+          lastStatus = await this.pollStatus(sessionHandle, lastOperationHandle);
+          if (lastStatus !== 'RUNNING') {
+            break;
+          }
+          await sleep(1000);
+        }
       }
 
       if (lastStatus === 'ERROR') {
+        // Fetch the actual error details from the SQL Gateway
+        const result = await this.fetchResult(sessionHandle, lastOperationHandle);
+        errorMessage = result.error;
         break;
       }
     }
 
     // Leave session open for streaming jobs (closing kills the job)
     // Close batch sessions after completion
-    if (lastStatus === 'FINISHED') {
+    if (lastStatus === 'FINISHED' || lastStatus === 'ERROR') {
       await this.closeSession(sessionHandle);
     }
 
@@ -122,6 +171,7 @@ export class SqlGatewayClient {
       sessionHandle,
       operationHandle: lastOperationHandle,
       status: lastStatus,
+      errorMessage,
     };
   }
 }

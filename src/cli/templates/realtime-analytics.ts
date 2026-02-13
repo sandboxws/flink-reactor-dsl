@@ -29,7 +29,7 @@ export const PageViewStatsSchema = Schema({
     },
     {
       path: 'pipelines/page-view-analytics/index.tsx',
-      content: `import { createElement, Pipeline, KafkaSource, TumbleWindow, Aggregate, JdbcSink } from 'flink-reactor';
+      content: `import { Pipeline, KafkaSource, TumbleWindow, Aggregate, JdbcSink } from 'flink-reactor';
 import { PageViewSchema } from '../../schemas/page-views';
 
 export default (

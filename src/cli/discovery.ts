@@ -1,9 +1,15 @@
 import { readdirSync, existsSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { createJiti } from 'jiti';
 import type { FlinkReactorConfig } from '../core/config.js';
 import type { EnvironmentConfig } from '../core/environment.js';
 import type { ConstructNode } from '../core/types.js';
+
+// jiti handles .ts/.tsx imports at runtime — automatic JSX transform
+// injects `import { jsx } from 'flink-reactor/jsx-runtime'` automatically
+const jiti = createJiti(import.meta.url, {
+  jsx: { runtime: 'automatic', importSource: 'flink-reactor' },
+});
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -71,8 +77,7 @@ export async function loadConfig(
     return null;
   }
 
-  const configUrl = pathToFileURL(resolve(configPath)).href;
-  const mod = await import(configUrl);
+  const mod = await jiti.import(resolve(configPath)) as Record<string, unknown>;
   return (mod.default ?? mod) as FlinkReactorConfig;
 }
 
@@ -94,8 +99,7 @@ export async function loadEnvironment(
     throw new Error(`Environment file not found: env/${envName}.ts`);
   }
 
-  const envUrl = pathToFileURL(resolve(envPath)).href;
-  const mod = await import(envUrl);
+  const mod = await jiti.import(resolve(envPath)) as Record<string, unknown>;
   return (mod.default ?? mod) as EnvironmentConfig;
 }
 
@@ -108,8 +112,7 @@ export async function loadEnvironment(
 export async function loadPipeline(
   entryPoint: string,
 ): Promise<ConstructNode> {
-  const url = pathToFileURL(resolve(entryPoint)).href;
-  const mod = await import(url);
+  const mod = await jiti.import(resolve(entryPoint)) as Record<string, unknown>;
   return mod.default as ConstructNode;
 }
 

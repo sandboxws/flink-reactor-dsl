@@ -24,7 +24,7 @@ export const OrderSchema = Schema({
     },
     {
       path: 'pipelines/cdc-to-lakehouse/index.tsx',
-      content: `import { createElement, Pipeline, KafkaSource, PaimonCatalog, PaimonSink } from 'flink-reactor';
+      content: `import { Pipeline, KafkaSource, PaimonCatalog, PaimonSink } from 'flink-reactor';
 import { OrderSchema } from '../../schemas/orders';
 
 const lakehouse = PaimonCatalog({ name: 'lakehouse', warehouse: 's3://my-bucket/warehouse' });

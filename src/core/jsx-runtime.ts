@@ -29,13 +29,45 @@ declare global {
 // ── ID generation ────────────────────────────────────────────────────
 
 let nextNodeId = 0;
+const usedNodeIds: Set<string> = new Set();
 
 export function resetNodeIdCounter(): void {
   nextNodeId = 0;
+  usedNodeIds.clear();
 }
 
-function generateNodeId(component: string): string {
-  return `${component}_${nextNodeId++}`;
+/**
+ * Convert a string to a valid SQL identifier.
+ * Replaces hyphens, dots, and slashes with underscores.
+ */
+export function toSqlIdentifier(value: string): string {
+  return value
+    .replace(/[.\-/]/g, '_')
+    .replace(/[^a-zA-Z0-9_]/g, '')
+    .replace(/^_+|_+$/g, '')
+    .replace(/_+/g, '_');
+}
+
+function generateNodeId(component: string, nameHint?: string): string {
+  const base = nameHint
+    ? toSqlIdentifier(nameHint)
+    : `${component}_${nextNodeId++}`;
+
+  let id = base;
+  let suffix = 2;
+  while (usedNodeIds.has(id)) {
+    id = `${base}_${suffix}`;
+    suffix++;
+  }
+
+  usedNodeIds.add(id);
+  if (!nameHint) {
+    // Counter already incremented above for auto-generated IDs
+  } else {
+    nextNodeId++; // keep counter moving for unnamed nodes
+  }
+
+  return id;
 }
 
 // ── Component type → NodeKind mapping ────────────────────────────────
@@ -126,10 +158,24 @@ export function createElement(
   props: Record<string, unknown> | null,
   ...children: (ConstructNode | ConstructNode[] | null | undefined)[]
 ): ConstructNode {
-  const resolvedComponent =
-    typeof component === 'function' ? component.name : component;
-  const id = generateNodeId(resolvedComponent);
-  const kind = resolveKind(resolvedComponent);
+  // Function components: delegate to the factory so it can set _nameHint,
+  // changelogMode, and other derived props before creating the node.
+  if (typeof component === 'function') {
+    const flatChildren = children
+      .flat(Infinity)
+      .filter((c): c is ConstructNode => c != null && typeof c === 'object' && '_tag' in c === false && 'id' in c);
+
+    const mergedProps: Record<string, unknown> = { ...(props ?? {}) };
+    if (flatChildren.length > 0) {
+      mergedProps.children = flatChildren;
+    }
+    return component(mergedProps) as ConstructNode;
+  }
+
+  // String components: create the node directly
+  const nameHint = props?._nameHint as string | undefined;
+  const id = generateNodeId(component, nameHint);
+  const kind = resolveKind(component);
 
   const flatChildren = children
     .flat(Infinity)
@@ -137,11 +183,12 @@ export function createElement(
 
   const cleanProps = { ...(props ?? {}) };
   delete cleanProps.children;
+  delete cleanProps._nameHint;
 
   const node: ConstructNode = {
     id,
     kind,
-    component: resolvedComponent,
+    component,
     props: cleanProps,
     children: flatChildren,
   };

@@ -1,6 +1,6 @@
 import type { FlinkType, ChangelogMode, BaseComponentProps, ConstructNode } from '../core/types.js';
 import type { SchemaDefinition, WatermarkDeclaration } from '../core/schema.js';
-import { createElement } from '../core/jsx-runtime.js';
+import { createElement, toSqlIdentifier } from '../core/jsx-runtime.js';
 
 // ── CDC format → ChangelogMode inference ────────────────────────────
 
@@ -39,6 +39,8 @@ export interface LookupCacheConfig {
 
 export interface KafkaSourceProps<T extends Record<string, FlinkType> = Record<string, FlinkType>>
   extends BaseComponentProps {
+  /** Optional SQL table name. Defaults to topic name normalized as a SQL identifier. */
+  readonly name?: string;
   readonly topic: string;
   readonly bootstrapServers?: string;
   readonly format?: KafkaFormat;
@@ -63,7 +65,7 @@ export interface KafkaSourceProps<T extends Record<string, FlinkType> = Record<s
 export function KafkaSource<T extends Record<string, FlinkType>>(
   props: KafkaSourceProps<T>,
 ): ConstructNode {
-  const { children, ...rest } = props;
+  const { children, name, ...rest } = props;
   const childArray = children == null
     ? []
     : Array.isArray(children)
@@ -71,14 +73,17 @@ export function KafkaSource<T extends Record<string, FlinkType>>(
       : [children];
 
   const changelogMode = inferChangelogMode(props.format);
+  const _nameHint = name ?? toSqlIdentifier(props.topic);
 
-  return createElement('KafkaSource', { ...rest, changelogMode }, ...childArray);
+  return createElement('KafkaSource', { ...rest, changelogMode, _nameHint }, ...childArray);
 }
 
 // ── JdbcSource ──────────────────────────────────────────────────────
 
 export interface JdbcSourceProps<T extends Record<string, FlinkType> = Record<string, FlinkType>>
   extends BaseComponentProps {
+  /** Optional SQL table name. Defaults to the JDBC table name. */
+  readonly name?: string;
   readonly url: string;
   readonly table: string;
   readonly schema: SchemaDefinition<T>;
@@ -95,20 +100,24 @@ export interface JdbcSourceProps<T extends Record<string, FlinkType> = Record<st
 export function JdbcSource<T extends Record<string, FlinkType>>(
   props: JdbcSourceProps<T>,
 ): ConstructNode {
-  const { children, ...rest } = props;
+  const { children, name, ...rest } = props;
   const childArray = children == null
     ? []
     : Array.isArray(children)
       ? children
       : [children];
 
-  return createElement('JdbcSource', { ...rest }, ...childArray);
+  const _nameHint = name ?? toSqlIdentifier(props.table);
+
+  return createElement('JdbcSource', { ...rest, _nameHint }, ...childArray);
 }
 
 // ── GenericSource ───────────────────────────────────────────────────
 
 export interface GenericSourceProps<T extends Record<string, FlinkType> = Record<string, FlinkType>>
   extends BaseComponentProps {
+  /** Optional SQL table name. Defaults to the connector name. */
+  readonly name?: string;
   readonly connector: string;
   readonly format?: string;
   readonly schema: SchemaDefinition<T>;
@@ -126,12 +135,14 @@ export interface GenericSourceProps<T extends Record<string, FlinkType> = Record
 export function GenericSource<T extends Record<string, FlinkType>>(
   props: GenericSourceProps<T>,
 ): ConstructNode {
-  const { children, ...rest } = props;
+  const { children, name, ...rest } = props;
   const childArray = children == null
     ? []
     : Array.isArray(children)
       ? children
       : [children];
 
-  return createElement('GenericSource', { ...rest }, ...childArray);
+  const _nameHint = name ?? toSqlIdentifier(props.connector);
+
+  return createElement('GenericSource', { ...rest, _nameHint }, ...childArray);
 }
