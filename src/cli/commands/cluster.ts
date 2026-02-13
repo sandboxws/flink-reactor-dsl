@@ -6,6 +6,7 @@ import { existsSync, readFileSync, writeFileSync, unlinkSync, readdirSync, copyF
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
+import type { CdcDomain } from '../cluster/cdc-publisher.js';
 
 // ── Resource path resolution ─────────────────────────────────────────
 // When bundled by tsup → dist/index.js, __dirname = <root>/dist
@@ -49,8 +50,9 @@ export function registerClusterCommand(program: Command): void {
     .description('Start local Flink cluster (JM + 2×TM + SQL Gateway + Kafka)')
     .option('--port <port>', 'Flink REST port', '8081')
     .option('--seed', 'Submit example pipelines after startup')
-    .action(async (opts: { port: string; seed?: boolean }) => {
-      await runClusterUp({ port: opts.port, seed: opts.seed ?? false });
+    .option('--domain <domain>', 'Filter seed data by domain: ecommerce, iot, or all', 'all')
+    .action(async (opts: { port: string; seed?: boolean; domain: string }) => {
+      await runClusterUp({ port: opts.port, seed: opts.seed ?? false, domain: opts.domain as CdcDomain });
     });
 
   cluster
@@ -65,8 +67,9 @@ export function registerClusterCommand(program: Command): void {
     .command('seed')
     .description('Submit example SQL pipelines and publish CDC data')
     .option('--only <category>', 'Filter by category: streaming, batch, or cdc')
-    .action(async (opts: { only?: string }) => {
-      await runClusterSeed({ only: opts.only as 'streaming' | 'batch' | 'cdc' | undefined });
+    .option('--domain <domain>', 'Filter by domain: ecommerce, iot, or all', 'all')
+    .action(async (opts: { only?: string; domain: string }) => {
+      await runClusterSeed({ only: opts.only as 'streaming' | 'batch' | 'cdc' | undefined, domain: opts.domain as CdcDomain });
     });
 
   cluster
@@ -91,6 +94,7 @@ export function registerClusterCommand(program: Command): void {
 export async function runClusterUp(opts: {
   port: string;
   seed: boolean;
+  domain?: CdcDomain;
 }): Promise<void> {
   clack.intro(pc.bgCyan(pc.black(' flink-reactor cluster up ')));
 
@@ -165,7 +169,7 @@ export async function runClusterUp(opts: {
   console.log('');
 
   if (opts.seed) {
-    await seedPipelines({});
+    await seedPipelines({ domain: opts.domain });
   }
 
   clack.outro(pc.green('Cluster is ready!'));
@@ -207,6 +211,7 @@ export async function runClusterDown(opts: {
 
 export async function runClusterSeed(opts: {
   only?: 'streaming' | 'batch' | 'cdc';
+  domain?: CdcDomain;
 }): Promise<void> {
   clack.intro(pc.bgCyan(pc.black(' flink-reactor cluster seed ')));
 
@@ -222,19 +227,20 @@ export async function runClusterSeed(opts: {
   clack.outro(pc.green('Seeding complete!'));
 }
 
-async function seedPipelines(opts: { only?: 'streaming' | 'batch' | 'cdc' }): Promise<void> {
+async function seedPipelines(opts: { only?: 'streaming' | 'batch' | 'cdc'; domain?: CdcDomain }): Promise<void> {
   const { SqlGatewayClient } = await import('../cluster/sql-gateway-client.js');
   const { publishCdcMessages } = await import('../cluster/cdc-publisher.js');
 
   const client = new SqlGatewayClient('http://localhost:8083');
   const category = opts.only;
+  const domain = opts.domain ?? 'all';
 
   // Step 1: Publish CDC batch data (needed before CDC pipelines)
   if (!category || category === 'cdc' || category === 'streaming') {
     const spinner = clack.spinner();
     spinner.start('Publishing CDC seed data to Kafka...');
     try {
-      await publishCdcMessages({ mode: 'batch', composeFile: composePath() });
+      await publishCdcMessages({ mode: 'batch', domain, composeFile: composePath() });
       spinner.stop(pc.green('CDC seed data published.'));
     } catch (err) {
       spinner.stop(pc.yellow('Failed to publish CDC data (Kafka may not be ready).'));
@@ -261,9 +267,18 @@ async function seedPipelines(opts: { only?: 'streaming' | 'batch' | 'cdc' }): Pr
       .sort();
 
     // When --only cdc, only submit Kafka-based pipelines
-    const filtered = category === 'cdc'
+    let filtered = category === 'cdc'
       ? files.filter((f) => f.includes('kafka'))
       : files;
+
+    // Apply domain filter: iot- prefixed files → iot domain, others → ecommerce
+    if (domain !== 'all') {
+      filtered = filtered.filter((f) => {
+        const name = f.replace(/^\d+-/, ''); // Strip numeric prefix
+        const isIoT = name.startsWith('iot-');
+        return domain === 'iot' ? isIoT : !isIoT;
+      });
+    }
 
     for (const file of filtered) {
       const filePath = join(dir, file);
@@ -288,7 +303,7 @@ async function seedPipelines(opts: { only?: 'streaming' | 'batch' | 'cdc' }): Pr
 
   // Step 3: Start continuous CDC publisher in background
   if (!category || category === 'cdc' || category === 'streaming') {
-    startBackgroundCdcPublisher();
+    startBackgroundCdcPublisher(domain);
   }
 }
 
@@ -410,7 +425,7 @@ export async function runClusterSubmit(sqlFile: string, sqlGatewayPort: number =
 
 // ── Background CDC publisher ─────────────────────────────────────────
 
-function startBackgroundCdcPublisher(): void {
+function startBackgroundCdcPublisher(domain: CdcDomain = 'all'): void {
   // Write a small inline script that imports and runs the continuous publisher
   // Fork it as a detached child process
   const scriptPath = join(tmpdir(), 'flink-reactor-cdc-continuous.mjs');
@@ -424,7 +439,7 @@ import { publishCdcMessages } from '${cdcModulePath}';
 const ac = new AbortController();
 process.on('SIGTERM', () => ac.abort());
 process.on('SIGINT', () => ac.abort());
-publishCdcMessages({ mode: 'continuous', composeFile: '${compose}', signal: ac.signal }).catch(() => {});
+publishCdcMessages({ mode: 'continuous', domain: '${domain}', composeFile: '${compose}', signal: ac.signal }).catch(() => {});
 `,
     'utf-8',
   );

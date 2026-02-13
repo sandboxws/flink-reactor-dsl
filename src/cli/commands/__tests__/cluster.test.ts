@@ -269,4 +269,26 @@ describe('registerClusterCommand', () => {
 
     expect(options).toContain('--only');
   });
+
+  it('cluster seed has --domain option', () => {
+    const program = new Command();
+    registerClusterCommand(program);
+
+    const cluster = program.commands.find((c) => c.name() === 'cluster')!;
+    const seed = cluster.commands.find((c) => c.name() === 'seed')!;
+    const options = seed.options.map((o) => o.long);
+
+    expect(options).toContain('--domain');
+  });
+
+  it('cluster up has --domain option', () => {
+    const program = new Command();
+    registerClusterCommand(program);
+
+    const cluster = program.commands.find((c) => c.name() === 'cluster')!;
+    const up = cluster.commands.find((c) => c.name() === 'up')!;
+    const options = up.options.map((o) => o.long);
+
+    expect(options).toContain('--domain');
+  });
 });
