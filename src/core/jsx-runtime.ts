@@ -1,5 +1,31 @@
 import type { ConstructNode, NodeKind } from './types.js';
 
+// ── JSX type declarations ────────────────────────────────────────────
+
+/**
+ * Global JSX namespace for the flink-reactor custom JSX runtime.
+ *
+ * - `Element = ConstructNode` — all JSX expressions have type `ConstructNode`
+ * - `IntrinsicElements = {}` — empty interface rejects `<div>`, `<span>`, etc. at compile time
+ * - `ElementChildrenAttribute` — maps JSX children to the `children` prop
+ *
+ * Note: In classic JSX mode ("jsx": "react"), `Element` determines the type of ALL
+ * JSX expressions. This means branded sub-component types (TypedConstructNode<C>)
+ * collapse to ConstructNode in JSX context, preventing compile-time children constraints
+ * on components like Route. Branded types still provide value for programmatic API usage
+ * and explicit type annotations. Full JSX children constraints would require migrating
+ * to "jsx": "react-jsx" automatic mode (a future change).
+ */
+declare global {
+  namespace JSX {
+    type Element = ConstructNode;
+    interface IntrinsicElements {}
+    interface ElementChildrenAttribute {
+      children: {};
+    }
+  }
+}
+
 // ── ID generation ────────────────────────────────────────────────────
 
 let nextNodeId = 0;
@@ -88,7 +114,7 @@ function resolveKind(component: string): NodeKind {
 /**
  * Custom JSX factory that builds a construct tree node.
  *
- * - `component`: the string tag name (e.g., 'KafkaSource', 'Filter')
+ * - `component`: the string tag name or function component
  * - `props`: the component props (excluding children)
  * - `...children`: nested JSX children (linear pipeline sugar)
  *

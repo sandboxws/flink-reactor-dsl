@@ -108,3 +108,18 @@ export interface ConstructNode {
   readonly props: Record<string, unknown>;
   readonly children: ConstructNode[];
 }
+
+/**
+ * Branded ConstructNode carrying a phantom component tag.
+ *
+ * Sub-component factories (Route.Branch, Query.Select, etc.) return this
+ * type so that parent components can constrain their `children` prop at
+ * compile time. The `__componentBrand` field never exists at runtime —
+ * it's a phantom type used purely for type-level discrimination.
+ *
+ * `TypedConstructNode<C>` is assignable TO `ConstructNode` (extends it),
+ * but `ConstructNode` is NOT assignable TO `TypedConstructNode<C>`.
+ */
+export interface TypedConstructNode<C extends string = string> extends ConstructNode {
+  readonly __componentBrand: C;
+}

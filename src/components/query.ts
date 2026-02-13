@@ -1,4 +1,4 @@
-import type { BaseComponentProps, ConstructNode } from '../core/types.js';
+import type { BaseComponentProps, ConstructNode, TypedConstructNode } from '../core/types.js';
 import type { SchemaDefinition } from '../core/schema.js';
 import { createElement } from '../core/jsx-runtime.js';
 
@@ -47,7 +47,7 @@ export interface QuerySelectProps extends BaseComponentProps {
   readonly children?: ConstructNode | ConstructNode[];
 }
 
-function QuerySelect(props: QuerySelectProps): ConstructNode {
+function QuerySelect(props: QuerySelectProps): TypedConstructNode<'Query.Select'> {
   const { children, ...rest } = props;
   const childArray = children == null
     ? []
@@ -55,7 +55,7 @@ function QuerySelect(props: QuerySelectProps): ConstructNode {
       ? children
       : [children];
 
-  return createElement('Query.Select', { ...rest }, ...childArray);
+  return createElement('Query.Select', { ...rest }, ...childArray) as TypedConstructNode<'Query.Select'>;
 }
 
 // ── Query.Where ──────────────────────────────────────────────────────
@@ -66,7 +66,7 @@ export interface QueryWhereProps extends BaseComponentProps {
   readonly children?: ConstructNode | ConstructNode[];
 }
 
-function QueryWhere(props: QueryWhereProps): ConstructNode {
+function QueryWhere(props: QueryWhereProps): TypedConstructNode<'Query.Where'> {
   const { children, ...rest } = props;
   const childArray = children == null
     ? []
@@ -74,7 +74,7 @@ function QueryWhere(props: QueryWhereProps): ConstructNode {
       ? children
       : [children];
 
-  return createElement('Query.Where', { ...rest }, ...childArray);
+  return createElement('Query.Where', { ...rest }, ...childArray) as TypedConstructNode<'Query.Where'>;
 }
 
 // ── Query.GroupBy ────────────────────────────────────────────────────
@@ -85,7 +85,7 @@ export interface QueryGroupByProps extends BaseComponentProps {
   readonly children?: ConstructNode | ConstructNode[];
 }
 
-function QueryGroupBy(props: QueryGroupByProps): ConstructNode {
+function QueryGroupBy(props: QueryGroupByProps): TypedConstructNode<'Query.GroupBy'> {
   const { children, ...rest } = props;
   const childArray = children == null
     ? []
@@ -93,7 +93,7 @@ function QueryGroupBy(props: QueryGroupByProps): ConstructNode {
       ? children
       : [children];
 
-  return createElement('Query.GroupBy', { ...rest }, ...childArray);
+  return createElement('Query.GroupBy', { ...rest }, ...childArray) as TypedConstructNode<'Query.GroupBy'>;
 }
 
 // ── Query.Having ─────────────────────────────────────────────────────
@@ -104,7 +104,7 @@ export interface QueryHavingProps extends BaseComponentProps {
   readonly children?: ConstructNode | ConstructNode[];
 }
 
-function QueryHaving(props: QueryHavingProps): ConstructNode {
+function QueryHaving(props: QueryHavingProps): TypedConstructNode<'Query.Having'> {
   const { children, ...rest } = props;
   const childArray = children == null
     ? []
@@ -112,7 +112,7 @@ function QueryHaving(props: QueryHavingProps): ConstructNode {
       ? children
       : [children];
 
-  return createElement('Query.Having', { ...rest }, ...childArray);
+  return createElement('Query.Having', { ...rest }, ...childArray) as TypedConstructNode<'Query.Having'>;
 }
 
 // ── Query.OrderBy ────────────────────────────────────────────────────
@@ -123,7 +123,7 @@ export interface QueryOrderByProps extends BaseComponentProps {
   readonly children?: ConstructNode | ConstructNode[];
 }
 
-function QueryOrderBy(props: QueryOrderByProps): ConstructNode {
+function QueryOrderBy(props: QueryOrderByProps): TypedConstructNode<'Query.OrderBy'> {
   const { children, ...rest } = props;
   const childArray = children == null
     ? []
@@ -131,7 +131,7 @@ function QueryOrderBy(props: QueryOrderByProps): ConstructNode {
       ? children
       : [children];
 
-  return createElement('Query.OrderBy', { ...rest }, ...childArray);
+  return createElement('Query.OrderBy', { ...rest }, ...childArray) as TypedConstructNode<'Query.OrderBy'>;
 }
 
 // ── Query ────────────────────────────────────────────────────────────

@@ -5,6 +5,10 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['src/**/*.test.ts'],
+    typecheck: {
+      enabled: true,
+      include: ['src/**/*.test-d.{ts,tsx}'],
+    },
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],

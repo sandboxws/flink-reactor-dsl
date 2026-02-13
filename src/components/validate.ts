@@ -1,4 +1,4 @@
-import type { BaseComponentProps, ConstructNode } from '../core/types.js';
+import type { BaseComponentProps, ConstructNode, TypedConstructNode } from '../core/types.js';
 import type { SchemaDefinition } from '../core/schema.js';
 import { createElement } from '../core/jsx-runtime.js';
 
@@ -8,7 +8,7 @@ export interface ValidateRejectProps extends BaseComponentProps {
   readonly children?: ConstructNode | ConstructNode[];
 }
 
-function ValidateReject(props: ValidateRejectProps): ConstructNode {
+function ValidateReject(props: ValidateRejectProps): TypedConstructNode<'Validate.Reject'> {
   const { children, ...rest } = props;
   const childArray = children == null
     ? []
@@ -16,7 +16,7 @@ function ValidateReject(props: ValidateRejectProps): ConstructNode {
       ? children
       : [children];
 
-  return createElement('Validate.Reject', { ...rest }, ...childArray);
+  return createElement('Validate.Reject', { ...rest }, ...childArray) as TypedConstructNode<'Validate.Reject'>;
 }
 
 // ── Validation rules ────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import type { BaseComponentProps, ConstructNode } from '../core/types.js';
+import type { BaseComponentProps, ConstructNode, TypedConstructNode } from '../core/types.js';
 import type { SchemaDefinition } from '../core/schema.js';
 import { createElement } from '../core/jsx-runtime.js';
 
@@ -8,7 +8,7 @@ export interface SideOutputSinkProps extends BaseComponentProps {
   readonly children?: ConstructNode | ConstructNode[];
 }
 
-function SideOutputSink(props: SideOutputSinkProps): ConstructNode {
+function SideOutputSink(props: SideOutputSinkProps): TypedConstructNode<'SideOutput.Sink'> {
   const { children, ...rest } = props;
   const childArray = children == null
     ? []
@@ -16,7 +16,7 @@ function SideOutputSink(props: SideOutputSinkProps): ConstructNode {
       ? children
       : [children];
 
-  return createElement('SideOutput.Sink', { ...rest }, ...childArray);
+  return createElement('SideOutput.Sink', { ...rest }, ...childArray) as TypedConstructNode<'SideOutput.Sink'>;
 }
 
 // ── SideOutput ──────────────────────────────────────────────────────
