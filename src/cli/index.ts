@@ -10,6 +10,7 @@ import { registerGraphCommand } from './commands/graph.js';
 import { registerDevCommand } from './commands/dev.js';
 import { registerDeployCommand } from './commands/deploy.js';
 import { registerClusterCommand } from './commands/cluster.js';
+import { registerSchemaCommand } from './commands/schema.js';
 
 const VERSION = '0.1.0';
 
@@ -74,6 +75,7 @@ export function createProgram(): Command {
   registerDevCommand(program);
   registerDeployCommand(program);
   registerClusterCommand(program);
+  registerSchemaCommand(program);
 
   return program;
 }
