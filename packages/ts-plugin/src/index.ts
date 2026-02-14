@@ -1,8 +1,8 @@
 /**
  * TypeScript language service plugin for flink-reactor.
  *
- * Provides context-aware JSX completion filtering and invalid nesting
- * diagnostics based on the flink-reactor component hierarchy.
+ * Provides nesting diagnostics that warn when JSX children are placed
+ * inside invalid parents (e.g., `<Filter />` inside `<Route>`).
  *
  * Activated via tsconfig.json:
  * {
@@ -13,16 +13,12 @@
  */
 import type ts from 'typescript';
 import { createRulesRegistry } from './component-rules';
-import { findParentJsxComponent } from './context-detector';
-import { filterCompletions } from './completion-filter';
 import { getNestingDiagnostics } from './diagnostics';
 
 interface PluginConfig {
   /** Override or extend component hierarchy rules */
   rules?: Record<string, string[] | '*'>;
-  /** Disable completion filtering (keep only diagnostics) */
-  disableCompletionFilter?: boolean;
-  /** Disable nesting diagnostics (keep only completion filter) */
+  /** Disable nesting diagnostics */
   disableDiagnostics?: boolean;
 }
 
@@ -44,30 +40,6 @@ function init(modules: { typescript: typeof ts }): ts.server.PluginModule {
       const original = info.languageService[key];
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (proxy as any)[key] = typeof original === 'function' ? original.bind(info.languageService) : original;
-    }
-
-    // Override: getCompletionsAtPosition
-    if (!config.disableCompletionFilter) {
-      proxy.getCompletionsAtPosition = (
-        fileName: string,
-        position: number,
-        options: ts.GetCompletionsAtPositionOptions | undefined,
-      ): ts.CompletionInfo | undefined => {
-        const original = info.languageService.getCompletionsAtPosition(
-          fileName,
-          position,
-          options,
-        );
-        if (!original) return original;
-        if (!fileName.endsWith('.tsx')) return original;
-
-        const program = info.languageService.getProgram();
-        const sourceFile = program?.getSourceFile(fileName);
-        if (!sourceFile) return original;
-
-        const parentName = findParentJsxComponent(sourceFile, position, tsModule);
-        return filterCompletions(original, parentName, registry);
-      };
     }
 
     // Override: getSemanticDiagnostics
