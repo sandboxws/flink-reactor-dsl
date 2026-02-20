@@ -3,7 +3,7 @@ import { sharedFiles } from './shared.js';
 
 export function getMinimalTemplates(opts: ScaffoldOptions): TemplateFile[] {
   return [
-    ...sharedFiles(opts),
+    ...sharedFiles(opts, { dashboard: false }),
     {
       path: 'schemas/.gitkeep',
       content: '',

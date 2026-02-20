@@ -1,21 +1,45 @@
 import type { ScaffoldOptions, TemplateFile } from '../commands/new.js';
 
-export function makePackageJson(opts: ScaffoldOptions, extra?: Record<string, unknown>): string {
+export interface SharedFileOptions {
+  /** Include @flink-reactor/dashboard dependency and scripts. Default: true */
+  readonly dashboard?: boolean;
+}
+
+export function makePackageJson(
+  opts: ScaffoldOptions,
+  extra?: Record<string, unknown>,
+  sharedOpts?: SharedFileOptions,
+): string {
+  const includeDashboard = sharedOpts?.dashboard !== false;
+
+  const scripts: Record<string, string> = {
+    dev: 'flink-reactor dev',
+    synth: 'flink-reactor synth',
+    validate: 'flink-reactor validate',
+    test: 'vitest run',
+    'test:watch': 'vitest',
+  };
+
+  if (includeDashboard) {
+    scripts['dashboard'] = 'flink-reactor-dashboard start';
+    scripts['dashboard:mock'] = 'flink-reactor-dashboard start --mock';
+  }
+
+  const dependencies: Record<string, string> = {
+    'flink-reactor': '^0.1.0',
+  };
+
+  if (includeDashboard) {
+    dependencies['@flink-reactor/dashboard'] = '^0.1.0';
+  }
+
   const pkg: Record<string, unknown> = {
     name: opts.projectName,
     version: '0.1.0',
     private: true,
     type: 'module',
-    scripts: {
-      dev: 'flink-reactor dev',
-      synth: 'flink-reactor synth',
-      validate: 'flink-reactor validate',
-      test: 'vitest run',
-      'test:watch': 'vitest',
-    },
-    dependencies: {
-      'flink-reactor': '^0.1.0',
-    },
+    scripts,
+    dependencies,
     devDependencies: {
       typescript: '^5.7.0',
       vitest: '^3.0.0',
@@ -78,9 +102,9 @@ export function makeNpmrc(registry: string): string {
   return `registry=${registry}\n`;
 }
 
-export function sharedFiles(opts: ScaffoldOptions): TemplateFile[] {
+export function sharedFiles(opts: ScaffoldOptions, sharedOpts?: SharedFileOptions): TemplateFile[] {
   const files: TemplateFile[] = [
-    { path: 'package.json', content: makePackageJson(opts) },
+    { path: 'package.json', content: makePackageJson(opts, undefined, sharedOpts) },
     { path: 'tsconfig.json', content: makeTsconfig(opts) },
     { path: 'flink-reactor.config.ts', content: makeConfig(opts) },
     { path: '.gitignore', content: makeGitignore() },

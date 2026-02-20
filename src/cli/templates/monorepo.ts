@@ -12,6 +12,11 @@ export function getMonorepoTemplates(opts: ScaffoldOptions): TemplateFile[] {
       validate: 'flink-reactor validate',
       test: 'vitest run',
       'test:watch': 'vitest',
+      dashboard: 'flink-reactor-dashboard start',
+      'dashboard:mock': 'flink-reactor-dashboard start --mock',
+    },
+    devDependencies: {
+      '@flink-reactor/dashboard': '^0.1.0',
     },
   };
 

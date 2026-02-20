@@ -19,8 +19,9 @@ export function registerDevCommand(program: Command): void {
     .description('Start development mode with file watching')
     .option('-p, --pipeline <name>', 'Watch a specific pipeline')
     .option('--no-cluster', 'Skip starting local Flink cluster')
+    .option('--no-dashboard', 'Skip starting FlinkReactor dashboard')
     .option('--port <port>', 'Flink dashboard port', '8081')
-    .action(async (opts: { pipeline?: string; cluster: boolean; port: string }) => {
+    .action(async (opts: { pipeline?: string; cluster: boolean; dashboard: boolean; port: string }) => {
       await runDev(opts);
     });
 }
@@ -31,9 +32,12 @@ interface DevState {
   projectDir: string;
   pipeline?: string;
   cluster: boolean;
+  dashboard: boolean;
   port: string;
+  dashboardPort: string;
   watchers: FSWatcher[];
   clusterProcess: ChildProcess | null;
+  dashboardProcess: ChildProcess | null;
   shuttingDown: boolean;
 }
 
@@ -42,6 +46,7 @@ interface DevState {
 export async function runDev(opts: {
   pipeline?: string;
   cluster: boolean;
+  dashboard?: boolean;
   port: string;
   projectDir?: string;
 }): Promise<void> {
@@ -51,9 +56,12 @@ export async function runDev(opts: {
     projectDir,
     pipeline: opts.pipeline,
     cluster: opts.cluster,
+    dashboard: opts.dashboard !== false,
     port: opts.port,
+    dashboardPort: '3001',
     watchers: [],
     clusterProcess: null,
+    dashboardProcess: null,
     shuttingDown: false,
   };
 
@@ -71,6 +79,11 @@ export async function runDev(opts: {
     outdir: 'dist',
     projectDir,
   });
+
+  // Start dashboard if available and not disabled
+  if (state.dashboard) {
+    state.dashboardProcess = startDashboard(state);
+  }
 
   // Set up file watchers
   setupWatchers(state);
@@ -123,6 +136,50 @@ async function startCluster(state: DevState): Promise<ChildProcess | null> {
     return child;
   } catch {
     console.log(pc.yellow('Failed to start Flink cluster. Continuing without it.'));
+    return null;
+  }
+}
+
+// ── Dashboard ────────────────────────────────────────────────────────
+
+function isDashboardInstalled(projectDir: string): boolean {
+  return existsSync(join(projectDir, 'node_modules', '.bin', 'flink-reactor-dashboard'));
+}
+
+function startDashboard(state: DevState): ChildProcess | null {
+  if (!isDashboardInstalled(state.projectDir)) {
+    return null;
+  }
+
+  const args = ['start', '--port', state.dashboardPort];
+  const env: Record<string, string | undefined> = { ...process.env };
+
+  // If no Flink cluster is running, use mock mode
+  if (!state.clusterProcess) {
+    args.push('--mock');
+  } else {
+    env['FLINK_REST_URL'] = `http://localhost:${state.port}`;
+  }
+
+  try {
+    const child = spawn(
+      join(state.projectDir, 'node_modules', '.bin', 'flink-reactor-dashboard'),
+      args,
+      { cwd: state.projectDir, stdio: 'pipe', env },
+    );
+
+    child.on('error', () => {
+      // Dashboard failed to start — non-fatal
+    });
+
+    console.log(pc.green(`  FlinkReactor Dashboard: http://localhost:${state.dashboardPort}`));
+    if (!state.clusterProcess) {
+      console.log(pc.dim('  (running in mock mode — no Flink cluster detected)'));
+    }
+    console.log('');
+
+    return child;
+  } catch {
     return null;
   }
 }
@@ -210,7 +267,17 @@ function setupKeyboard(state: DevState): void {
         break;
 
       case 'o':
-        openDashboard(state.port);
+        openUrl(
+          state.dashboardProcess
+            ? `http://localhost:${state.dashboardPort}`
+            : null,
+          'FlinkReactor Dashboard',
+          'Install @flink-reactor/dashboard to use the dashboard.',
+        );
+        break;
+
+      case 'f':
+        openUrl(`http://localhost:${state.port}`, 'Flink UI');
         break;
 
       case 's':
@@ -235,15 +302,20 @@ function printHelp(): void {
   console.log(pc.dim('    r  re-synthesize'));
   console.log(pc.dim('    v  validate'));
   console.log(pc.dim('    g  show graph'));
-  console.log(pc.dim('    o  open Flink dashboard'));
+  console.log(pc.dim('    o  open FlinkReactor dashboard'));
+  console.log(pc.dim('    f  open Flink UI'));
   console.log(pc.dim('    s  SQL preview'));
   console.log(pc.dim('    q  quit'));
   console.log('');
 }
 
-function openDashboard(port: string): void {
-  const url = `http://localhost:${port}`;
-  console.log(pc.dim(`\nOpening ${url}...`));
+function openUrl(url: string | null, label: string, hint?: string): void {
+  if (!url) {
+    if (hint) console.log(pc.yellow(`\n${hint}`));
+    return;
+  }
+
+  console.log(pc.dim(`\nOpening ${label} (${url})...`));
 
   try {
     const platform = process.platform;
@@ -281,6 +353,11 @@ async function shutdown(state: DevState): Promise<void> {
   // Close file watchers
   for (const watcher of state.watchers) {
     watcher.close();
+  }
+
+  // Stop dashboard
+  if (state.dashboardProcess) {
+    state.dashboardProcess.kill('SIGTERM');
   }
 
   // Stop cluster

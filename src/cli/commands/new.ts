@@ -119,6 +119,10 @@ export async function runNewCommand(
   console.log('');
   console.log(pc.green('Project created successfully!'));
   console.log('');
+  if (options.template !== 'minimal') {
+    console.log(pc.dim('  Dashboard included! Run `' + options.pm + ' run dashboard` to start it.'));
+    console.log('');
+  }
   console.log(`  ${pc.dim('cd')} ${projectName}`);
   console.log(`  ${pc.dim(options.pm)} run dev`);
   console.log('');
