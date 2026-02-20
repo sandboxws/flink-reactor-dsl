@@ -7,6 +7,9 @@
     "outDir": "dist",
     "rootDir": "src",
     "strict": true,
+    "plugins": [
+      { "name": "@flink-reactor/ts-plugin" }
+    ],
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,

@@ -33,7 +33,8 @@
     "dev:dashboard:live": "flink-reactor cluster up --seed && pnpm --filter dashboard dev",
     "ui:embed": "pnpm --filter @flink-reactor/ui-embeddings embed",
     "ui:search": "pnpm --filter @flink-reactor/ui-embeddings search",
-    "ui:benchmark": "pnpm --filter @flink-reactor/ui-embeddings benchmark"
+    "ui:benchmark": "pnpm --filter @flink-reactor/ui-embeddings benchmark",
+    "docs": "pnpm -C web dev"
   },
   "keywords": [
     "flink",
@@ -55,6 +56,7 @@
     "picocolors": "^1.1.1"
   },
   "devDependencies": {
+    "@flink-reactor/ts-plugin": "workspace:*",
     "@types/node": "^22.12.0",
     "tsup": "^8.4.0",
     "typescript": "^5.7.0",
