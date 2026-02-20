@@ -1,4 +1,4 @@
-import type { BaseComponentProps, ConstructNode } from '../core/types.js';
+import type { BaseComponentProps, ConstructNode, TapConfig } from '../core/types.js';
 import type { CatalogHandle } from './catalogs.js';
 import { createElement, toSqlIdentifier } from '../core/jsx-runtime.js';
 
@@ -21,6 +21,8 @@ export interface KafkaSinkProps extends BaseComponentProps {
   readonly topic: string;
   readonly format?: SinkFormat;
   readonly bootstrapServers?: string;
+  /** Enable operator tailing for this sink */
+  readonly tap?: boolean | TapConfig;
   readonly children?: ConstructNode | ConstructNode[];
 }
 
@@ -52,6 +54,8 @@ export interface JdbcSinkProps extends BaseComponentProps {
   readonly table: string;
   readonly upsertMode?: boolean;
   readonly keyFields?: readonly string[];
+  /** Enable operator tailing for this sink */
+  readonly tap?: boolean | TapConfig;
   readonly children?: ConstructNode | ConstructNode[];
 }
 
@@ -83,6 +87,8 @@ export interface FileSystemSinkProps extends BaseComponentProps {
   readonly format?: FileFormat;
   readonly partitionBy?: readonly string[];
   readonly rollingPolicy?: RollingPolicy;
+  /** Enable operator tailing for this sink */
+  readonly tap?: boolean | TapConfig;
   readonly children?: ConstructNode | ConstructNode[];
 }
 
@@ -114,6 +120,8 @@ export interface GenericSinkProps extends BaseComponentProps {
   readonly name?: string;
   readonly connector: string;
   readonly options?: Record<string, string>;
+  /** Enable operator tailing for this sink */
+  readonly tap?: boolean | TapConfig;
   readonly children?: ConstructNode | ConstructNode[];
 }
 
@@ -150,6 +158,8 @@ export interface PaimonSinkProps extends BaseComponentProps {
   readonly mergeEngine?: PaimonMergeEngine;
   readonly changelogProducer?: PaimonChangelogProducer;
   readonly sequenceField?: string;
+  /** Enable operator tailing for this sink */
+  readonly tap?: boolean | TapConfig;
   readonly children?: ConstructNode | ConstructNode[];
 }
 
@@ -185,6 +195,8 @@ export interface IcebergSinkProps extends BaseComponentProps {
   readonly primaryKey?: readonly string[];
   readonly formatVersion?: 1 | 2;
   readonly upsertEnabled?: boolean;
+  /** Enable operator tailing for this sink */
+  readonly tap?: boolean | TapConfig;
   readonly children?: ConstructNode | ConstructNode[];
 }
 

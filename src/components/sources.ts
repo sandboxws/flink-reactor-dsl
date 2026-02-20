@@ -1,4 +1,4 @@
-import type { FlinkType, ChangelogMode, BaseComponentProps, ConstructNode } from '../core/types.js';
+import type { FlinkType, ChangelogMode, BaseComponentProps, ConstructNode, TapConfig } from '../core/types.js';
 import type { SchemaDefinition, WatermarkDeclaration } from '../core/schema.js';
 import { createElement, toSqlIdentifier } from '../core/jsx-runtime.js';
 
@@ -49,6 +49,8 @@ export interface KafkaSourceProps<T extends Record<string, FlinkType> = Record<s
   readonly startupMode?: KafkaStartupMode;
   readonly consumerGroup?: string;
   readonly primaryKey?: readonly string[];
+  /** Enable operator tailing for this source */
+  readonly tap?: boolean | TapConfig;
   readonly children?: ConstructNode | ConstructNode[];
 }
 
@@ -88,6 +90,8 @@ export interface JdbcSourceProps<T extends Record<string, FlinkType> = Record<st
   readonly table: string;
   readonly schema: SchemaDefinition<T>;
   readonly lookupCache?: LookupCacheConfig;
+  /** Enable operator tailing for this source */
+  readonly tap?: boolean | TapConfig;
   readonly children?: ConstructNode | ConstructNode[];
 }
 
@@ -122,6 +126,8 @@ export interface GenericSourceProps<T extends Record<string, FlinkType> = Record
   readonly format?: string;
   readonly schema: SchemaDefinition<T>;
   readonly options?: Record<string, string>;
+  /** Enable operator tailing for this source */
+  readonly tap?: boolean | TapConfig;
   readonly children?: ConstructNode | ConstructNode[];
 }
 

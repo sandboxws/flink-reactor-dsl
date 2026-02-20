@@ -1,4 +1,4 @@
-import type { BaseComponentProps, ConstructNode } from '../core/types.js';
+import type { BaseComponentProps, ConstructNode, TapConfig } from '../core/types.js';
 import { createElement } from '../core/jsx-runtime.js';
 
 // ── Regular Join ────────────────────────────────────────────────────
@@ -22,6 +22,8 @@ export interface JoinProps extends BaseComponentProps {
   readonly hints?: JoinHints;
   /** State TTL for join state expiry (e.g. '1h', '30min') */
   readonly stateTtl?: string;
+  /** Enable operator tailing for this join */
+  readonly tap?: boolean | TapConfig;
   readonly children?: ConstructNode | ConstructNode[];
 }
 
@@ -66,6 +68,8 @@ export interface TemporalJoinProps extends BaseComponentProps {
   readonly on: string;
   /** Time attribute column for FOR SYSTEM_TIME AS OF */
   readonly asOf: string;
+  /** Enable operator tailing for this join */
+  readonly tap?: boolean | TapConfig;
   readonly children?: ConstructNode | ConstructNode[];
 }
 
@@ -119,6 +123,8 @@ export interface LookupJoinProps extends BaseComponentProps {
   readonly async?: LookupAsyncConfig;
   /** Lookup cache configuration */
   readonly cache?: LookupCacheConfig;
+  /** Enable operator tailing for this join */
+  readonly tap?: boolean | TapConfig;
   readonly children?: ConstructNode | ConstructNode[];
 }
 
@@ -164,6 +170,8 @@ export interface IntervalJoinProps extends BaseComponentProps {
   readonly interval: IntervalBounds;
   /** Join type (default: 'inner') */
   readonly type?: 'inner' | 'left' | 'right' | 'full';
+  /** Enable operator tailing for this join */
+  readonly tap?: boolean | TapConfig;
   readonly children?: ConstructNode | ConstructNode[];
 }
 

@@ -1,0 +1,149 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Full pipeline TapManifest > generates correct manifest JSON for mixed tapped/untapped operators 1`] = `
+{
+  "flinkVersion": "2.0",
+  "generatedAt": "<redacted>",
+  "pipelineName": "ecommerce",
+  "taps": [
+    {
+      "componentName": "KafkaSink",
+      "componentType": "sink",
+      "config": {
+        "endTimestamp": "",
+        "groupIdPrefix": "",
+        "name": "output-tap",
+        "offsetMode": "earliest",
+        "startTimestamp": "",
+      },
+      "connectorProperties": {
+        "connector": "kafka",
+        "format": "json",
+        "properties.bootstrap.servers": "kafka:9092",
+        "topic": "large-orders",
+      },
+      "connectorType": "kafka",
+      "consumerGroupId": "flink-reactor-tap-ecommerce-large_orders-33e69e92",
+      "name": "output-tap",
+      "nodeId": "large_orders",
+      "observationSql": "CREATE TEMPORARY TABLE \`_tap_large_orders\` (
+
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'large-orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'properties.group.id' = 'flink-reactor-tap-ecommerce-large_orders-33e69e92',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+SELECT * FROM \`_tap_large_orders\`;",
+      "schema": {},
+    },
+    {
+      "componentName": "KafkaSource",
+      "componentType": "source",
+      "config": {
+        "endTimestamp": "",
+        "groupIdPrefix": "",
+        "name": "KafkaSource (orders)",
+        "offsetMode": "latest",
+        "startTimestamp": "",
+      },
+      "connectorProperties": {
+        "connector": "kafka",
+        "format": "json",
+        "properties.bootstrap.servers": "kafka:9092",
+        "topic": "orders",
+      },
+      "connectorType": "kafka",
+      "consumerGroupId": "flink-reactor-tap-ecommerce-orders-187baec2",
+      "name": "KafkaSource (orders)",
+      "nodeId": "orders",
+      "observationSql": "CREATE TEMPORARY TABLE \`_tap_orders\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`event_time\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'properties.group.id' = 'flink-reactor-tap-ecommerce-orders-187baec2',
+  'scan.startup.mode' = 'latest-offset'
+);
+
+SELECT * FROM \`_tap_orders\`;",
+      "schema": {
+        "amount": "DECIMAL(10, 2)",
+        "event_time": "TIMESTAMP(3)",
+        "order_id": "BIGINT",
+        "user_id": "STRING",
+      },
+    },
+  ],
+}
+`;
+
+exports[`JDBC sink tap observation SQL > generates correct observation SQL with periodic poll 1`] = `
+"CREATE TEMPORARY TABLE \`_tap_users\` (
+  \`id\` BIGINT,
+  \`name\` STRING
+) WITH (
+  'connector' = 'jdbc',
+  'url' = 'jdbc:postgresql://localhost:5432/db',
+  'table-name' = 'users'
+);
+
+SELECT * FROM \`_tap_users\`;"
+`;
+
+exports[`Kafka sink tap observation SQL > generates correct observation SQL with latest offset 1`] = `
+"CREATE TEMPORARY TABLE \`_tap_large_orders\` (
+  \`order_id\` BIGINT,
+  \`total\` DECIMAL(10, 2)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'large-orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'properties.group.id' = 'flink-reactor-tap-test-large_orders-def56789',
+  'scan.startup.mode' = 'latest-offset'
+);
+
+SELECT * FROM \`_tap_large_orders\`;"
+`;
+
+exports[`Kafka source tap observation SQL > generates correct observation SQL with consumer group clone 1`] = `
+"CREATE TEMPORARY TABLE \`_tap_orders\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'properties.group.id' = 'flink-reactor-tap-test-orders-abc12345',
+  'scan.startup.mode' = 'latest-offset'
+);
+
+SELECT * FROM \`_tap_orders\`;"
+`;
+
+exports[`Kafka tap with timestamp offset mode > generates correct startup timestamp config 1`] = `
+"CREATE TEMPORARY TABLE \`_tap_orders\` (
+  \`order_id\` BIGINT
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'properties.group.id' = 'flink-reactor-tap-test-orders-abc12345',
+  'scan.startup.mode' = 'timestamp',
+  'scan.startup.timestamp-millis' = '1705312800000'
+);
+
+SELECT * FROM \`_tap_orders\`;"
+`;

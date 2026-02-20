@@ -1,4 +1,4 @@
-import type { ConstructNode, FlinkMajorVersion } from '../core/types.js';
+import type { ConstructNode, FlinkMajorVersion, TapManifest } from '../core/types.js';
 import type { SchemaDefinition } from '../core/schema.js';
 import type { PluginSqlGenerator, PluginDdlGenerator } from '../core/plugin.js';
 import { FlinkVersionCompat } from '../core/flink-compat.js';
@@ -13,6 +13,8 @@ import {
   findRouteUpstreamNode,
   indexTree,
 } from './schema-introspect.js';
+import { generateTapMetadata } from '../core/tap.js';
+import type { ValidationDiagnostic } from '../core/synth-context.js';
 
 // ── Public API ──────────────────────────────────────────────────────
 
@@ -22,6 +24,10 @@ export interface GenerateSqlOptions {
   readonly pluginSqlGenerators?: ReadonlyMap<string, PluginSqlGenerator>;
   /** Plugin-provided DDL generators (component name → generator) */
   readonly pluginDdlGenerators?: ReadonlyMap<string, PluginDdlGenerator>;
+  /** Enable dev mode: auto-taps all sinks for maximum visibility */
+  readonly devMode?: boolean;
+  /** Disable tap metadata generation entirely */
+  readonly noTap?: boolean;
 }
 
 export interface GenerateSqlResult {
@@ -120,6 +126,48 @@ export function generateSql(
     statements,
     sql: statements.join('\n\n') + '\n',
   };
+}
+
+/**
+ * Generate a TapManifest from a Pipeline construct tree.
+ *
+ * This is a post-processing step that runs after (or independently of)
+ * main SQL generation. It walks the tree, collects tapped nodes, and
+ * produces observation metadata. Production SQL is never modified.
+ *
+ * Returns null if tap generation is disabled or no taps are found.
+ */
+export function generateTapManifest(
+  pipelineNode: ConstructNode,
+  options: GenerateSqlOptions = {},
+): { manifest: TapManifest | null; diagnostics: ValidationDiagnostic[] } {
+  if (options.noTap) {
+    return { manifest: null, diagnostics: [] };
+  }
+
+  const version = options.flinkVersion ?? '2.0';
+  const devMode = options.devMode ?? false;
+  const pipelineName = (pipelineNode.props.name as string) ?? 'unnamed';
+
+  const { taps, diagnostics } = generateTapMetadata(
+    pipelineNode,
+    pipelineName,
+    version,
+    devMode,
+  );
+
+  if (taps.length === 0) {
+    return { manifest: null, diagnostics };
+  }
+
+  const manifest: TapManifest = {
+    pipelineName,
+    flinkVersion: version,
+    generatedAt: new Date().toISOString(),
+    taps,
+  };
+
+  return { manifest, diagnostics };
 }
 
 // ── Identifier quoting ──────────────────────────────────────────────

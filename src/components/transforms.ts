@@ -1,4 +1,4 @@
-import type { FlinkType, BaseComponentProps, ConstructNode } from '../core/types.js';
+import type { FlinkType, BaseComponentProps, ConstructNode, TapConfig } from '../core/types.js';
 import type { SchemaDefinition } from '../core/schema.js';
 import { createElement } from '../core/jsx-runtime.js';
 
@@ -7,6 +7,8 @@ import { createElement } from '../core/jsx-runtime.js';
 export interface FilterProps extends BaseComponentProps {
   /** SQL WHERE expression (e.g. "amount > 100 AND status = 'active'") */
   readonly condition: string;
+  /** Enable operator tailing for this transform */
+  readonly tap?: boolean | TapConfig;
   readonly children?: ConstructNode | ConstructNode[];
 }
 
@@ -30,6 +32,8 @@ export function Filter(props: FilterProps): ConstructNode {
 export interface MapProps extends BaseComponentProps {
   /** Record mapping output field names to SQL expressions */
   readonly select: Record<string, string>;
+  /** Enable operator tailing for this transform */
+  readonly tap?: boolean | TapConfig;
   readonly children?: ConstructNode | ConstructNode[];
 }
 
@@ -55,6 +59,8 @@ export interface FlatMapProps extends BaseComponentProps {
   readonly unnest: string;
   /** Output field schema for the unnested elements */
   readonly as: Record<string, FlinkType>;
+  /** Enable operator tailing for this transform */
+  readonly tap?: boolean | TapConfig;
   readonly children?: ConstructNode | ConstructNode[];
 }
 
@@ -80,6 +86,8 @@ export interface AggregateProps extends BaseComponentProps {
   readonly groupBy: readonly string[];
   /** Record mapping output fields to aggregate expressions (e.g. 'COUNT(*)', 'SUM(amount)') */
   readonly select: Record<string, string>;
+  /** Enable operator tailing for this transform */
+  readonly tap?: boolean | TapConfig;
   readonly children?: ConstructNode | ConstructNode[];
 }
 
@@ -103,6 +111,8 @@ export function Aggregate(props: AggregateProps): ConstructNode {
 export interface UnionProps extends BaseComponentProps {
   /** Input schemas to validate compatibility (set by the framework during synthesis) */
   readonly inputs?: readonly SchemaDefinition[];
+  /** Enable operator tailing for this transform */
+  readonly tap?: boolean | TapConfig;
   readonly children?: ConstructNode | ConstructNode[];
 }
 
@@ -156,6 +166,8 @@ export interface DeduplicateProps extends BaseComponentProps {
   readonly order: string;
   /** Keep the first or last row per key */
   readonly keep: 'first' | 'last';
+  /** Enable operator tailing for this transform */
+  readonly tap?: boolean | TapConfig;
   readonly children?: ConstructNode | ConstructNode[];
 }
 
@@ -185,6 +197,8 @@ export interface TopNProps extends BaseComponentProps {
   readonly orderBy: Record<string, 'ASC' | 'DESC'>;
   /** Number of top rows to keep per partition */
   readonly n: number;
+  /** Enable operator tailing for this transform */
+  readonly tap?: boolean | TapConfig;
   readonly children?: ConstructNode | ConstructNode[];
 }
 

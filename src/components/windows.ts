@@ -1,4 +1,4 @@
-import type { BaseComponentProps, ConstructNode } from '../core/types.js';
+import type { BaseComponentProps, ConstructNode, TapConfig } from '../core/types.js';
 import { createElement } from '../core/jsx-runtime.js';
 
 // ── TumbleWindow ────────────────────────────────────────────────────
@@ -8,6 +8,8 @@ export interface TumbleWindowProps extends BaseComponentProps {
   readonly size: string;
   /** Time attribute column for the window */
   readonly on: string;
+  /** Enable operator tailing for this window */
+  readonly tap?: boolean | TapConfig;
   readonly children?: ConstructNode | ConstructNode[];
 }
 
@@ -38,6 +40,8 @@ export interface SlideWindowProps extends BaseComponentProps {
   readonly slide: string;
   /** Time attribute column for the window */
   readonly on: string;
+  /** Enable operator tailing for this window */
+  readonly tap?: boolean | TapConfig;
   readonly children?: ConstructNode | ConstructNode[];
 }
 
@@ -65,6 +69,8 @@ export interface SessionWindowProps extends BaseComponentProps {
   readonly gap: string;
   /** Time attribute column for the window */
   readonly on: string;
+  /** Enable operator tailing for this window */
+  readonly tap?: boolean | TapConfig;
   readonly children?: ConstructNode | ConstructNode[];
 }
 

@@ -123,3 +123,58 @@ export interface ConstructNode {
 export interface TypedConstructNode<C extends string = string> extends ConstructNode {
   readonly __componentBrand: C;
 }
+
+// ── Tap types ─────────────────────────────────────────────────────
+
+/** Offset mode for tap observation queries */
+export type TapOffsetMode = 'latest' | 'earliest' | 'timestamp';
+
+/** Configuration for an operator tap point */
+export interface TapConfig {
+  /** Display name for the tap point (defaults to component type + node ID) */
+  readonly name?: string;
+  /** Consumer group ID prefix (auto-generated if omitted) */
+  readonly groupIdPrefix?: string;
+  /** Where to start reading: 'latest' (default), 'earliest', or 'timestamp' */
+  readonly offsetMode?: TapOffsetMode;
+  /** ISO timestamp for 'timestamp' offset mode */
+  readonly startTimestamp?: string;
+  /** Optional end timestamp to bound the observation window */
+  readonly endTimestamp?: string;
+}
+
+/** Metadata describing how to observe a tapped operator's output stream */
+export interface TapMetadata {
+  /** Unique node ID from the construct tree */
+  readonly nodeId: string;
+  /** Human-readable name (from TapConfig.name or auto-generated) */
+  readonly name: string;
+  /** Component type: 'source' | 'sink' | 'transform' | 'join' | 'window' */
+  readonly componentType: string;
+  /** Component name (e.g., 'KafkaSource', 'Filter', 'JdbcSink') */
+  readonly componentName: string;
+  /** Output schema of the tapped operator */
+  readonly schema: Record<string, string>;
+  /** Connector type used for observation */
+  readonly connectorType: string;
+  /** Full SQL for the observation query (CREATE TEMPORARY TABLE + SELECT) */
+  readonly observationSql: string;
+  /** Default consumer group ID */
+  readonly consumerGroupId: string;
+  /** Tap configuration (merged defaults + user overrides) */
+  readonly config: Required<TapConfig>;
+  /** Source connector properties needed to reconstruct the observation table */
+  readonly connectorProperties: Record<string, string>;
+}
+
+/** Manifest file emitted alongside synthesized SQL for all tap points */
+export interface TapManifest {
+  /** Pipeline name from Pipeline component */
+  readonly pipelineName: string;
+  /** Target Flink version */
+  readonly flinkVersion: string;
+  /** Timestamp when manifest was generated */
+  readonly generatedAt: string;
+  /** All tapped operators */
+  readonly taps: TapMetadata[];
+}
