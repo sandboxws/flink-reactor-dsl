@@ -1,3 +1,20 @@
+/**
+ * CLI SQL Gateway Client — re-exports the shared SqlGatewayClient from
+ * src/lib/sql-gateway/ and extends it with CLI-specific methods (submitSqlFile).
+ *
+ * All existing imports from this module continue to work unchanged.
+ */
+
+// Re-export shared utilities
+export { splitSqlStatements } from '../../lib/sql-gateway/sql-utils.js';
+
+// Re-export shared types for consumers that import from this module
+export { SqlGatewayClientError } from '../../lib/sql-gateway/client.js';
+export type { ColumnInfo, ResultPage, StatementStatus, SessionConfig } from '../../lib/sql-gateway/types.js';
+
+import { SqlGatewayClient as SharedSqlGatewayClient } from '../../lib/sql-gateway/client.js';
+import { splitSqlStatements } from '../../lib/sql-gateway/sql-utils.js';
+
 export interface SubmitResult {
   sessionHandle: string;
   operationHandle: string;
@@ -6,115 +23,65 @@ export interface SubmitResult {
   errorMessage?: string;
 }
 
-interface OpenSessionResponse {
-  sessionHandle: string;
-}
-
-interface SubmitStatementResponse {
-  operationHandle: string;
-}
-
-interface OperationStatusResponse {
-  status: 'RUNNING' | 'FINISHED' | 'ERROR' | 'INITIALIZED';
-  results?: {
-    columns?: Array<{ name: string }>;
-    data?: Array<{ fields: unknown[] }>;
-  };
-}
-
-export class SqlGatewayClient {
-  constructor(private baseUrl: string) {}
-
-  async openSession(): Promise<string> {
-    const res = await fetch(`${this.baseUrl}/sessions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ properties: {} }),
-    });
-
-    if (!res.ok) {
-      throw new Error(`Failed to open session: ${res.status} ${res.statusText}`);
-    }
-
-    const data = (await res.json()) as OpenSessionResponse;
-    return data.sessionHandle;
+/**
+ * Extended SQL Gateway Client for CLI use.
+ *
+ * Inherits all shared client methods (openSession, closeSession, submitStatement,
+ * getOperationStatus, fetchResults, cancelOperation, fetchResultStream, executeAndStream)
+ * and adds CLI-specific methods for file-based SQL submission.
+ */
+export class SqlGatewayClient extends SharedSqlGatewayClient {
+  constructor(baseUrl: string) {
+    super(baseUrl);
   }
 
-  async submitStatement(sessionHandle: string, sql: string): Promise<string> {
-    const res = await fetch(`${this.baseUrl}/sessions/${sessionHandle}/statements`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ statement: sql }),
-    });
-
-    if (!res.ok) {
-      const body = await res.text();
-      throw new Error(`Failed to submit statement: ${res.status} ${body}`);
-    }
-
-    const data = (await res.json()) as SubmitStatementResponse;
-    return data.operationHandle;
-  }
-
+  /**
+   * Poll operation status — CLI-friendly alias for getOperationStatus.
+   * Maps INITIALIZED → RUNNING for CLI consumers that expect 3-state results.
+   */
   async pollStatus(
     sessionHandle: string,
     operationHandle: string,
   ): Promise<'RUNNING' | 'FINISHED' | 'ERROR'> {
-    const res = await fetch(
-      `${this.baseUrl}/sessions/${sessionHandle}/operations/${operationHandle}/status`,
-    );
-
-    if (!res.ok) {
-      throw new Error(`Failed to poll status: ${res.status} ${res.statusText}`);
-    }
-
-    const data = (await res.json()) as OperationStatusResponse;
-    if (data.status === 'INITIALIZED') {
+    const status = await this.getOperationStatus(sessionHandle, operationHandle);
+    if (status === 'INITIALIZED' || status === 'PENDING') {
       return 'RUNNING';
     }
-    return data.status as 'RUNNING' | 'FINISHED' | 'ERROR';
+    if (status === 'CANCELED') {
+      return 'ERROR';
+    }
+    return status as 'RUNNING' | 'FINISHED' | 'ERROR';
   }
 
   /**
-   * Fetch the result of an operation, which may contain error details.
+   * Fetch the result of an operation to extract error details.
+   * CLI-friendly wrapper around fetchResults that parses Java exception chains.
    */
   async fetchResult(
     sessionHandle: string,
     operationHandle: string,
   ): Promise<{ error?: string }> {
-    const res = await fetch(
-      `${this.baseUrl}/sessions/${sessionHandle}/operations/${operationHandle}/result/0`,
-    );
-
-    if (!res.ok) {
+    try {
+      const page = await this.fetchResults(sessionHandle, operationHandle, 0);
+      if (page.resultKind === 'ERROR') {
+        return { error: 'Statement execution failed' };
+      }
+      return {};
+    } catch (err) {
+      if (err instanceof Error) {
+        // Extract root cause from Java exception chain
+        const fullError = err.message;
+        const causeMatch = fullError.match(/Caused by: [^\n]*TableException: ([^\n]+)/);
+        return { error: causeMatch ? causeMatch[1] : fullError };
+      }
       return {};
     }
-
-    const data = (await res.json()) as {
-      errors?: string[];
-      results?: { data?: Array<{ fields: unknown[] }> };
-    };
-
-    if (data.errors && data.errors.length > 0) {
-      // Extract the root cause from the Java exception chain
-      const fullError = data.errors.join('\n');
-      const causeMatch = fullError.match(/Caused by: [^\n]*TableException: ([^\n]+)/);
-      return { error: causeMatch ? causeMatch[1] : data.errors[0] };
-    }
-
-    return {};
   }
 
-  async closeSession(sessionHandle: string): Promise<void> {
-    const res = await fetch(`${this.baseUrl}/sessions/${sessionHandle}`, {
-      method: 'DELETE',
-    });
-
-    if (!res.ok) {
-      throw new Error(`Failed to close session: ${res.status} ${res.statusText}`);
-    }
-  }
-
+  /**
+   * Read a SQL file, split into statements, and submit each one.
+   * Polls status for each statement, handling streaming vs batch differently.
+   */
   async submitSqlFile(filePath: string): Promise<SubmitResult> {
     const { readFileSync } = await import('node:fs');
     const sql = readFileSync(filePath, 'utf-8');
@@ -176,76 +143,7 @@ export class SqlGatewayClient {
   }
 }
 
-/**
- * Split a SQL file into individual statements, keeping
- * `EXECUTE STATEMENT SET BEGIN ... END;` as a single block.
- */
-export function splitSqlStatements(sql: string): string[] {
-  const statements: string[] = [];
-  const lines = sql.split('\n');
-  let current = '';
-  let inStatementSet = false;
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    // Skip empty lines and comments
-    if (!trimmed || trimmed.startsWith('--')) {
-      continue;
-    }
-
-    // Detect STATEMENT SET block start (may be on one or two lines)
-    if (/^EXECUTE\s+STATEMENT\s+SET\s*$/i.test(trimmed)) {
-      // Flush any pending statement
-      const pending = current.trim().replace(/;$/, '').trim();
-      if (pending) statements.push(pending);
-      current = trimmed + '\n';
-      inStatementSet = true;
-      continue;
-    }
-
-    if (!inStatementSet && /^EXECUTE\s+STATEMENT\s+SET\s+BEGIN\s*$/i.test(trimmed)) {
-      const pending = current.trim().replace(/;$/, '').trim();
-      if (pending) statements.push(pending);
-      current = trimmed + '\n';
-      inStatementSet = true;
-      continue;
-    }
-
-    if (inStatementSet) {
-      current += line + '\n';
-      // Detect STATEMENT SET block end
-      if (/^END\s*;?\s*$/i.test(trimmed)) {
-        inStatementSet = false;
-        statements.push(current.trim());
-        current = '';
-      }
-      continue;
-    }
-
-    // Regular statement: accumulate until semicolon
-    current += line + '\n';
-    if (trimmed.endsWith(';')) {
-      const stmt = current.trim().replace(/;$/, '').trim();
-      if (stmt) {
-        statements.push(stmt);
-      }
-      current = '';
-    }
-  }
-
-  // Handle final statement without trailing semicolon
-  const remaining = current.trim().replace(/;$/, '').trim();
-  if (remaining) {
-    statements.push(remaining);
-  }
-
-  return statements;
-}
-
 function isStreamingStatement(sql: string): boolean {
-  // INSERT INTO with unbounded source = streaming
-  // EXECUTE STATEMENT SET = streaming
   const upper = sql.toUpperCase();
   return upper.includes('INSERT INTO') || upper.includes('EXECUTE STATEMENT SET');
 }

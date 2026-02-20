@@ -105,7 +105,7 @@ describe('SqlGatewayClient', () => {
     vi.restoreAllMocks();
   });
 
-  it('openSession sends POST to /sessions', async () => {
+  it('openSession sends POST to /v1/sessions', async () => {
     fetchSpy.mockResolvedValueOnce(
       new Response(JSON.stringify({ sessionHandle: 'sess-123' }), {
         status: 200,
@@ -116,7 +116,7 @@ describe('SqlGatewayClient', () => {
     const handle = await client.openSession();
     expect(handle).toBe('sess-123');
     expect(fetchSpy).toHaveBeenCalledWith(
-      'http://localhost:8083/sessions',
+      'http://localhost:8083/v1/sessions',
       expect.objectContaining({ method: 'POST' }),
     );
   });
@@ -132,7 +132,7 @@ describe('SqlGatewayClient', () => {
     const handle = await client.submitStatement('sess-123', 'SELECT 1');
     expect(handle).toBe('op-456');
     expect(fetchSpy).toHaveBeenCalledWith(
-      'http://localhost:8083/sessions/sess-123/statements',
+      'http://localhost:8083/v1/sessions/sess-123/statements',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ statement: 'SELECT 1' }),
@@ -169,7 +169,7 @@ describe('SqlGatewayClient', () => {
 
     await client.closeSession('sess-123');
     expect(fetchSpy).toHaveBeenCalledWith(
-      'http://localhost:8083/sessions/sess-123',
+      'http://localhost:8083/v1/sessions/sess-123',
       expect.objectContaining({ method: 'DELETE' }),
     );
   });
