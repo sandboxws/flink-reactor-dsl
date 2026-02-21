@@ -1,7 +1,9 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`5.5: synth() test helper > works with toMatchSnapshot() 1`] = `
-"SET 'parallelism.default' = '1';
+"SET 'pipeline.name' = 'snapshot-test';
+
+SET 'parallelism.default' = '1';
 
 CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,

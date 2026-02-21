@@ -231,6 +231,13 @@ function generateSetStatements(
   const config: Record<string, string> = {};
   const props = pipeline.props;
 
+  // Always set pipeline.name so Flink job name matches the pipeline name.
+  // This enables the dashboard to match running jobs to tap manifests by name.
+  const pipelineName = props.name as string | undefined;
+  if (pipelineName) {
+    config['pipeline.name'] = pipelineName;
+  }
+
   if (props.mode) {
     config['execution.runtime-mode'] = props.mode as string;
   }

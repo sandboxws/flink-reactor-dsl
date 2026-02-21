@@ -1,7 +1,9 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`Query: WHERE + GROUP BY + HAVING combined > produces all clauses in correct order 1`] = `
-"CREATE TABLE \`orders\` (
+"SET 'pipeline.name' = 'combined-clauses-pipeline';
+
+CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
@@ -29,7 +31,9 @@ HAVING SUM(amount) > 500;
 `;
 
 exports[`Query: aggregation with HAVING > produces correct SQL 1`] = `
-"CREATE TABLE \`orders\` (
+"SET 'pipeline.name' = 'agg-having-pipeline';
+
+CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
@@ -56,7 +60,9 @@ HAVING SUM(amount) > 1000;
 `;
 
 exports[`Query: chained with upstream Filter > wraps the upstream filter in a subquery 1`] = `
-"CREATE TABLE \`orders\` (
+"SET 'pipeline.name' = 'filter-query-pipeline';
+
+CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
@@ -84,7 +90,9 @@ GROUP BY \`user_id\`;
 `;
 
 exports[`Query: multiple window functions sharing a named window > produces correct SQL with shared WINDOW clause 1`] = `
-"CREATE TABLE \`orders\` (
+"SET 'pipeline.name' = 'multi-window-pipeline';
+
+CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
@@ -110,7 +118,9 @@ WINDOW \`w\` AS (PARTITION BY \`user_id\` ORDER BY \`event_time\` ASC);
 `;
 
 exports[`Query: window function with inline OVER > produces correct SQL for RANK with inline window spec 1`] = `
-"CREATE TABLE \`orders\` (
+"SET 'pipeline.name' = 'inline-over-pipeline';
+
+CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
@@ -135,7 +145,9 @@ SELECT user_id AS \`user_id\`, amount AS \`amount\`, RANK() OVER (PARTITION BY \
 `;
 
 exports[`Query: window function with named window > produces correct SQL for LAG and ROW_NUMBER with named window 1`] = `
-"CREATE TABLE \`orders\` (
+"SET 'pipeline.name' = 'named-window-pipeline';
+
+CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),

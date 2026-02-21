@@ -1,7 +1,9 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`6.1: KafkaSource → Filter → KafkaSink > produces correct DDL + DML 1`] = `
-"CREATE TABLE \`orders\` (
+"SET 'pipeline.name' = 'filter-pipeline';
+
+CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
@@ -31,7 +33,9 @@ SELECT * FROM \`orders\` WHERE \`amount\` > 100;
 `;
 
 exports[`6.2: Two-table inner join > produces correct JOIN SQL 1`] = `
-"CREATE TABLE \`orders\` (
+"SET 'pipeline.name' = 'join-pipeline';
+
+CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
@@ -72,7 +76,9 @@ SELECT * FROM \`orders\` INNER JOIN \`users\` ON \`KafkaSource_0\`.\`user_id\` =
 `;
 
 exports[`6.3: Windowed aggregation with TUMBLE > produces correct TVF + GROUP BY 1`] = `
-"CREATE TABLE \`orders\` (
+"SET 'pipeline.name' = 'windowed-pipeline';
+
+CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
@@ -103,7 +109,9 @@ SELECT \`user_id\`, SUM(\`amount\`) AS \`total_amount\`, COUNT(*) AS \`order_cou
 `;
 
 exports[`6.4: Deduplicate produces ROW_NUMBER pattern > produces correct ROW_NUMBER with WHERE rownum = 1 1`] = `
-"CREATE TABLE \`events\` (
+"SET 'pipeline.name' = 'dedup-pipeline';
+
+CREATE TABLE \`events\` (
   \`event_id\` BIGINT,
   \`user_id\` STRING,
   \`event_type\` STRING,
@@ -138,7 +146,9 @@ SELECT * FROM (
 `;
 
 exports[`6.5: TopN produces ROW_NUMBER pattern > produces correct ROW_NUMBER with WHERE rownum <= N 1`] = `
-"CREATE TABLE \`orders\` (
+"SET 'pipeline.name' = 'topn-pipeline';
+
+CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
@@ -171,7 +181,9 @@ SELECT * FROM (
 `;
 
 exports[`6.6: Multi-sink produces STATEMENT SET > wraps multiple INSERT INTO in STATEMENT SET 1`] = `
-"CREATE TABLE \`events\` (
+"SET 'pipeline.name' = 'multi-sink-pipeline';
+
+CREATE TABLE \`events\` (
   \`event_id\` BIGINT,
   \`user_id\` STRING,
   \`event_type\` STRING,
@@ -219,7 +231,9 @@ END;
 `;
 
 exports[`6.7: Catalog pipeline produces CREATE CATALOG > generates CREATE CATALOG and catalog-qualified references 1`] = `
-"CREATE CATALOG \`lake\` WITH (
+"SET 'pipeline.name' = 'catalog-pipeline';
+
+CREATE CATALOG \`lake\` WITH (
   'type' = 'paimon',
   'warehouse' = 's3://bucket/paimon'
 );
@@ -236,7 +250,9 @@ SELECT * FROM \`lake\`.\`analytics\`.\`page_views\`;
 `;
 
 exports[`6.8: CDC source with debezium-json > produces Kafka source DDL with debezium-json format 1`] = `
-"CREATE TABLE \`dbserver1_inventory_orders\` (
+"SET 'pipeline.name' = 'cdc-pipeline';
+
+CREATE TABLE \`dbserver1_inventory_orders\` (
   \`order_id\` BIGINT,
   \`product\` STRING,
   \`quantity\` INT,
@@ -267,7 +283,9 @@ SELECT * FROM \`dbserver1_inventory_orders\`;
 `;
 
 exports[`6.9: LookupJoin with async config > produces lookup join with proc_time and FOR SYSTEM_TIME AS OF 1`] = `
-"CREATE TABLE \`orders\` (
+"SET 'pipeline.name' = 'lookup-pipeline';
+
+CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
@@ -297,7 +315,9 @@ SELECT * FROM \`orders\` LEFT JOIN \`dim_users\` FOR SYSTEM_TIME AS OF \`orders\
 `;
 
 exports[`6.10: IntervalJoin with time bounds > produces BETWEEN ... AND ... time predicates 1`] = `
-"CREATE TABLE \`orders\` (
+"SET 'pipeline.name' = 'interval-join-pipeline';
+
+CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
@@ -339,7 +359,9 @@ SELECT * FROM \`orders\` JOIN \`shipments\` ON \`KafkaSource_0\`.\`order_id\` = 
 `;
 
 exports[`6.11: Anti join produces WHERE NOT EXISTS > generates correlated subquery with NOT EXISTS 1`] = `
-"CREATE TABLE \`orders\` (
+"SET 'pipeline.name' = 'anti-join-pipeline';
+
+CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
@@ -381,7 +403,9 @@ SELECT \`orders\`.* FROM \`orders\` WHERE NOT EXISTS (
 `;
 
 exports[`6.12: Broadcast hint in join SQL > generates /*+ BROADCAST(alias) */ hint 1`] = `
-"CREATE TABLE \`orders\` (
+"SET 'pipeline.name' = 'broadcast-pipeline';
+
+CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
@@ -422,7 +446,9 @@ SELECT /*+ BROADCAST(\`products\`) */ * FROM \`orders\` INNER JOIN \`products\` 
 `;
 
 exports[`9.1: RawSQL inlines SQL in pipeline > inlines raw SQL as a subquery 1`] = `
-"CREATE TABLE \`orders\` (
+"SET 'pipeline.name' = 'raw-sql-pipeline';
+
+CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
@@ -463,7 +489,9 @@ SELECT o.*, u.name AS user_name FROM \`KafkaSource_0\` o JOIN \`KafkaSource_1\` 
 `;
 
 exports[`9.2: UDF generates CREATE FUNCTION DDL > produces CREATE FUNCTION statement 1`] = `
-"CREATE FUNCTION \`my_hash\` AS 'com.mycompany.HashFunction';
+"SET 'pipeline.name' = 'udf-pipeline';
+
+CREATE FUNCTION \`my_hash\` AS 'com.mycompany.HashFunction';
 
 CREATE TABLE \`events\` (
   \`event_id\` BIGINT,
@@ -494,7 +522,9 @@ SELECT \`event_id\` AS \`event_id\`, my_hash(\`payload\`) AS \`hashed\` FROM \`e
 `;
 
 exports[`9.3: MatchRecognize generates MATCH_RECOGNIZE clause > produces MATCH_RECOGNIZE with PARTITION BY, ORDER BY, MEASURES, PATTERN, DEFINE 1`] = `
-"CREATE TABLE \`transactions\` (
+"SET 'pipeline.name' = 'cep-pipeline';
+
+CREATE TABLE \`transactions\` (
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
   \`event_type\` STRING,
@@ -539,7 +569,9 @@ MATCH_RECOGNIZE (
 `;
 
 exports[`LateralJoin produces LATERAL TABLE > generates cross join lateral table SQL 1`] = `
-"CREATE FUNCTION \`parse_address\` AS 'com.mycompany.fns.AddressParser';
+"SET 'pipeline.name' = 'lateral-join-pipeline';
+
+CREATE FUNCTION \`parse_address\` AS 'com.mycompany.fns.AddressParser';
 
 CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
@@ -568,7 +600,9 @@ SELECT \`orders\`.*, T.\`street\`, T.\`city\`, T.\`zip\` FROM \`orders\` JOIN LA
 `;
 
 exports[`LateralJoin produces LATERAL TABLE > generates left join lateral table SQL 1`] = `
-"CREATE TABLE \`documents\` (
+"SET 'pipeline.name' = 'left-lateral-pipeline';
+
+CREATE TABLE \`documents\` (
   \`doc_id\` BIGINT,
   \`content\` STRING
 ) WITH (
@@ -593,7 +627,9 @@ SELECT \`documents\`.*, T.\`entity\`, T.\`entity_type\` FROM \`documents\` LEFT 
 `;
 
 exports[`Route produces correct multi-branch SQL > generates Route DML with programmatic reverse-nesting pattern 1`] = `
-"CREATE TABLE \`logs\` (
+"SET 'pipeline.name' = 'log-router';
+
+CREATE TABLE \`logs\` (
   \`message\` STRING,
   \`level\` STRING,
   \`timestamp\` TIMESTAMP(3)
@@ -648,7 +684,9 @@ END;
 `;
 
 exports[`Route produces correct multi-branch SQL > generates STATEMENT SET with branch conditions and transforms (JSX forward-reading) 1`] = `
-"CREATE TABLE \`cdc_inventory_products\` (
+"SET 'pipeline.name' = 'inventory-analytics';
+
+CREATE TABLE \`cdc_inventory_products\` (
   \`id\` INT,
   \`name\` STRING,
   \`category\` STRING,
@@ -701,7 +739,9 @@ END;
 `;
 
 exports[`SideOutput produces STATEMENT SET with main + side INSERTs > generates WHERE NOT for main path and WHERE for side path with metadata 1`] = `
-"CREATE TABLE \`orders\` (
+"SET 'pipeline.name' = 'side-output-pipeline';
+
+CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
@@ -736,7 +776,9 @@ END;
 `;
 
 exports[`SideOutput produces STATEMENT SET with main + side INSERTs > generates side output without tag 1`] = `
-"CREATE TABLE \`events\` (
+"SET 'pipeline.name' = 'no-tag-pipeline';
+
+CREATE TABLE \`events\` (
   \`event_id\` BIGINT,
   \`user_id\` STRING,
   \`event_type\` STRING,
@@ -772,7 +814,9 @@ END;
 `;
 
 exports[`Validate produces STATEMENT SET with valid + reject INSERTs > generates full validation SQL with notNull, range, and expression rules 1`] = `
-"CREATE TABLE \`raw_orders\` (
+"SET 'pipeline.name' = 'validate-pipeline';
+
+CREATE TABLE \`raw_orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
@@ -827,7 +871,9 @@ END;
 `;
 
 exports[`Validate produces STATEMENT SET with valid + reject INSERTs > generates notNull-only validation 1`] = `
-"CREATE TABLE \`events\` (
+"SET 'pipeline.name' = 'notnull-pipeline';
+
+CREATE TABLE \`events\` (
   \`event_id\` BIGINT,
   \`user_id\` STRING,
   \`event_type\` STRING,
@@ -875,7 +921,9 @@ END;
 `;
 
 exports[`View produces CREATE VIEW > generates CREATE VIEW from upstream Map + Source 1`] = `
-"CREATE TABLE \`orders\` (
+"SET 'pipeline.name' = 'view-pipeline';
+
+CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
