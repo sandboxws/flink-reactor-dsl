@@ -53,6 +53,7 @@ export async function runSynth(opts: {
       {
         env: ctx.env ?? undefined,
         config: ctx.config ?? undefined,
+        resolvedConfig: ctx.resolvedConfig ?? undefined,
       },
     );
 

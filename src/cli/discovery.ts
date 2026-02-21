@@ -4,6 +4,8 @@ import { createJiti } from 'jiti';
 import type { FlinkReactorConfig } from '../core/config.js';
 import type { EnvironmentConfig } from '../core/environment.js';
 import type { ConstructNode } from '../core/types.js';
+import type { ResolvedConfig } from '../core/config-resolver.js';
+import { resolveConfig } from '../core/config-resolver.js';
 
 // jiti handles .ts/.tsx imports at runtime — automatic JSX transform
 // injects `import { jsx } from 'flink-reactor/jsx-runtime'` automatically
@@ -22,6 +24,7 @@ export interface ProjectContext {
   readonly projectDir: string;
   readonly config: FlinkReactorConfig | null;
   readonly env: EnvironmentConfig | null;
+  readonly resolvedConfig: ResolvedConfig | null;
   readonly pipelines: readonly DiscoveredPipeline[];
 }
 
@@ -119,7 +122,23 @@ export async function loadPipeline(
 // ── Full project context ────────────────────────────────────────────
 
 /**
+ * Auto-select the default environment name when --env is not specified.
+ * Priority: 'development' > 'local' > first alphabetical.
+ */
+function autoSelectEnvironment(environments: Record<string, unknown>): string | undefined {
+  const names = Object.keys(environments);
+  if (names.length === 0) return undefined;
+  if (names.includes('development')) return 'development';
+  if (names.includes('local')) return 'local';
+  return names.sort()[0];
+}
+
+/**
  * Build the full project context: config, environment, and pipeline list.
+ *
+ * When the config has an `environments` block and an env name is available
+ * (via --env flag or auto-selection), resolves the config into a
+ * `ResolvedConfig` with env() markers replaced.
  */
 export async function resolveProjectContext(
   projectDir: string,
@@ -129,13 +148,39 @@ export async function resolveProjectContext(
   },
 ): Promise<ProjectContext> {
   const config = await loadConfig(projectDir);
-  const env = await loadEnvironment(projectDir, options?.env);
   const pipelines = discoverPipelines(projectDir, options?.pipeline);
+
+  // Unified config path: resolve environments block
+  let resolvedConfig: ResolvedConfig | null = null;
+  let env: EnvironmentConfig | null = null;
+
+  if (config?.environments && Object.keys(config.environments).length > 0) {
+    const envName = options?.env ?? autoSelectEnvironment(config.environments);
+    if (envName) {
+      resolvedConfig = resolveConfig(config, envName);
+    }
+
+    // Print deprecation warning if legacy env files also exist
+    const envDir = join(projectDir, 'env');
+    if (existsSync(envDir)) {
+      const files = readdirSync(envDir).filter((f) => f.endsWith('.ts') && !f.endsWith('.d.ts'));
+      if (files.length > 0) {
+        console.warn(
+          '\x1b[33m⚠ Deprecation: env/*.ts files detected alongside environments block in config.\n' +
+          '  The environments block takes priority. Consider removing env/*.ts files.\x1b[0m\n',
+        );
+      }
+    }
+  } else {
+    // Legacy path: load env/*.ts files
+    env = await loadEnvironment(projectDir, options?.env);
+  }
 
   return {
     projectDir,
     config,
     env,
+    resolvedConfig,
     pipelines,
   };
 }

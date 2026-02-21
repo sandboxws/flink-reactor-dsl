@@ -12,6 +12,7 @@ import { registerDeployCommand } from './commands/deploy.js';
 import { registerClusterCommand } from './commands/cluster.js';
 import { registerSchemaCommand } from './commands/schema.js';
 import { registerUpgradeCommand } from './commands/upgrade.js';
+import { registerDashboardCommand } from './commands/dashboard.js';
 
 const VERSION = '0.1.0';
 
@@ -78,6 +79,7 @@ export function createProgram(): Command {
   registerClusterCommand(program);
   registerSchemaCommand(program);
   registerUpgradeCommand(program);
+  registerDashboardCommand(program);
 
   return program;
 }

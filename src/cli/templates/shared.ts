@@ -74,6 +74,19 @@ export function makeConfig(opts: ScaffoldOptions): string {
 
 export default defineConfig({
   flink: { version: '${opts.flinkVersion}' },
+
+  environments: {
+    development: {
+      cluster: { url: 'http://localhost:8081' },
+      dashboard: { mockMode: true },
+      pipelines: { '*': { parallelism: 1 } },
+    },
+    production: {
+      cluster: { url: 'https://flink-prod:8081' },
+      kubernetes: { namespace: 'flink-prod' },
+      pipelines: { '*': { parallelism: 4 } },
+    },
+  },
 });
 `;
 }
@@ -108,7 +121,6 @@ export function sharedFiles(opts: ScaffoldOptions, sharedOpts?: SharedFileOption
     { path: 'tsconfig.json', content: makeTsconfig(opts) },
     { path: 'flink-reactor.config.ts', content: makeConfig(opts) },
     { path: '.gitignore', content: makeGitignore() },
-    { path: 'env/dev.ts', content: makeDevEnv(opts) },
   ];
   if (opts.registry) {
     files.push({ path: '.npmrc', content: makeNpmrc(opts.registry) });

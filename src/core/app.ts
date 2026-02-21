@@ -2,9 +2,11 @@ import type { ConstructNode, FlinkMajorVersion } from './types.js';
 import type { InfraConfig, FlinkReactorConfig } from './config.js';
 import type { EnvironmentConfig } from './environment.js';
 import type { FlinkReactorPlugin } from './plugin.js';
+import type { ResolvedConfig } from './config-resolver.js';
 import { generateSql, type GenerateSqlResult } from '../codegen/sql-generator.js';
 import { generateCrd, type FlinkDeploymentCrd, type CrdGeneratorOptions } from '../codegen/crd-generator.js';
 import { resolveEnvironment } from './environment.js';
+import { toInfraConfigFromResolved } from './config-resolver.js';
 import { resolvePlugins, EMPTY_PLUGIN_CHAIN } from './plugin-registry.js';
 import { registerComponentKinds, resetComponentKinds } from './jsx-runtime.js';
 import { rekindTree } from './tree-utils.js';
@@ -43,6 +45,7 @@ function applyConfigCascade(
   pipelineNode: ConstructNode,
   infra?: InfraConfig,
   env?: EnvironmentConfig,
+  resolvedConfig?: ResolvedConfig,
 ): ConstructNode {
   const pipelineName = pipelineNode.props.name as string;
   const mergedProps = { ...pipelineNode.props };
@@ -55,8 +58,28 @@ function applyConfigCascade(
     mergedProps.namespace = infra.kubernetes.namespace;
   }
 
-  // Layer 2: Environment overrides
-  if (env) {
+  // Layer 2: Environment overrides (prefer resolvedConfig.pipelines over legacy env)
+  if (resolvedConfig?.pipelines) {
+    // Apply wildcard overrides first (lower priority)
+    const wildcard = resolvedConfig.pipelines['*'];
+    if (wildcard) {
+      for (const [key, value] of Object.entries(wildcard)) {
+        if (value !== undefined && mergedProps[key] === undefined) {
+          mergedProps[key] = value;
+        }
+      }
+    }
+    // Apply named pipeline overrides (higher priority)
+    const named = resolvedConfig.pipelines[pipelineName];
+    if (named) {
+      for (const [key, value] of Object.entries(named)) {
+        if (value !== undefined && mergedProps[key] === undefined) {
+          mergedProps[key] = value;
+        }
+      }
+    }
+  } else if (env) {
+    // Legacy path: use EnvironmentConfig
     const envOverrides = resolveEnvironment(pipelineName, env);
     for (const [key, value] of Object.entries(envOverrides)) {
       if (mergedProps[key] === undefined) {
@@ -121,6 +144,7 @@ export function synthesizeApp(
     readonly flinkVersion?: FlinkMajorVersion;
     readonly env?: EnvironmentConfig;
     readonly config?: FlinkReactorConfig;
+    readonly resolvedConfig?: ResolvedConfig;
     readonly crdOptions?: Partial<CrdGeneratorOptions>;
     readonly plugins?: readonly FlinkReactorPlugin[];
   },
@@ -134,11 +158,15 @@ export function synthesizeApp(
   // Filter to only Pipeline nodes
   const pipelineNodes = childArray.filter((c) => c.kind === 'Pipeline');
 
-  const flinkVersion = options?.flinkVersion
+  const flinkVersion: FlinkMajorVersion = options?.flinkVersion
+    ?? options?.resolvedConfig?.flink.version
     ?? options?.config?.flink?.version
     ?? '2.0';
 
-  const infra = props.infra ?? options?.config?.toInfraConfig?.();
+  // Prefer infra from resolvedConfig, then props, then legacy config
+  const infra = props.infra
+    ?? (options?.resolvedConfig ? toInfraConfigFromResolved(options.resolvedConfig) : undefined)
+    ?? options?.config?.toInfraConfig?.();
 
   // ── Plugin resolution ──────────────────────────────────────────────
   // Merge plugins from options and config (options take precedence / come first)
@@ -171,7 +199,7 @@ export function synthesizeApp(
     // ── Per-pipeline synthesis ──────────────────────────────────────────
     const pipelines: PipelineArtifact[] = pipelineNodes.map((pipelineNode) => {
       // Apply config cascade
-      let node = applyConfigCascade(pipelineNode, infra, options?.env);
+      let node = applyConfigCascade(pipelineNode, infra, options?.env, options?.resolvedConfig);
 
       // Propagate infra settings to children
       node = propagateInfraToChildren(node, infra);

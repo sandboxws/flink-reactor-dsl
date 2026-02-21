@@ -3,9 +3,18 @@
 
 // Core: config & environment
 export { defineConfig } from './core/config.js';
-export type { FlinkReactorConfig, InfraConfig, ConnectorConfig, DeliveryStrategy } from './core/config.js';
+export type {
+  FlinkReactorConfig, InfraConfig, ConnectorConfig, DeliveryStrategy,
+  PipelineOverrides, ClusterConfig, DashboardSection, DashboardAuthConfig,
+  DashboardSslConfig, DashboardRbacConfig, DashboardObservabilityConfig,
+  EnvironmentEntry,
+} from './core/config.js';
+export { env, isEnvVarRef, resolveEnvVars } from './core/env-var.js';
+export type { EnvVarRef, Resolved } from './core/env-var.js';
+export { resolveConfig, buildResolvedDashboardJson, toInfraConfigFromResolved } from './core/config-resolver.js';
+export type { ResolvedConfig, ResolvedDashboardJson } from './core/config-resolver.js';
 export { defineEnvironment, resolveEnvironment, discoverEnvironments } from './core/environment.js';
-export type { EnvironmentConfig, PipelineOverrides } from './core/environment.js';
+export type { EnvironmentConfig } from './core/environment.js';
 
 // Core: types
 export type {

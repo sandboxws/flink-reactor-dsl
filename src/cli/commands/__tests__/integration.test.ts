@@ -36,9 +36,6 @@ describe('integration: new --template starter --yes', () => {
     expect(existsSync(join(projectDir, 'flink-reactor.config.ts'))).toBe(true);
     expect(existsSync(join(projectDir, '.gitignore'))).toBe(true);
 
-    // Environment
-    expect(existsSync(join(projectDir, 'env', 'dev.ts'))).toBe(true);
-
     // Schema
     expect(existsSync(join(projectDir, 'schemas', 'events.ts'))).toBe(true);
 

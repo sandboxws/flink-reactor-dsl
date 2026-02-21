@@ -1,9 +1,7 @@
 // ── Environment configuration ────────────────────────────────────────
 
-export interface PipelineOverrides {
-  readonly parallelism?: number;
-  readonly [key: string]: unknown;
-}
+// Re-export PipelineOverrides from config.ts (canonical location)
+export type { PipelineOverrides } from './config.js';
 
 export interface EnvironmentConfig {
   readonly name: string;
@@ -17,7 +15,7 @@ export interface EnvironmentConfig {
     };
   };
   /** Pipeline-specific overrides. Use '*' for wildcard (all pipelines). */
-  readonly pipelineOverrides?: Record<string, PipelineOverrides>;
+  readonly pipelineOverrides?: Record<string, import('./config.js').PipelineOverrides>;
 }
 
 // ── Resolution ───────────────────────────────────────────────────────
@@ -27,6 +25,9 @@ export interface EnvironmentConfig {
  *
  * Named pipeline overrides take priority over wildcard ('*') overrides.
  * Properties from both are merged, with the named override winning on conflicts.
+ *
+ * @deprecated Use `resolveConfig()` from `./config-resolver.js` with inline
+ * `environments` in `defineConfig()` instead of separate `env/*.ts` files.
  */
 export function resolveEnvironment(
   pipelineName: string,
@@ -76,6 +77,9 @@ export function resolveEnvironment(
  * The filename (without extension) becomes the environment name.
  *
  * Returns an array of { name, path } entries (does NOT import them).
+ *
+ * @deprecated Use inline `environments` in `defineConfig()` instead of
+ * separate `env/*.ts` files.
  */
 export function discoverEnvironments(
   envDir: string,
@@ -95,6 +99,8 @@ export function discoverEnvironments(
  * Helper for creating a typed environment config file (env/*.ts).
  *
  * Returns a frozen EnvironmentConfig.
+ *
+ * @deprecated Use inline `environments` in `defineConfig()` instead.
  */
 export function defineEnvironment(config: EnvironmentConfig): EnvironmentConfig {
   return Object.freeze(config);
