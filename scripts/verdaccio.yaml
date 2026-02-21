@@ -27,12 +27,18 @@ packages:
     publish: $anonymous
     unpublish: $anonymous
 
+  '@*/*':
+    access: $all
+    proxy: npmjs
+
   '**':
     access: $all
     proxy: npmjs
 
 server:
   keepAliveTimeout: 60
+
+max_body_size: 100mb
 
 logs:
   type: stdout
