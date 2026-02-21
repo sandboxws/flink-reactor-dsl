@@ -34,7 +34,8 @@
     "ui:embed": "pnpm --filter @flink-reactor/ui-embeddings embed",
     "ui:search": "pnpm --filter @flink-reactor/ui-embeddings search",
     "ui:benchmark": "pnpm --filter @flink-reactor/ui-embeddings benchmark",
-    "docs": "pnpm -C web dev"
+    "docs": "pnpm -C web dev",
+    "local:publish": "bash scripts/local-publish.sh"
   },
   "keywords": [
     "flink",

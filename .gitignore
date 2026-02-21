@@ -370,3 +370,6 @@ $RECYCLE.BIN/
 
 # Embedding index (local-only, generated per-machine)
 **/.embeddings/
+
+# Verdaccio local registry data
+.verdaccio/

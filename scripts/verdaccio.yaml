@@ -1,0 +1,40 @@
+# Local development registry config
+# Used by `pnpm local:publish` — allows anonymous publish for @flink-reactor packages
+
+storage: ../.verdaccio/storage
+plugins: ../.verdaccio/plugins
+
+web:
+  title: FlinkReactor Local Registry
+
+auth:
+  htpasswd:
+    file: ../.verdaccio/htpasswd
+    max_users: 100
+
+uplinks:
+  npmjs:
+    url: https://registry.npmjs.org/
+
+packages:
+  'flink-reactor':
+    access: $all
+    publish: $anonymous
+    unpublish: $anonymous
+
+  '@flink-reactor/*':
+    access: $all
+    publish: $anonymous
+    unpublish: $anonymous
+
+  '**':
+    access: $all
+    proxy: npmjs
+
+server:
+  keepAliveTimeout: 60
+
+logs:
+  type: stdout
+  format: pretty
+  level: warn
