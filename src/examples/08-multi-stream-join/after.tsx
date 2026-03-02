@@ -1,10 +1,10 @@
-import { createElement } from '../../core/jsx-runtime';
-import { Schema, Field } from '../../core/schema';
-import { Pipeline } from '../../components/pipeline';
-import { KafkaSource } from '../../components/sources';
-import { JdbcSink } from '../../components/sinks';
-import { Aggregate } from '../../components/transforms';
-import { IntervalJoin } from '../../components/joins';
+import { IntervalJoin } from "../../components/joins"
+import { Pipeline } from "../../components/pipeline"
+import { JdbcSink } from "../../components/sinks"
+import { KafkaSource } from "../../components/sources"
+import { Aggregate } from "../../components/transforms"
+import { createElement } from "../../core/jsx-runtime"
+import { Field, Schema } from "../../core/schema"
 
 const PageViewSchema = Schema({
   fields: {
@@ -14,10 +14,10 @@ const PageViewSchema = Schema({
     view_time: Field.TIMESTAMP(3),
   },
   watermark: {
-    column: 'view_time',
+    column: "view_time",
     expression: "view_time - INTERVAL '30' SECOND",
   },
-});
+})
 
 const ClickSchema = Schema({
   fields: {
@@ -27,10 +27,10 @@ const ClickSchema = Schema({
     click_time: Field.TIMESTAMP(3),
   },
   watermark: {
-    column: 'click_time',
+    column: "click_time",
     expression: "click_time - INTERVAL '30' SECOND",
   },
-});
+})
 
 const ConversionSchema = Schema({
   fields: {
@@ -41,22 +41,34 @@ const ConversionSchema = Schema({
     conversion_time: Field.TIMESTAMP(3),
   },
   watermark: {
-    column: 'conversion_time',
+    column: "conversion_time",
     expression: "conversion_time - INTERVAL '30' SECOND",
   },
-});
+})
 
 const pageViews = (
-  <KafkaSource topic="page_views" bootstrapServers="kafka:9092" schema={PageViewSchema} />
-);
+  <KafkaSource
+    topic="page_views"
+    bootstrapServers="kafka:9092"
+    schema={PageViewSchema}
+  />
+)
 
 const clicks = (
-  <KafkaSource topic="clicks" bootstrapServers="kafka:9092" schema={ClickSchema} />
-);
+  <KafkaSource
+    topic="clicks"
+    bootstrapServers="kafka:9092"
+    schema={ClickSchema}
+  />
+)
 
 const conversions = (
-  <KafkaSource topic="conversions" bootstrapServers="kafka:9092" schema={ConversionSchema} />
-);
+  <KafkaSource
+    topic="conversions"
+    bootstrapServers="kafka:9092"
+    schema={ConversionSchema}
+  />
+)
 
 // First join: page views + clicks within 30 minutes
 const viewsWithClicks = (
@@ -66,11 +78,11 @@ const viewsWithClicks = (
     on="session_id = session_id"
     type="left"
     interval={{
-      from: 'view_time',
+      from: "view_time",
       to: "view_time + INTERVAL '30' MINUTE",
     }}
   />
-);
+)
 
 // Second join: enriched views + conversions within 1 hour
 const fullFunnel = (
@@ -80,23 +92,23 @@ const fullFunnel = (
     on="session_id = session_id"
     type="left"
     interval={{
-      from: 'view_time',
+      from: "view_time",
       to: "view_time + INTERVAL '1' HOUR",
     }}
   />
-);
+)
 
 export default (
   <Pipeline name="user-funnel" parallelism={8}>
     {fullFunnel}
     <Aggregate
-      groupBy={['user_id']}
+      groupBy={["user_id"]}
       select={{
-        user_id: 'user_id',
-        total_views: 'COUNT(*)',
-        total_clicks: 'COUNT(click_id)',
-        total_conversions: 'COUNT(conversion_id)',
-        total_revenue: 'SUM(revenue)',
+        user_id: "user_id",
+        total_views: "COUNT(*)",
+        total_clicks: "COUNT(click_id)",
+        total_conversions: "COUNT(conversion_id)",
+        total_revenue: "SUM(revenue)",
       }}
     />
     <JdbcSink
@@ -104,4 +116,4 @@ export default (
       table="user_funnel_metrics"
     />
   </Pipeline>
-);
+)

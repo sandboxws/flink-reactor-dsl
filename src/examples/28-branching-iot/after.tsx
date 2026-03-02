@@ -1,11 +1,11 @@
-import { createElement } from '../../core/jsx-runtime';
-import { Schema, Field } from '../../core/schema';
-import { Pipeline } from '../../components/pipeline';
-import { KafkaSource } from '../../components/sources';
-import { KafkaSink, JdbcSink, FileSystemSink } from '../../components/sinks';
-import { Aggregate } from '../../components/transforms';
-import { TumbleWindow } from '../../components/windows';
-import { Route } from '../../components/route';
+import { Pipeline } from "../../components/pipeline"
+import { Route } from "../../components/route"
+import { FileSystemSink, JdbcSink, KafkaSink } from "../../components/sinks"
+import { KafkaSource } from "../../components/sources"
+import { Aggregate } from "../../components/transforms"
+import { TumbleWindow } from "../../components/windows"
+import { createElement } from "../../core/jsx-runtime"
+import { Field, Schema } from "../../core/schema"
 
 const SensorSchema = Schema({
   fields: {
@@ -16,10 +16,10 @@ const SensorSchema = Schema({
     location_id: Field.STRING(),
   },
   watermark: {
-    column: 'reading_time',
+    column: "reading_time",
     expression: "reading_time - INTERVAL '30' SECOND",
   },
-});
+})
 
 export default (
   <Pipeline name="iot-sensor-pipeline">
@@ -38,13 +38,13 @@ export default (
       <Route.Branch condition="true">
         <TumbleWindow size="5 minutes" on="reading_time">
           <Aggregate
-            groupBy={['device_id', 'sensor_type']}
+            groupBy={["device_id", "sensor_type"]}
             select={{
-              device_id: 'device_id',
-              sensor_type: 'sensor_type',
-              avg_value: 'AVG(reading_value)',
-              min_value: 'MIN(reading_value)',
-              max_value: 'MAX(reading_value)',
+              device_id: "device_id",
+              sensor_type: "sensor_type",
+              avg_value: "AVG(reading_value)",
+              min_value: "MIN(reading_value)",
+              max_value: "MAX(reading_value)",
             }}
           />
         </TumbleWindow>
@@ -59,9 +59,9 @@ export default (
         <FileSystemSink
           path="s3://iot-archive/raw/"
           format="parquet"
-          partitionBy={['DATE(reading_time)']}
+          partitionBy={["DATE(reading_time)"]}
         />
       </Route.Default>
     </Route>
   </Pipeline>
-);
+)

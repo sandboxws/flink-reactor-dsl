@@ -1,53 +1,53 @@
-import type { ChangelogMode, ConstructNode, NodeKind } from './types.js';
-import type { PluginValidator } from './plugin.js';
+import type { PluginValidator } from "./plugin.js"
+import type { ChangelogMode, ConstructNode, NodeKind } from "./types.js"
 
 // ── Changelog compatibility ─────────────────────────────────────────
 
 /** Sinks that natively support retract/upsert streams */
 const CHANGELOG_CAPABLE_SINKS: ReadonlySet<string> = new Set([
-  'JdbcSink',      // with upsertMode=true
-  'PaimonSink',
-  'IcebergSink',
-]);
+  "JdbcSink", // with upsertMode=true
+  "PaimonSink",
+  "IcebergSink",
+])
 
 function sinkAcceptsChangelog(node: ConstructNode): boolean {
-  if (node.component === 'JdbcSink') {
-    return node.props.upsertMode === true;
+  if (node.component === "JdbcSink") {
+    return node.props.upsertMode === true
   }
-  return CHANGELOG_CAPABLE_SINKS.has(node.component);
+  return CHANGELOG_CAPABLE_SINKS.has(node.component)
 }
 
 // ── Graph types ──────────────────────────────────────────────────────
 
 export interface GraphEdge {
-  readonly from: string;
-  readonly to: string;
+  readonly from: string
+  readonly to: string
 }
 
 export interface ValidationDiagnostic {
-  readonly severity: 'error' | 'warning';
-  readonly message: string;
-  readonly nodeId?: string;
-  readonly component?: string;
+  readonly severity: "error" | "warning"
+  readonly message: string
+  readonly nodeId?: string
+  readonly component?: string
 }
 
 // ── SynthContext ──────────────────────────────────────────────────────
 
 export class SynthContext {
-  private readonly nodes: Map<string, ConstructNode> = new Map();
-  private readonly adjacency: Map<string, Set<string>> = new Map();
-  private readonly reverseAdj: Map<string, Set<string>> = new Map();
+  private readonly nodes: Map<string, ConstructNode> = new Map()
+  private readonly adjacency: Map<string, Set<string>> = new Map()
+  private readonly reverseAdj: Map<string, Set<string>> = new Map()
 
   /**
    * Register a construct node in the graph.
    */
   addNode(node: ConstructNode): void {
-    this.nodes.set(node.id, node);
+    this.nodes.set(node.id, node)
     if (!this.adjacency.has(node.id)) {
-      this.adjacency.set(node.id, new Set());
+      this.adjacency.set(node.id, new Set())
     }
     if (!this.reverseAdj.has(node.id)) {
-      this.reverseAdj.set(node.id, new Set());
+      this.reverseAdj.set(node.id, new Set())
     }
   }
 
@@ -56,69 +56,69 @@ export class SynthContext {
    */
   addEdge(from: string, to: string): void {
     if (!this.adjacency.has(from)) {
-      this.adjacency.set(from, new Set());
+      this.adjacency.set(from, new Set())
     }
-    this.adjacency.get(from)!.add(to);
+    this.adjacency.get(from)?.add(to)
 
     if (!this.reverseAdj.has(to)) {
-      this.reverseAdj.set(to, new Set());
+      this.reverseAdj.set(to, new Set())
     }
-    this.reverseAdj.get(to)!.add(from);
+    this.reverseAdj.get(to)?.add(from)
   }
 
   /**
    * Get a node by ID.
    */
   getNode(id: string): ConstructNode | undefined {
-    return this.nodes.get(id);
+    return this.nodes.get(id)
   }
 
   /**
    * Get all outgoing neighbor IDs for a node.
    */
   getOutgoing(id: string): ReadonlySet<string> {
-    return this.adjacency.get(id) ?? new Set();
+    return this.adjacency.get(id) ?? new Set()
   }
 
   /**
    * Get all incoming neighbor IDs for a node.
    */
   getIncoming(id: string): ReadonlySet<string> {
-    return this.reverseAdj.get(id) ?? new Set();
+    return this.reverseAdj.get(id) ?? new Set()
   }
 
   /**
    * Collect all nodes matching the given kind(s).
    */
   getNodesByKind(...kinds: NodeKind[]): ConstructNode[] {
-    const kindSet = new Set(kinds);
-    const result: ConstructNode[] = [];
+    const kindSet = new Set(kinds)
+    const result: ConstructNode[] = []
     for (const node of this.nodes.values()) {
       if (kindSet.has(node.kind)) {
-        result.push(node);
+        result.push(node)
       }
     }
-    return result;
+    return result
   }
 
   /**
    * Get all registered nodes.
    */
   getAllNodes(): ConstructNode[] {
-    return [...this.nodes.values()];
+    return [...this.nodes.values()]
   }
 
   /**
    * Get all edges in the graph.
    */
   getAllEdges(): GraphEdge[] {
-    const edges: GraphEdge[] = [];
+    const edges: GraphEdge[] = []
     for (const [from, tos] of this.adjacency) {
       for (const to of tos) {
-        edges.push({ from, to });
+        edges.push({ from, to })
       }
     }
-    return edges;
+    return edges
   }
 
   // ── Build from construct tree ────────────────────────────────────
@@ -128,11 +128,11 @@ export class SynthContext {
    * Parent → child edges represent the linear pipeline chain.
    */
   buildFromTree(root: ConstructNode): void {
-    this.addNode(root);
+    this.addNode(root)
     for (const child of root.children) {
-      this.addNode(child);
-      this.addEdge(root.id, child.id);
-      this.buildFromTree(child);
+      this.addNode(child)
+      this.addEdge(root.id, child.id)
+      this.buildFromTree(child)
     }
   }
 
@@ -143,39 +143,39 @@ export class SynthContext {
    * Throws if the graph contains a cycle.
    */
   topologicalSort(): ConstructNode[] {
-    const inDegree = new Map<string, number>();
+    const inDegree = new Map<string, number>()
     for (const id of this.nodes.keys()) {
-      inDegree.set(id, 0);
+      inDegree.set(id, 0)
     }
     for (const [, tos] of this.adjacency) {
       for (const to of tos) {
-        inDegree.set(to, (inDegree.get(to) ?? 0) + 1);
+        inDegree.set(to, (inDegree.get(to) ?? 0) + 1)
       }
     }
 
-    const queue: string[] = [];
+    const queue: string[] = []
     for (const [id, deg] of inDegree) {
-      if (deg === 0) queue.push(id);
+      if (deg === 0) queue.push(id)
     }
 
-    const sorted: ConstructNode[] = [];
+    const sorted: ConstructNode[] = []
     while (queue.length > 0) {
-      const id = queue.shift()!;
-      const node = this.nodes.get(id);
-      if (node) sorted.push(node);
+      const id = queue.shift()!
+      const node = this.nodes.get(id)
+      if (node) sorted.push(node)
 
       for (const neighbor of this.adjacency.get(id) ?? []) {
-        const newDeg = (inDegree.get(neighbor) ?? 1) - 1;
-        inDegree.set(neighbor, newDeg);
-        if (newDeg === 0) queue.push(neighbor);
+        const newDeg = (inDegree.get(neighbor) ?? 1) - 1
+        inDegree.set(neighbor, newDeg)
+        if (newDeg === 0) queue.push(neighbor)
       }
     }
 
     if (sorted.length !== this.nodes.size) {
-      throw new Error('Cycle detected in pipeline graph');
+      throw new Error("Cycle detected in pipeline graph")
     }
 
-    return sorted;
+    return sorted
   }
 
   // ── Validation ───────────────────────────────────────────────────
@@ -185,21 +185,21 @@ export class SynthContext {
    * (declared but never consumed by a downstream component).
    */
   detectOrphanSources(): ValidationDiagnostic[] {
-    const diagnostics: ValidationDiagnostic[] = [];
+    const diagnostics: ValidationDiagnostic[] = []
     for (const node of this.nodes.values()) {
-      if (node.kind === 'Source') {
-        const outgoing = this.adjacency.get(node.id);
+      if (node.kind === "Source") {
+        const outgoing = this.adjacency.get(node.id)
         if (!outgoing || outgoing.size === 0) {
           diagnostics.push({
-            severity: 'error',
+            severity: "error",
             message: `Orphan source '${node.component}' (${node.id}): declared but never consumed`,
             nodeId: node.id,
             component: node.component,
-          });
+          })
         }
       }
     }
-    return diagnostics;
+    return diagnostics
   }
 
   /**
@@ -207,21 +207,21 @@ export class SynthContext {
    * (no input path to feed data).
    */
   detectDanglingSinks(): ValidationDiagnostic[] {
-    const diagnostics: ValidationDiagnostic[] = [];
+    const diagnostics: ValidationDiagnostic[] = []
     for (const node of this.nodes.values()) {
-      if (node.kind === 'Sink') {
-        const incoming = this.reverseAdj.get(node.id);
+      if (node.kind === "Sink") {
+        const incoming = this.reverseAdj.get(node.id)
         if (!incoming || incoming.size === 0) {
           diagnostics.push({
-            severity: 'error',
+            severity: "error",
             message: `Dangling sink '${node.component}' (${node.id}): no input path`,
             nodeId: node.id,
             component: node.component,
-          });
+          })
         }
       }
     }
-    return diagnostics;
+    return diagnostics
   }
 
   /**
@@ -229,46 +229,50 @@ export class SynthContext {
    * Returns diagnostics if cycles are found.
    */
   detectCycles(): ValidationDiagnostic[] {
-    const WHITE = 0, GRAY = 1, BLACK = 2;
-    const color = new Map<string, number>();
+    const WHITE = 0,
+      GRAY = 1,
+      BLACK = 2
+    const color = new Map<string, number>()
     for (const id of this.nodes.keys()) {
-      color.set(id, WHITE);
+      color.set(id, WHITE)
     }
 
-    const cycleNodes: string[] = [];
+    const cycleNodes: string[] = []
 
     const dfs = (id: string): boolean => {
-      color.set(id, GRAY);
+      color.set(id, GRAY)
       for (const neighbor of this.adjacency.get(id) ?? []) {
         if (color.get(neighbor) === GRAY) {
-          cycleNodes.push(neighbor);
-          return true;
+          cycleNodes.push(neighbor)
+          return true
         }
         if (color.get(neighbor) === WHITE && dfs(neighbor)) {
-          return true;
+          return true
         }
       }
-      color.set(id, BLACK);
-      return false;
-    };
+      color.set(id, BLACK)
+      return false
+    }
 
     for (const id of this.nodes.keys()) {
       if (color.get(id) === WHITE) {
-        if (dfs(id)) break;
+        if (dfs(id)) break
       }
     }
 
     if (cycleNodes.length > 0) {
-      const node = this.nodes.get(cycleNodes[0]);
-      return [{
-        severity: 'error',
-        message: `Cycle detected involving node '${node?.component ?? cycleNodes[0]}' (${cycleNodes[0]})`,
-        nodeId: cycleNodes[0],
-        component: node?.component,
-      }];
+      const node = this.nodes.get(cycleNodes[0])
+      return [
+        {
+          severity: "error",
+          message: `Cycle detected involving node '${node?.component ?? cycleNodes[0]}' (${cycleNodes[0]})`,
+          nodeId: cycleNodes[0],
+          component: node?.component,
+        },
+      ]
     }
 
-    return [];
+    return []
   }
 
   /**
@@ -280,31 +284,31 @@ export class SynthContext {
    * determines the mode for that path.
    */
   detectChangelogMismatch(): ValidationDiagnostic[] {
-    const diagnostics: ValidationDiagnostic[] = [];
+    const diagnostics: ValidationDiagnostic[] = []
 
     for (const node of this.nodes.values()) {
-      if (node.kind !== 'Sink') continue;
-      if (sinkAcceptsChangelog(node)) continue;
+      if (node.kind !== "Sink") continue
+      if (sinkAcceptsChangelog(node)) continue
 
       // Walk incoming edges to find changelog mode
-      const incoming = this.reverseAdj.get(node.id);
-      if (!incoming) continue;
+      const incoming = this.reverseAdj.get(node.id)
+      if (!incoming) continue
 
       for (const parentId of incoming) {
-        const mode = this.resolveChangelogMode(parentId);
-        if (mode && mode !== 'append-only') {
+        const mode = this.resolveChangelogMode(parentId)
+        if (mode && mode !== "append-only") {
           diagnostics.push({
-            severity: 'error',
+            severity: "error",
             message: `Sink '${node.component}' (${node.id}) does not support '${mode}' streams. Use an upsert-capable sink or add a changelog normalization step.`,
             nodeId: node.id,
             component: node.component,
-          });
-          break;
+          })
+          break
         }
       }
     }
 
-    return diagnostics;
+    return diagnostics
   }
 
   /**
@@ -312,22 +316,22 @@ export class SynthContext {
    * Returns the first changelogMode found on the path, or undefined.
    */
   private resolveChangelogMode(nodeId: string): ChangelogMode | undefined {
-    const node = this.nodes.get(nodeId);
-    if (!node) return undefined;
+    const node = this.nodes.get(nodeId)
+    if (!node) return undefined
 
-    const mode = node.props.changelogMode as ChangelogMode | undefined;
-    if (mode) return mode;
+    const mode = node.props.changelogMode as ChangelogMode | undefined
+    if (mode) return mode
 
     // Recurse through incoming edges
-    const incoming = this.reverseAdj.get(nodeId);
-    if (!incoming) return undefined;
+    const incoming = this.reverseAdj.get(nodeId)
+    if (!incoming) return undefined
 
     for (const parentId of incoming) {
-      const parentMode = this.resolveChangelogMode(parentId);
-      if (parentMode) return parentMode;
+      const parentMode = this.resolveChangelogMode(parentId)
+      if (parentMode) return parentMode
     }
 
-    return undefined;
+    return undefined
   }
 
   /**
@@ -344,17 +348,19 @@ export class SynthContext {
       ...this.detectDanglingSinks(),
       ...this.detectCycles(),
       ...this.detectChangelogMismatch(),
-    ];
+    ]
 
     if (!pluginValidators || pluginValidators.length === 0 || !root) {
-      return builtIn;
+      return builtIn
     }
 
-    const pluginDiagnostics: ValidationDiagnostic[] = [];
+    const pluginDiagnostics: ValidationDiagnostic[] = []
     for (const validator of pluginValidators) {
-      pluginDiagnostics.push(...validator(root, [...builtIn, ...pluginDiagnostics]));
+      pluginDiagnostics.push(
+        ...validator(root, [...builtIn, ...pluginDiagnostics]),
+      )
     }
 
-    return [...builtIn, ...pluginDiagnostics];
+    return [...builtIn, ...pluginDiagnostics]
   }
 }

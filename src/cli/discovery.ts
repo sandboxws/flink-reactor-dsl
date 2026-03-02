@@ -1,28 +1,28 @@
-import { readdirSync, existsSync, statSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { createJiti } from 'jiti';
-import type { FlinkReactorConfig } from '../core/config.js';
-import type { EnvironmentConfig } from '../core/environment.js';
-import type { ConstructNode } from '../core/types.js';
+import { existsSync, readdirSync, statSync } from "node:fs"
+import { join, resolve } from "node:path"
+import { createJiti } from "jiti"
+import type { FlinkReactorConfig } from "../core/config.js"
+import type { EnvironmentConfig } from "../core/environment.js"
+import type { ConstructNode } from "../core/types.js"
 
 // jiti handles .ts/.tsx imports at runtime — automatic JSX transform
 // injects `import { jsx } from 'flink-reactor/jsx-runtime'` automatically
 const jiti = createJiti(import.meta.url, {
-  jsx: { runtime: 'automatic', importSource: 'flink-reactor' },
-});
+  jsx: { runtime: "automatic", importSource: "flink-reactor" },
+})
 
 // ── Types ───────────────────────────────────────────────────────────
 
 export interface DiscoveredPipeline {
-  readonly name: string;
-  readonly entryPoint: string;
+  readonly name: string
+  readonly entryPoint: string
 }
 
 export interface ProjectContext {
-  readonly projectDir: string;
-  readonly config: FlinkReactorConfig | null;
-  readonly env: EnvironmentConfig | null;
-  readonly pipelines: readonly DiscoveredPipeline[];
+  readonly projectDir: string
+  readonly config: FlinkReactorConfig | null
+  readonly env: EnvironmentConfig | null
+  readonly pipelines: readonly DiscoveredPipeline[]
 }
 
 // ── Pipeline discovery ──────────────────────────────────────────────
@@ -35,31 +35,31 @@ export function discoverPipelines(
   projectDir: string,
   targetPipeline?: string,
 ): DiscoveredPipeline[] {
-  const pipelinesDir = join(projectDir, 'pipelines');
+  const pipelinesDir = join(projectDir, "pipelines")
 
   if (!existsSync(pipelinesDir)) {
-    return [];
+    return []
   }
 
-  const entries = readdirSync(pipelinesDir);
-  const pipelines: DiscoveredPipeline[] = [];
+  const entries = readdirSync(pipelinesDir)
+  const pipelines: DiscoveredPipeline[] = []
 
   for (const entry of entries) {
-    const entryPath = join(pipelinesDir, entry);
-    if (!statSync(entryPath).isDirectory()) continue;
+    const entryPath = join(pipelinesDir, entry)
+    if (!statSync(entryPath).isDirectory()) continue
 
-    const indexPath = join(entryPath, 'index.tsx');
-    if (!existsSync(indexPath)) continue;
+    const indexPath = join(entryPath, "index.tsx")
+    if (!existsSync(indexPath)) continue
 
-    if (targetPipeline && entry !== targetPipeline) continue;
+    if (targetPipeline && entry !== targetPipeline) continue
 
     pipelines.push({
       name: entry,
       entryPoint: indexPath,
-    });
+    })
   }
 
-  return pipelines.sort((a, b) => a.name.localeCompare(b.name));
+  return pipelines.sort((a, b) => a.name.localeCompare(b.name))
 }
 
 // ── Config loading ──────────────────────────────────────────────────
@@ -71,14 +71,17 @@ export function discoverPipelines(
 export async function loadConfig(
   projectDir: string,
 ): Promise<FlinkReactorConfig | null> {
-  const configPath = join(projectDir, 'flink-reactor.config.ts');
+  const configPath = join(projectDir, "flink-reactor.config.ts")
 
   if (!existsSync(configPath)) {
-    return null;
+    return null
   }
 
-  const mod = await jiti.import(resolve(configPath)) as Record<string, unknown>;
-  return (mod.default ?? mod) as FlinkReactorConfig;
+  const mod = (await jiti.import(resolve(configPath))) as Record<
+    string,
+    unknown
+  >
+  return (mod.default ?? mod) as FlinkReactorConfig
 }
 
 // ── Environment loading ─────────────────────────────────────────────
@@ -91,16 +94,16 @@ export async function loadEnvironment(
   projectDir: string,
   envName?: string,
 ): Promise<EnvironmentConfig | null> {
-  if (!envName) return null;
+  if (!envName) return null
 
-  const envPath = join(projectDir, 'env', `${envName}.ts`);
+  const envPath = join(projectDir, "env", `${envName}.ts`)
 
   if (!existsSync(envPath)) {
-    throw new Error(`Environment file not found: env/${envName}.ts`);
+    throw new Error(`Environment file not found: env/${envName}.ts`)
   }
 
-  const mod = await jiti.import(resolve(envPath)) as Record<string, unknown>;
-  return (mod.default ?? mod) as EnvironmentConfig;
+  const mod = (await jiti.import(resolve(envPath))) as Record<string, unknown>
+  return (mod.default ?? mod) as EnvironmentConfig
 }
 
 // ── Pipeline loading ────────────────────────────────────────────────
@@ -109,11 +112,12 @@ export async function loadEnvironment(
  * Dynamically import a pipeline entry point and return its construct tree.
  * The pipeline's index.tsx should export a default ConstructNode.
  */
-export async function loadPipeline(
-  entryPoint: string,
-): Promise<ConstructNode> {
-  const mod = await jiti.import(resolve(entryPoint)) as Record<string, unknown>;
-  return mod.default as ConstructNode;
+export async function loadPipeline(entryPoint: string): Promise<ConstructNode> {
+  const mod = (await jiti.import(resolve(entryPoint))) as Record<
+    string,
+    unknown
+  >
+  return mod.default as ConstructNode
 }
 
 // ── Full project context ────────────────────────────────────────────
@@ -124,18 +128,18 @@ export async function loadPipeline(
 export async function resolveProjectContext(
   projectDir: string,
   options?: {
-    readonly pipeline?: string;
-    readonly env?: string;
+    readonly pipeline?: string
+    readonly env?: string
   },
 ): Promise<ProjectContext> {
-  const config = await loadConfig(projectDir);
-  const env = await loadEnvironment(projectDir, options?.env);
-  const pipelines = discoverPipelines(projectDir, options?.pipeline);
+  const config = await loadConfig(projectDir)
+  const env = await loadEnvironment(projectDir, options?.env)
+  const pipelines = discoverPipelines(projectDir, options?.pipeline)
 
   return {
     projectDir,
     config,
     env,
     pipelines,
-  };
+  }
 }

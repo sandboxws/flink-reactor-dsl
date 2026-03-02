@@ -1,34 +1,36 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { tmpdir } from 'node:os';
-import { runValidate } from '../validate.js';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join, resolve } from "node:path"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { runValidate } from "../validate.js"
 
-const projectRoot = resolve(__dirname, '../../../../');
+const projectRoot = resolve(__dirname, "../../../../")
 
-describe('validate command', () => {
-  let tempDir: string;
+describe("validate command", () => {
+  let tempDir: string
 
   beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), 'flink-reactor-validate-'));
-  });
+    tempDir = mkdtempSync(join(tmpdir(), "flink-reactor-validate-"))
+  })
 
   afterEach(() => {
-    rmSync(tempDir, { recursive: true, force: true });
-  });
+    rmSync(tempDir, { recursive: true, force: true })
+  })
 
   function writePipeline(name: string, content: string): void {
-    const dir = join(tempDir, 'pipelines', name);
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, 'index.tsx'), content, 'utf-8');
+    const dir = join(tempDir, "pipelines", name)
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, "index.tsx"), content, "utf-8")
   }
 
   function jsxPath(): string {
-    return join(projectRoot, 'src/core/jsx-runtime.js');
+    return join(projectRoot, "src/core/jsx-runtime.js")
   }
 
-  it('passes for a valid pipeline', async () => {
-    writePipeline('orders', `
+  it("passes for a valid pipeline", async () => {
+    writePipeline(
+      "orders",
+      `
 import { createElement } from '${jsxPath()}';
 
 const pipeline = createElement('Pipeline', { name: 'valid-pipeline' },
@@ -48,17 +50,20 @@ const pipeline = createElement('Pipeline', { name: 'valid-pipeline' },
 );
 
 export default pipeline;
-`);
+`,
+    )
 
     const result = await runValidate({
       projectDir: tempDir,
-    });
+    })
 
-    expect(result).toBe(true);
-  });
+    expect(result).toBe(true)
+  })
 
-  it('reports errors for an invalid pipeline with orphan source', async () => {
-    writePipeline('invalid', `
+  it("reports errors for an invalid pipeline with orphan source", async () => {
+    writePipeline(
+      "invalid",
+      `
 import { createElement } from '${jsxPath()}';
 
 const pipeline = createElement('Pipeline', { name: 'invalid-pipeline' },
@@ -74,21 +79,22 @@ const pipeline = createElement('Pipeline', { name: 'invalid-pipeline' },
 );
 
 export default pipeline;
-`);
+`,
+    )
 
     const result = await runValidate({
       projectDir: tempDir,
-    });
+    })
 
     // Orphan source should cause validation failure
-    expect(result).toBe(false);
-  });
+    expect(result).toBe(false)
+  })
 
-  it('returns true when no pipelines found', async () => {
+  it("returns true when no pipelines found", async () => {
     const result = await runValidate({
       projectDir: tempDir,
-    });
+    })
 
-    expect(result).toBe(true);
-  });
-});
+    expect(result).toBe(true)
+  })
+})

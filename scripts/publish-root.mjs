@@ -7,15 +7,15 @@
  * publishes when it doesn't — making it safe to run on every release.
  */
 
-import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { execSync } from "node:child_process"
+import { readFileSync } from "node:fs"
 
-const { name, version } = JSON.parse(readFileSync("./package.json", "utf8"));
+const { name, version } = JSON.parse(readFileSync("./package.json", "utf8"))
 
 try {
-  execSync(`npm view ${name}@${version} version`, { stdio: "pipe" });
-  console.log(`${name}@${version} already on npm, skipping`);
+  execSync(`npm view ${name}@${version} version`, { stdio: "pipe" })
+  console.log(`${name}@${version} already on npm, skipping`)
 } catch {
-  console.log(`Publishing ${name}@${version}...`);
-  execSync("npm publish --access public", { stdio: "inherit" });
+  console.log(`Publishing ${name}@${version}...`)
+  execSync("npm publish --access public", { stdio: "inherit" })
 }

@@ -1,12 +1,12 @@
-import { defineConfig } from 'tsup';
+import { defineConfig } from "tsup"
 
 export default defineConfig([
   // Library entry — importable as `import { ... } from 'flink-reactor'`
   {
-    entry: { index: 'src/index.ts', 'jsx-runtime': 'src/jsx-runtime.ts' },
-    format: ['esm'],
-    target: 'node18',
-    outDir: 'dist',
+    entry: { index: "src/index.ts", "jsx-runtime": "src/jsx-runtime.ts" },
+    format: ["esm"],
+    target: "node18",
+    outDir: "dist",
     clean: true,
     dts: true,
     sourcemap: true,
@@ -14,17 +14,17 @@ export default defineConfig([
   },
   // CLI entry — `flink-reactor` bin
   {
-    entry: { cli: 'src/cli/index.ts' },
-    format: ['esm'],
-    target: 'node18',
-    outDir: 'dist',
+    entry: { cli: "src/cli/index.ts" },
+    format: ["esm"],
+    target: "node18",
+    outDir: "dist",
     clean: false,
     dts: false,
     sourcemap: true,
     splitting: false,
     shims: true,
     banner: {
-      js: '#!/usr/bin/env node',
+      js: "#!/usr/bin/env node",
     },
   },
-]);
+])

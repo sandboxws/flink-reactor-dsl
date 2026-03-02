@@ -1,44 +1,50 @@
-import type { BaseComponentProps, ConstructNode, TypedConstructNode } from '../core/types.js';
-import { createElement } from '../core/jsx-runtime.js';
+import { createElement } from "../core/jsx-runtime.js"
+import type {
+  BaseComponentProps,
+  ConstructNode,
+  TypedConstructNode,
+} from "../core/types.js"
 
 /** Branded node types for Route's structural children */
-type RouteBranchNode = TypedConstructNode<'Route.Branch'>;
-type RouteDefaultNode = TypedConstructNode<'Route.Default'>;
+type RouteBranchNode = TypedConstructNode<"Route.Branch">
+type RouteDefaultNode = TypedConstructNode<"Route.Default">
 
 // ── Route.Branch ────────────────────────────────────────────────────
 
 export interface RouteBranchProps extends BaseComponentProps {
   /** SQL condition expression for this branch */
-  readonly condition: string;
-  readonly children?: ConstructNode | ConstructNode[];
+  readonly condition: string
+  readonly children?: ConstructNode | ConstructNode[]
 }
 
 function RouteBranch(props: RouteBranchProps): RouteBranchNode {
-  const { children, ...rest } = props;
-  const childArray = children == null
-    ? []
-    : Array.isArray(children)
-      ? children
-      : [children];
+  const { children, ...rest } = props
+  const childArray =
+    children == null ? [] : Array.isArray(children) ? children : [children]
 
-  return createElement('Route.Branch', { ...rest }, ...childArray) as RouteBranchNode;
+  return createElement(
+    "Route.Branch",
+    { ...rest },
+    ...childArray,
+  ) as RouteBranchNode
 }
 
 // ── Route.Default ───────────────────────────────────────────────────
 
 export interface RouteDefaultProps extends BaseComponentProps {
-  readonly children?: ConstructNode | ConstructNode[];
+  readonly children?: ConstructNode | ConstructNode[]
 }
 
 function RouteDefault(props: RouteDefaultProps): RouteDefaultNode {
-  const { children, ...rest } = props;
-  const childArray = children == null
-    ? []
-    : Array.isArray(children)
-      ? children
-      : [children];
+  const { children, ...rest } = props
+  const childArray =
+    children == null ? [] : Array.isArray(children) ? children : [children]
 
-  return createElement('Route.Default', { ...rest }, ...childArray) as RouteDefaultNode;
+  return createElement(
+    "Route.Default",
+    { ...rest },
+    ...childArray,
+  ) as RouteDefaultNode
 }
 
 // ── Route ───────────────────────────────────────────────────────────
@@ -48,7 +54,7 @@ export interface RouteProps extends BaseComponentProps {
   // so compile-time constraint to Branch/Default only is not possible.
   // The branded sub-component types enable this constraint when migrating to
   // "jsx": "react-jsx" mode, and the runtime validation below catches misuse.
-  readonly children?: ConstructNode | ConstructNode[];
+  readonly children?: ConstructNode | ConstructNode[]
 }
 
 /**
@@ -62,22 +68,17 @@ export interface RouteProps extends BaseComponentProps {
  * INSERT INTO ... SELECT ... WHERE statements.
  */
 function RouteFactory(props: RouteProps): ConstructNode {
-  const { children, ...rest } = props;
-  const childArray = children == null
-    ? []
-    : Array.isArray(children)
-      ? children
-      : [children];
+  const { children, ...rest } = props
+  const childArray =
+    children == null ? [] : Array.isArray(children) ? children : [children]
 
-  const hasBranch = childArray.some(
-    (c) => c.component === 'Route.Branch',
-  );
+  const hasBranch = childArray.some((c) => c.component === "Route.Branch")
 
   if (!hasBranch) {
-    throw new Error('Route requires at least one Route.Branch child');
+    throw new Error("Route requires at least one Route.Branch child")
   }
 
-  return createElement('Route', { ...rest }, ...childArray);
+  return createElement("Route", { ...rest }, ...childArray)
 }
 
 /**
@@ -99,9 +100,9 @@ function RouteFactory(props: RouteProps): ConstructNode {
  * ```
  */
 export const Route: typeof RouteFactory & {
-  Branch: typeof RouteBranch;
-  Default: typeof RouteDefault;
+  Branch: typeof RouteBranch
+  Default: typeof RouteDefault
 } = Object.assign(RouteFactory, {
   Branch: RouteBranch,
   Default: RouteDefault,
-});
+})

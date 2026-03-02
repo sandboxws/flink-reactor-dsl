@@ -1,10 +1,10 @@
-import { createElement } from '../../core/jsx-runtime';
-import { Schema, Field } from '../../core/schema';
-import { Pipeline } from '../../components/pipeline';
-import { KafkaSource } from '../../components/sources';
-import { KafkaSink } from '../../components/sinks';
-import { Map } from '../../components/transforms';
-import { IntervalJoin } from '../../components/joins';
+import { IntervalJoin } from "../../components/joins"
+import { Pipeline } from "../../components/pipeline"
+import { KafkaSink } from "../../components/sinks"
+import { KafkaSource } from "../../components/sources"
+import { Map } from "../../components/transforms"
+import { createElement } from "../../core/jsx-runtime"
+import { Field, Schema } from "../../core/schema"
 
 const OrderSchema = Schema({
   fields: {
@@ -15,10 +15,10 @@ const OrderSchema = Schema({
     order_time: Field.TIMESTAMP(3),
   },
   watermark: {
-    column: 'order_time',
+    column: "order_time",
     expression: "order_time - INTERVAL '10' SECOND",
   },
-});
+})
 
 const ShipmentSchema = Schema({
   fields: {
@@ -28,18 +28,26 @@ const ShipmentSchema = Schema({
     ship_time: Field.TIMESTAMP(3),
   },
   watermark: {
-    column: 'ship_time',
+    column: "ship_time",
     expression: "ship_time - INTERVAL '10' SECOND",
   },
-});
+})
 
 const orders = (
-  <KafkaSource topic="orders" bootstrapServers="kafka:9092" schema={OrderSchema} />
-);
+  <KafkaSource
+    topic="orders"
+    bootstrapServers="kafka:9092"
+    schema={OrderSchema}
+  />
+)
 
 const shipments = (
-  <KafkaSource topic="shipments" bootstrapServers="kafka:9092" schema={ShipmentSchema} />
-);
+  <KafkaSource
+    topic="shipments"
+    bootstrapServers="kafka:9092"
+    schema={ShipmentSchema}
+  />
+)
 
 export default (
   <Pipeline name="order-fulfillment" parallelism={8}>
@@ -48,17 +56,19 @@ export default (
       right={shipments}
       on="order_id = order_id"
       interval={{
-        from: 'order_time',
+        from: "order_time",
         to: "order_time + INTERVAL '7' DAY",
       }}
     />
-    <Map select={{
-      order_id: 'order_id',
-      user_id: 'user_id',
-      amount: 'amount',
-      carrier: 'carrier',
-      fulfillment_time: 'ship_time - order_time',
-    }} />
+    <Map
+      select={{
+        order_id: "order_id",
+        user_id: "user_id",
+        amount: "amount",
+        carrier: "carrier",
+        fulfillment_time: "ship_time - order_time",
+      }}
+    />
     <KafkaSink topic="order_fulfillment" />
   </Pipeline>
-);
+)

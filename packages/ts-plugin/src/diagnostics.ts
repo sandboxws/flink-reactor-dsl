@@ -6,11 +6,11 @@
  * hierarchy registry. Produces Warning-level diagnostics for invalid
  * nesting.
  */
-import type ts from 'typescript';
-import type { ComponentRulesRegistry } from './component-rules';
-import { getComponentName } from './context-detector';
+import type ts from "typescript"
+import type { ComponentRulesRegistry } from "./component-rules"
+import { getComponentName } from "./context-detector"
 
-const DIAGNOSTIC_SOURCE = 'flink-reactor';
+const DIAGNOSTIC_SOURCE = "flink-reactor"
 
 /**
  * Generate nesting diagnostics for a source file.
@@ -23,25 +23,32 @@ export function getNestingDiagnostics(
   registry: ComponentRulesRegistry,
   tsModule: typeof ts,
 ): ts.Diagnostic[] {
-  const diagnostics: ts.Diagnostic[] = [];
+  const diagnostics: ts.Diagnostic[] = []
 
   function visit(node: ts.Node): void {
     if (tsModule.isJsxElement(node)) {
-      const parentName = getComponentName(node.openingElement.tagName, tsModule);
+      const parentName = getComponentName(node.openingElement.tagName, tsModule)
       if (parentName !== undefined) {
-        const allowed = registry.getAllowedChildren(parentName);
+        const allowed = registry.getAllowedChildren(parentName)
         // Skip if parent is unrecognized or has wildcard rule
-        if (allowed !== undefined && allowed !== '*') {
-          checkChildren(node, parentName, allowed, sourceFile, tsModule, diagnostics);
+        if (allowed !== undefined && allowed !== "*") {
+          checkChildren(
+            node,
+            parentName,
+            allowed,
+            sourceFile,
+            tsModule,
+            diagnostics,
+          )
         }
       }
     }
 
-    tsModule.forEachChild(node, visit);
+    tsModule.forEachChild(node, visit)
   }
 
-  visit(sourceFile);
-  return diagnostics;
+  visit(sourceFile)
+  return diagnostics
 }
 
 function checkChildren(
@@ -53,30 +60,30 @@ function checkChildren(
   diagnostics: ts.Diagnostic[],
 ): void {
   for (const child of parentNode.children) {
-    let childName: string | undefined;
-    let tagSpan: { start: number; length: number } | undefined;
+    let childName: string | undefined
+    let tagSpan: { start: number; length: number } | undefined
 
     if (tsModule.isJsxElement(child)) {
-      childName = getComponentName(child.openingElement.tagName, tsModule);
+      childName = getComponentName(child.openingElement.tagName, tsModule)
       if (childName !== undefined) {
-        const tagNameNode = child.openingElement.tagName;
+        const tagNameNode = child.openingElement.tagName
         tagSpan = {
           start: tagNameNode.getStart(sourceFile),
           length: tagNameNode.getEnd() - tagNameNode.getStart(sourceFile),
-        };
+        }
       }
     } else if (tsModule.isJsxSelfClosingElement(child)) {
-      childName = getComponentName(child.tagName, tsModule);
+      childName = getComponentName(child.tagName, tsModule)
       if (childName !== undefined) {
-        const tagNameNode = child.tagName;
+        const tagNameNode = child.tagName
         tagSpan = {
           start: tagNameNode.getStart(sourceFile),
           length: tagNameNode.getEnd() - tagNameNode.getStart(sourceFile),
-        };
+        }
       }
     }
 
-    if (childName === undefined || tagSpan === undefined) continue;
+    if (childName === undefined || tagSpan === undefined) continue
 
     if (!allowed.includes(childName)) {
       diagnostics.push({
@@ -85,9 +92,9 @@ function checkChildren(
         file: sourceFile,
         start: tagSpan.start,
         length: tagSpan.length,
-        messageText: `'${childName}' is not a valid child of '${parentName}'. Expected: ${allowed.join(', ')}`,
+        messageText: `'${childName}' is not a valid child of '${parentName}'. Expected: ${allowed.join(", ")}`,
         source: DIAGNOSTIC_SOURCE,
-      });
+      })
     }
   }
 }

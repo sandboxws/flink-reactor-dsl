@@ -1,31 +1,38 @@
-import type { ConstructNode, FlinkMajorVersion } from './types.js';
-import type { InfraConfig, FlinkReactorConfig } from './config.js';
-import type { EnvironmentConfig } from './environment.js';
-import type { FlinkReactorPlugin } from './plugin.js';
-import { generateSql, type GenerateSqlResult } from '../codegen/sql-generator.js';
-import { generateCrd, type FlinkDeploymentCrd, type CrdGeneratorOptions } from '../codegen/crd-generator.js';
-import { resolveEnvironment } from './environment.js';
-import { resolvePlugins, EMPTY_PLUGIN_CHAIN } from './plugin-registry.js';
-import { registerComponentKinds, resetComponentKinds } from './jsx-runtime.js';
-import { rekindTree } from './tree-utils.js';
+import {
+  type CrdGeneratorOptions,
+  type FlinkDeploymentCrd,
+  generateCrd,
+} from "../codegen/crd-generator.js"
+import {
+  type GenerateSqlResult,
+  generateSql,
+} from "../codegen/sql-generator.js"
+import type { FlinkReactorConfig, InfraConfig } from "./config.js"
+import type { EnvironmentConfig } from "./environment.js"
+import { resolveEnvironment } from "./environment.js"
+import { registerComponentKinds, resetComponentKinds } from "./jsx-runtime.js"
+import type { FlinkReactorPlugin } from "./plugin.js"
+import { EMPTY_PLUGIN_CHAIN, resolvePlugins } from "./plugin-registry.js"
+import { rekindTree } from "./tree-utils.js"
+import type { ConstructNode, FlinkMajorVersion } from "./types.js"
 
 // ── FlinkReactorApp types ────────────────────────────────────────────
 
 export interface FlinkReactorAppProps {
-  readonly name: string;
-  readonly infra?: InfraConfig;
-  readonly children?: ConstructNode | ConstructNode[];
+  readonly name: string
+  readonly infra?: InfraConfig
+  readonly children?: ConstructNode | ConstructNode[]
 }
 
 export interface PipelineArtifact {
-  readonly name: string;
-  readonly sql: GenerateSqlResult;
-  readonly crd: FlinkDeploymentCrd;
+  readonly name: string
+  readonly sql: GenerateSqlResult
+  readonly crd: FlinkDeploymentCrd
 }
 
 export interface AppSynthResult {
-  readonly appName: string;
-  readonly pipelines: readonly PipelineArtifact[];
+  readonly appName: string
+  readonly pipelines: readonly PipelineArtifact[]
 }
 
 // ── Configuration cascade ────────────────────────────────────────────
@@ -44,23 +51,26 @@ function applyConfigCascade(
   infra?: InfraConfig,
   env?: EnvironmentConfig,
 ): ConstructNode {
-  const pipelineName = pipelineNode.props.name as string;
-  const mergedProps = { ...pipelineNode.props };
+  const pipelineName = pipelineNode.props.name as string
+  const mergedProps = { ...pipelineNode.props }
 
   // Layer 3: InfraConfig defaults (lowest)
-  if (infra?.kafka?.bootstrapServers && mergedProps.bootstrapServers === undefined) {
+  if (
+    infra?.kafka?.bootstrapServers &&
+    mergedProps.bootstrapServers === undefined
+  ) {
     // bootstrapServers propagates to source/sink children, not the pipeline itself
   }
   if (infra?.kubernetes?.namespace && mergedProps.namespace === undefined) {
-    mergedProps.namespace = infra.kubernetes.namespace;
+    mergedProps.namespace = infra.kubernetes.namespace
   }
 
   // Layer 2: Environment overrides
   if (env) {
-    const envOverrides = resolveEnvironment(pipelineName, env);
+    const envOverrides = resolveEnvironment(pipelineName, env)
     for (const [key, value] of Object.entries(envOverrides)) {
       if (mergedProps[key] === undefined) {
-        mergedProps[key] = value;
+        mergedProps[key] = value
       }
     }
   }
@@ -68,7 +78,7 @@ function applyConfigCascade(
   return {
     ...pipelineNode,
     props: mergedProps,
-  };
+  }
 }
 
 /**
@@ -78,29 +88,29 @@ function propagateInfraToChildren(
   node: ConstructNode,
   infra?: InfraConfig,
 ): ConstructNode {
-  if (!infra?.kafka?.bootstrapServers) return node;
+  if (!infra?.kafka?.bootstrapServers) return node
 
-  const bs = infra.kafka.bootstrapServers;
+  const bs = infra.kafka.bootstrapServers
 
   const propagate = (n: ConstructNode): ConstructNode => {
-    let props = n.props;
+    let props = n.props
 
     // Only apply bootstrapServers to Source/Sink components that accept it
     // and don't already have it set
     if (
-      (n.kind === 'Source' || n.kind === 'Sink') &&
-      (n.component === 'KafkaSource' || n.component === 'KafkaSink') &&
+      (n.kind === "Source" || n.kind === "Sink") &&
+      (n.component === "KafkaSource" || n.component === "KafkaSink") &&
       props.bootstrapServers === undefined
     ) {
-      props = { ...props, bootstrapServers: bs };
+      props = { ...props, bootstrapServers: bs }
     }
 
-    const children = n.children.map((c) => propagate(c));
+    const children = n.children.map((c) => propagate(c))
 
-    return { ...n, props, children };
-  };
+    return { ...n, props, children }
+  }
 
-  return propagate(node);
+  return propagate(node)
 }
 
 // ── FlinkReactorApp ──────────────────────────────────────────────────
@@ -118,41 +128,40 @@ function propagateInfraToChildren(
 export function synthesizeApp(
   props: FlinkReactorAppProps,
   options?: {
-    readonly flinkVersion?: FlinkMajorVersion;
-    readonly env?: EnvironmentConfig;
-    readonly config?: FlinkReactorConfig;
-    readonly crdOptions?: Partial<CrdGeneratorOptions>;
-    readonly plugins?: readonly FlinkReactorPlugin[];
+    readonly flinkVersion?: FlinkMajorVersion
+    readonly env?: EnvironmentConfig
+    readonly config?: FlinkReactorConfig
+    readonly crdOptions?: Partial<CrdGeneratorOptions>
+    readonly plugins?: readonly FlinkReactorPlugin[]
   },
 ): AppSynthResult {
-  const childArray = props.children == null
-    ? []
-    : Array.isArray(props.children)
-      ? props.children
-      : [props.children];
+  const childArray =
+    props.children == null
+      ? []
+      : Array.isArray(props.children)
+        ? props.children
+        : [props.children]
 
   // Filter to only Pipeline nodes
-  const pipelineNodes = childArray.filter((c) => c.kind === 'Pipeline');
+  const pipelineNodes = childArray.filter((c) => c.kind === "Pipeline")
 
-  const flinkVersion = options?.flinkVersion
-    ?? options?.config?.flink?.version
-    ?? '2.0';
+  const flinkVersion =
+    options?.flinkVersion ?? options?.config?.flink?.version ?? "2.0"
 
-  const infra = props.infra ?? options?.config?.toInfraConfig?.();
+  const infra = props.infra ?? options?.config?.toInfraConfig?.()
 
   // ── Plugin resolution ──────────────────────────────────────────────
   // Merge plugins from options and config (options take precedence / come first)
   const allPlugins = [
     ...(options?.config?.plugins ?? []),
     ...(options?.plugins ?? []),
-  ];
-  const chain = allPlugins.length > 0
-    ? resolvePlugins(allPlugins)
-    : EMPTY_PLUGIN_CHAIN;
+  ]
+  const chain =
+    allPlugins.length > 0 ? resolvePlugins(allPlugins) : EMPTY_PLUGIN_CHAIN
 
   // Register plugin component kinds (cleaned up after synthesis)
   if (chain.components.size > 0) {
-    registerComponentKinds(chain.components);
+    registerComponentKinds(chain.components)
   }
 
   try {
@@ -162,50 +171,52 @@ export function synthesizeApp(
         appName: props.name,
         flinkVersion,
         pipelines: pipelineNodes,
-      };
+      }
       for (const hook of chain.beforeSynth) {
-        hook!(hookCtx);
+        hook?.(hookCtx)
       }
     }
 
     // ── Per-pipeline synthesis ──────────────────────────────────────────
     const pipelines: PipelineArtifact[] = pipelineNodes.map((pipelineNode) => {
       // Apply config cascade
-      let node = applyConfigCascade(pipelineNode, infra, options?.env);
+      let node = applyConfigCascade(pipelineNode, infra, options?.env)
 
       // Propagate infra settings to children
-      node = propagateInfraToChildren(node, infra);
+      node = propagateInfraToChildren(node, infra)
 
       // Re-resolve node kinds for plugin-registered components
       // (needed because createElement runs before plugin registration)
       if (chain.components.size > 0) {
-        node = rekindTree(node, chain.components);
+        node = rekindTree(node, chain.components)
       }
 
       // Apply plugin tree transformers (composed left-to-right)
-      node = chain.transformTree(node);
+      node = chain.transformTree(node)
 
-      const name = node.props.name as string;
+      const name = node.props.name as string
 
       // Generate SQL (with plugin SQL/DDL generators)
       const sql = generateSql(node, {
         flinkVersion,
-        pluginSqlGenerators: chain.sqlGenerators.size > 0 ? chain.sqlGenerators : undefined,
-        pluginDdlGenerators: chain.ddlGenerators.size > 0 ? chain.ddlGenerators : undefined,
-      });
+        pluginSqlGenerators:
+          chain.sqlGenerators.size > 0 ? chain.sqlGenerators : undefined,
+        pluginDdlGenerators:
+          chain.ddlGenerators.size > 0 ? chain.ddlGenerators : undefined,
+      })
 
       // Generate CRD
       const crdOpts: CrdGeneratorOptions = {
         flinkVersion,
         ...options?.crdOptions,
-      };
-      let crd = generateCrd(node, crdOpts);
+      }
+      let crd = generateCrd(node, crdOpts)
 
       // Apply plugin CRD transformers
-      crd = chain.transformCrd(crd, node);
+      crd = chain.transformCrd(crd, node)
 
-      return { name, sql, crd };
-    });
+      return { name, sql, crd }
+    })
 
     // ── afterSynth hooks ───────────────────────────────────────────────
     if (chain.afterSynth.length > 0) {
@@ -218,20 +229,20 @@ export function synthesizeApp(
           sql: p.sql.sql,
           crd: p.crd,
         })),
-      };
+      }
       for (const hook of chain.afterSynth) {
-        hook!(hookCtx);
+        hook?.(hookCtx)
       }
     }
 
     return {
       appName: props.name,
       pipelines,
-    };
+    }
   } finally {
     // Clean up plugin component registrations to avoid leaking between runs
     if (chain.components.size > 0) {
-      resetComponentKinds();
+      resetComponentKinds()
     }
   }
 }

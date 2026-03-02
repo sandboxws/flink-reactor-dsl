@@ -1,9 +1,9 @@
-import { createElement } from '../../core/jsx-runtime';
-import { Schema, Field } from '../../core/schema';
-import { Pipeline } from '../../components/pipeline';
-import { KafkaSource } from '../../components/sources';
-import { GenericSink } from '../../components/sinks';
-import { Filter, Map } from '../../components/transforms';
+import { Pipeline } from "../../components/pipeline"
+import { GenericSink } from "../../components/sinks"
+import { KafkaSource } from "../../components/sources"
+import { Filter, Map } from "../../components/transforms"
+import { createElement } from "../../core/jsx-runtime"
+import { Field, Schema } from "../../core/schema"
 
 const OrderSchema = Schema({
   fields: {
@@ -13,7 +13,7 @@ const OrderSchema = Schema({
     amount: Field.DECIMAL(10, 2),
     order_time: Field.TIMESTAMP(3),
   },
-});
+})
 
 export default (
   <Pipeline name="filter-project" parallelism={8}>
@@ -23,12 +23,14 @@ export default (
       schema={OrderSchema}
     />
     <Filter condition="amount > 100" />
-    <Map select={{
-      order_id: 'order_id',
-      user_id: 'user_id',
-      amount: 'amount',
-      order_time: 'order_time',
-    }} />
+    <Map
+      select={{
+        order_id: "order_id",
+        user_id: "user_id",
+        amount: "amount",
+        order_time: "order_time",
+      }}
+    />
     <GenericSink connector="print" />
   </Pipeline>
-);
+)

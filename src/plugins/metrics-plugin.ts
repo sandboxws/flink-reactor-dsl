@@ -1,29 +1,29 @@
-import type { FlinkReactorPlugin } from '../core/plugin.js';
+import type { FlinkReactorPlugin } from "../core/plugin.js"
 
 // ── Reporter configuration types ────────────────────────────────────
 
 export interface PrometheusReporterConfig {
-  readonly type: 'prometheus';
+  readonly type: "prometheus"
   /** Port for the Prometheus endpoint. Defaults to `9249`. */
-  readonly port?: number;
+  readonly port?: number
 }
 
 export interface Slf4jReporterConfig {
-  readonly type: 'slf4j';
+  readonly type: "slf4j"
   /** Reporting interval (e.g., '60s', '5m'). Defaults to `'60s'`. */
-  readonly interval?: string;
+  readonly interval?: string
 }
 
 export interface JmxReporterConfig {
-  readonly type: 'jmx';
+  readonly type: "jmx"
   /** JMX port range (e.g., '8789'). Defaults to `'8789'`. */
-  readonly port?: string;
+  readonly port?: string
 }
 
 export type MetricReporterConfig =
   | PrometheusReporterConfig
   | Slf4jReporterConfig
-  | JmxReporterConfig;
+  | JmxReporterConfig
 
 // ── Plugin options ──────────────────────────────────────────────────
 
@@ -42,25 +42,25 @@ export interface MetricsPluginOptions {
    * })
    * ```
    */
-  readonly reporters: readonly MetricReporterConfig[];
+  readonly reporters: readonly MetricReporterConfig[]
   /**
    * Flink metric scope delimiter. Defaults to `'.'`.
    */
-  readonly scopeDelimiter?: string;
+  readonly scopeDelimiter?: string
   /**
    * Latency tracking interval in milliseconds. Set to 0 to disable.
    * Defaults to `undefined` (Flink default: disabled).
    */
-  readonly latencyTrackingInterval?: number;
+  readonly latencyTrackingInterval?: number
 }
 
 // ── Reporter factory classes ────────────────────────────────────────
 
 const REPORTER_FACTORIES: Record<string, string> = {
-  prometheus: 'org.apache.flink.metrics.prometheus.PrometheusReporterFactory',
-  slf4j: 'org.apache.flink.metrics.slf4j.Slf4jReporterFactory',
-  jmx: 'org.apache.flink.metrics.jmx.JMXReporterFactory',
-};
+  prometheus: "org.apache.flink.metrics.prometheus.PrometheusReporterFactory",
+  slf4j: "org.apache.flink.metrics.slf4j.Slf4jReporterFactory",
+  jmx: "org.apache.flink.metrics.jmx.JMXReporterFactory",
+}
 
 // ── Plugin factory ──────────────────────────────────────────────────
 
@@ -90,64 +90,66 @@ const REPORTER_FACTORIES: Record<string, string> = {
  * });
  * ```
  */
-export function metricsPlugin(options: MetricsPluginOptions): FlinkReactorPlugin {
-  const { reporters, scopeDelimiter, latencyTrackingInterval } = options;
+export function metricsPlugin(
+  options: MetricsPluginOptions,
+): FlinkReactorPlugin {
+  const { reporters, scopeDelimiter, latencyTrackingInterval } = options
 
   return {
-    name: 'flink-reactor:metrics',
-    version: '0.1.0',
+    name: "flink-reactor:metrics",
+    version: "0.1.0",
 
     transformCrd(crd) {
-      const config = { ...crd.spec.flinkConfiguration };
+      const config = { ...crd.spec.flinkConfiguration }
 
       // Configure each reporter
       for (const reporter of reporters) {
-        const name = reporter.type;
-        const prefix = `metrics.reporter.${name}`;
+        const name = reporter.type
+        const prefix = `metrics.reporter.${name}`
 
-        const factory = REPORTER_FACTORIES[reporter.type];
+        const factory = REPORTER_FACTORIES[reporter.type]
         if (factory) {
-          config[`${prefix}.factory.class`] = factory;
+          config[`${prefix}.factory.class`] = factory
         }
 
         switch (reporter.type) {
-          case 'prometheus': {
-            config[`${prefix}.port`] = String(reporter.port ?? 9249);
-            break;
+          case "prometheus": {
+            config[`${prefix}.port`] = String(reporter.port ?? 9249)
+            break
           }
-          case 'slf4j': {
-            config[`${prefix}.interval`] = reporter.interval ?? '60s';
-            break;
+          case "slf4j": {
+            config[`${prefix}.interval`] = reporter.interval ?? "60s"
+            break
           }
-          case 'jmx': {
-            config[`${prefix}.port`] = reporter.port ?? '8789';
-            break;
+          case "jmx": {
+            config[`${prefix}.port`] = reporter.port ?? "8789"
+            break
           }
         }
       }
 
       // Scope delimiter
       if (scopeDelimiter !== undefined) {
-        config['metrics.scope.delimiter'] = scopeDelimiter;
+        config["metrics.scope.delimiter"] = scopeDelimiter
       }
 
       // Latency tracking
       if (latencyTrackingInterval !== undefined) {
-        config['metrics.latency.interval'] = String(latencyTrackingInterval);
+        config["metrics.latency.interval"] = String(latencyTrackingInterval)
       }
 
       // Add reporter metadata as annotation
-      const reporterNames = reporters.map((r) => r.type).join(',');
+      const reporterNames = reporters.map((r) => r.type).join(",")
       const annotations = {
         ...crd.metadata.annotations,
-        'flink-reactor.io/metric-reporters': reporterNames,
-      };
+        "flink-reactor.io/metric-reporters": reporterNames,
+      }
 
       return {
         ...crd,
         metadata: { ...crd.metadata, annotations },
         spec: { ...crd.spec, flinkConfiguration: config },
-      };
+      }
     },
-  };
+  }
 }

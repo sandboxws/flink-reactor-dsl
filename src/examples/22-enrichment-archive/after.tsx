@@ -1,11 +1,11 @@
-import { createElement } from '../../core/jsx-runtime';
-import { Schema, Field } from '../../core/schema';
-import { Pipeline } from '../../components/pipeline';
-import { KafkaSource } from '../../components/sources';
-import { KafkaSink, FileSystemSink } from '../../components/sinks';
-import { Filter } from '../../components/transforms';
-import { LookupJoin } from '../../components/joins';
-import { Route } from '../../components/route';
+import { LookupJoin } from "../../components/joins"
+import { Pipeline } from "../../components/pipeline"
+import { Route } from "../../components/route"
+import { FileSystemSink, KafkaSink } from "../../components/sinks"
+import { KafkaSource } from "../../components/sources"
+import { Filter } from "../../components/transforms"
+import { createElement } from "../../core/jsx-runtime"
+import { Field, Schema } from "../../core/schema"
 
 const EventSchema = Schema({
   fields: {
@@ -17,10 +17,10 @@ const EventSchema = Schema({
     processed_time: Field.TIMESTAMP(3),
   },
   watermark: {
-    column: 'event_time',
+    column: "event_time",
     expression: "event_time - INTERVAL '30' SECOND",
   },
-});
+})
 
 const events = (
   <KafkaSource
@@ -28,7 +28,7 @@ const events = (
     bootstrapServers="kafka:9092"
     schema={EventSchema}
   />
-);
+)
 
 // Enrich with user profiles
 const enriched = (
@@ -38,9 +38,9 @@ const enriched = (
     url="jdbc:postgresql://db:5432/users"
     on="user_id"
     async={{ enabled: true, capacity: 100 }}
-    cache={{ type: 'lru', maxRows: 50000, ttl: '5m' }}
+    cache={{ type: "lru", maxRows: 50000, ttl: "5m" }}
   />
-);
+)
 
 export default (
   <Pipeline name="enrichment-archive" parallelism={12}>
@@ -51,8 +51,8 @@ export default (
         <FileSystemSink
           path="s3://data-lake/raw/user_events"
           format="parquet"
-          partitionBy={['DATE(event_time)']}
-          rollingPolicy={{ size: '128MB', interval: '15min' }}
+          partitionBy={["DATE(event_time)"]}
+          rollingPolicy={{ size: "128MB", interval: "15min" }}
         />
       </Route.Branch>
 
@@ -70,4 +70,4 @@ export default (
       </Route.Branch>
     </Route>
   </Pipeline>
-);
+)

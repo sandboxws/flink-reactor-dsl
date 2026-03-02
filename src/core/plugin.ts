@@ -1,29 +1,29 @@
-import type { ConstructNode, NodeKind } from './types.js';
-import type { FlinkDeploymentCrd } from '../codegen/crd-generator.js';
-import type { ValidationDiagnostic } from './synth-context.js';
+import type { FlinkDeploymentCrd } from "../codegen/crd-generator.js"
+import type { ValidationDiagnostic } from "./synth-context.js"
+import type { ConstructNode, NodeKind } from "./types.js"
 
 // ── Synthesis hook context ──────────────────────────────────────────
 
 /** Context provided to beforeSynth / afterSynth lifecycle hooks */
 export interface SynthHookContext {
   /** The application name from FlinkReactorApp */
-  readonly appName: string;
+  readonly appName: string
   /** Resolved Flink version for this synthesis run */
-  readonly flinkVersion: string;
+  readonly flinkVersion: string
   /** Pipeline construct trees (before transforms for beforeSynth, after for afterSynth) */
-  readonly pipelines: readonly ConstructNode[];
+  readonly pipelines: readonly ConstructNode[]
 }
 
 /** Result of a single pipeline synthesis (passed to afterSynth) */
 export interface PipelineSynthHookResult {
-  readonly name: string;
-  readonly sql: string;
-  readonly crd: FlinkDeploymentCrd;
+  readonly name: string
+  readonly sql: string
+  readonly crd: FlinkDeploymentCrd
 }
 
 /** Extended context for afterSynth that includes synthesis results */
 export interface AfterSynthHookContext extends SynthHookContext {
-  readonly results: readonly PipelineSynthHookResult[];
+  readonly results: readonly PipelineSynthHookResult[]
 }
 
 // ── Plugin SQL/DDL generator signatures ─────────────────────────────
@@ -36,15 +36,13 @@ export interface AfterSynthHookContext extends SynthHookContext {
 export type PluginSqlGenerator = (
   node: ConstructNode,
   nodeIndex: ReadonlyMap<string, ConstructNode>,
-) => string;
+) => string
 
 /**
  * Custom DDL generator for a component type.
  * Returns a DDL statement string, or null to skip DDL for this node.
  */
-export type PluginDdlGenerator = (
-  node: ConstructNode,
-) => string | null;
+export type PluginDdlGenerator = (node: ConstructNode) => string | null
 
 // ── Plugin validator signature ──────────────────────────────────────
 
@@ -56,7 +54,7 @@ export type PluginDdlGenerator = (
 export type PluginValidator = (
   tree: ConstructNode,
   existingDiagnostics: readonly ValidationDiagnostic[],
-) => ValidationDiagnostic[];
+) => ValidationDiagnostic[]
 
 // ── FlinkReactorPlugin interface ────────────────────────────────────
 
@@ -83,23 +81,23 @@ export type PluginValidator = (
  */
 export interface FlinkReactorPlugin {
   /** Unique plugin name (used for ordering and conflict detection) */
-  readonly name: string;
+  readonly name: string
   /** Semver version string (informational) */
-  readonly version?: string;
+  readonly version?: string
   /**
    * Ordering constraints relative to other plugins.
    * `before`: this plugin runs before the named plugins.
    * `after`: this plugin runs after the named plugins.
    */
   readonly ordering?: {
-    readonly before?: readonly string[];
-    readonly after?: readonly string[];
-  };
+    readonly before?: readonly string[]
+    readonly after?: readonly string[]
+  }
 
   // ── Layer 1: Component Registration ──────────────────────────────
 
   /** Register new component kinds (component name → NodeKind) */
-  readonly components?: ReadonlyMap<string, NodeKind>;
+  readonly components?: ReadonlyMap<string, NodeKind>
 
   // ── Layer 2: Tree Transformers ───────────────────────────────────
 
@@ -108,14 +106,14 @@ export interface FlinkReactorPlugin {
    * Must return a new tree (or the same reference if unchanged).
    * Composed left-to-right: plugin 1's output → plugin 2's input.
    */
-  readonly transformTree?: (tree: ConstructNode) => ConstructNode;
+  readonly transformTree?: (tree: ConstructNode) => ConstructNode
 
   // ── Layer 3: Synthesis Extensions ────────────────────────────────
 
   /** Custom SQL query builders keyed by component name */
-  readonly sqlGenerators?: ReadonlyMap<string, PluginSqlGenerator>;
+  readonly sqlGenerators?: ReadonlyMap<string, PluginSqlGenerator>
   /** Custom DDL generators keyed by component name */
-  readonly ddlGenerators?: ReadonlyMap<string, PluginDdlGenerator>;
+  readonly ddlGenerators?: ReadonlyMap<string, PluginDdlGenerator>
 
   // ── Layer 4: CRD Post-processing ─────────────────────────────────
 
@@ -127,7 +125,7 @@ export interface FlinkReactorPlugin {
   readonly transformCrd?: (
     crd: FlinkDeploymentCrd,
     pipelineNode: ConstructNode,
-  ) => FlinkDeploymentCrd;
+  ) => FlinkDeploymentCrd
 
   // ── Layer 5: Validation ──────────────────────────────────────────
 
@@ -136,12 +134,12 @@ export interface FlinkReactorPlugin {
    * Receives the tree root and diagnostics from prior validators.
    * Returns additional diagnostics to append.
    */
-  readonly validate?: PluginValidator;
+  readonly validate?: PluginValidator
 
   // ── Layer 6: Lifecycle Hooks ─────────────────────────────────────
 
   /** Called before synthesis begins (after plugin resolution) */
-  readonly beforeSynth?: (context: SynthHookContext) => void;
+  readonly beforeSynth?: (context: SynthHookContext) => void
   /** Called after all pipelines have been synthesized */
-  readonly afterSynth?: (context: AfterSynthHookContext) => void;
+  readonly afterSynth?: (context: AfterSynthHookContext) => void
 }

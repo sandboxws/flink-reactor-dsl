@@ -1,112 +1,252 @@
 // ── FlinkReactor public API ──────────────────────────────────────────
 // This is the library entry point for `import { ... } from 'flink-reactor'`.
 
-// Core: config & environment
-export { defineConfig } from './core/config.js';
-export type { FlinkReactorConfig, InfraConfig, ConnectorConfig, DeliveryStrategy } from './core/config.js';
-export { defineEnvironment, resolveEnvironment, discoverEnvironments } from './core/environment.js';
-export type { EnvironmentConfig, PipelineOverrides } from './core/environment.js';
-
-// Core: types
+export type { CatalogSourceProps } from "./components/catalog-source.js"
+// Components: catalog source
+export { CatalogSource } from "./components/catalog-source.js"
 export type {
-  FlinkType,
-  FlinkPrimitiveType,
-  FlinkParameterizedType,
-  FlinkCompositeType,
-  FlinkMajorVersion,
-  FlinkSchema,
-  Stream,
-  ChangelogMode,
-  BaseComponentProps,
-  NodeKind,
-  ConstructNode,
-  TypedConstructNode,
-} from './core/types.js';
-export { createStream } from './core/types.js';
-
-// Core: schema
-export { Schema, Field, isValidFlinkType } from './core/schema.js';
-export type { SchemaDefinition, SchemaOptions, WatermarkDeclaration, PrimaryKeyDeclaration, MetadataColumnDeclaration } from './core/schema.js';
-
-// Core: JSX runtime
-export { createElement, Fragment, jsx, jsxs } from './core/jsx-runtime.js';
-
-// Core: synth context
-export { SynthContext } from './core/synth-context.js';
-export type { GraphEdge, ValidationDiagnostic } from './core/synth-context.js';
-
-// Core: app
-export { synthesizeApp } from './core/app.js';
-export type { FlinkReactorAppProps, PipelineArtifact, AppSynthResult } from './core/app.js';
-
-// Core: Flink version compat
-export { FlinkVersionCompat } from './core/flink-compat.js';
-export type { JdbcConnectorInfo, FeatureGateError } from './core/flink-compat.js';
-
-// Core: plugins
-export type { FlinkReactorPlugin, SynthHookContext, PipelineSynthHookResult, AfterSynthHookContext, PluginSqlGenerator, PluginDdlGenerator, PluginValidator } from './core/plugin.js';
-export { resolvePlugins, EMPTY_PLUGIN_CHAIN } from './core/plugin-registry.js';
-export type { ResolvedPluginChain } from './core/plugin-registry.js';
-
-// Core: tree utilities
-export { rekindTree, mapTree, walkTree, findNodes, wrapNode, replaceChild } from './core/tree-utils.js';
-
+  CatalogHandle,
+  CatalogResult,
+  GenericCatalogProps,
+  HiveCatalogProps,
+  IcebergCatalogProps,
+  IcebergCatalogType,
+  JdbcCatalogProps,
+  PaimonCatalogProps,
+} from "./components/catalogs.js"
+// Components: catalogs
+export {
+  GenericCatalog,
+  HiveCatalog,
+  IcebergCatalog,
+  JdbcCatalog,
+  PaimonCatalog,
+} from "./components/catalogs.js"
+export type {
+  MatchAfterStrategy,
+  MatchRecognizeProps,
+} from "./components/cep.js"
+// Components: CEP
+export { MatchRecognize } from "./components/cep.js"
+export type { RawSQLProps, UDFProps } from "./components/escape-hatches.js"
+// Components: escape hatches
+export { RawSQL, UDF } from "./components/escape-hatches.js"
+export type {
+  AddFieldProps,
+  CastProps,
+  CoalesceProps,
+  DropProps,
+  RenameProps,
+} from "./components/field-transforms.js"
+// Components: field transforms
+export {
+  AddField,
+  Cast,
+  Coalesce,
+  Drop,
+  Rename,
+} from "./components/field-transforms.js"
+export type {
+  IntervalBounds,
+  IntervalJoinProps,
+  JoinHints,
+  JoinProps,
+  JoinType,
+  LookupJoinProps,
+  TemporalJoinProps,
+} from "./components/joins.js"
+// Components: joins
+export {
+  IntervalJoin,
+  Join,
+  LookupJoin,
+  TemporalJoin,
+} from "./components/joins.js"
+export type { LateralJoinProps } from "./components/lateral-join.js"
+export { LateralJoin } from "./components/lateral-join.js"
+export type {
+  CheckpointConfig,
+  PipelineMode,
+  PipelineProps,
+  RestartStrategy,
+  StateBackend,
+} from "./components/pipeline.js"
 // Components: pipeline
-export { Pipeline } from './components/pipeline.js';
-export type { PipelineProps, PipelineMode, StateBackend, CheckpointConfig, RestartStrategy } from './components/pipeline.js';
-
-// Components: sources
-export { KafkaSource, JdbcSource, GenericSource } from './components/sources.js';
-export type { KafkaSourceProps, JdbcSourceProps, GenericSourceProps, KafkaFormat, KafkaStartupMode } from './components/sources.js';
+export { Pipeline } from "./components/pipeline.js"
+export type {
+  ColumnExpr,
+  QueryGroupByProps,
+  QueryHavingProps,
+  QueryOrderByProps,
+  QueryProps,
+  QuerySelectProps,
+  QueryWhereProps,
+  WindowFunctionExpr,
+  WindowSpec,
+} from "./components/query.js"
+export { Query } from "./components/query.js"
+export type {
+  RouteBranchProps,
+  RouteDefaultProps,
+  RouteProps,
+} from "./components/route.js"
+// Components: route
+export { Route } from "./components/route.js"
+export type {
+  SideOutputProps,
+  SideOutputSinkProps,
+} from "./components/side-output.js"
+export { SideOutput } from "./components/side-output.js"
+export type {
+  FileFormat,
+  FileSystemSinkProps,
+  GenericSinkProps,
+  IcebergSinkProps,
+  JdbcSinkProps,
+  KafkaSinkProps,
+  PaimonChangelogProducer,
+  PaimonMergeEngine,
+  PaimonSinkProps,
+  RollingPolicy,
+  SinkFormat,
+} from "./components/sinks.js"
 
 // Components: sinks
-export { KafkaSink, JdbcSink, FileSystemSink, GenericSink, PaimonSink, IcebergSink } from './components/sinks.js';
-export type { KafkaSinkProps, JdbcSinkProps, FileSystemSinkProps, GenericSinkProps, PaimonSinkProps, IcebergSinkProps, SinkFormat, FileFormat, RollingPolicy, PaimonMergeEngine, PaimonChangelogProducer } from './components/sinks.js';
-
+export {
+  FileSystemSink,
+  GenericSink,
+  IcebergSink,
+  JdbcSink,
+  KafkaSink,
+  PaimonSink,
+} from "./components/sinks.js"
+export type {
+  GenericSourceProps,
+  JdbcSourceProps,
+  KafkaFormat,
+  KafkaSourceProps,
+  KafkaStartupMode,
+} from "./components/sources.js"
+// Components: sources
+export { GenericSource, JdbcSource, KafkaSource } from "./components/sources.js"
+export type {
+  AggregateProps,
+  DeduplicateProps,
+  FilterProps,
+  FlatMapProps,
+  MapProps,
+  TopNProps,
+  UnionProps,
+} from "./components/transforms.js"
 // Components: transforms
-export { Filter, Map, FlatMap, Aggregate, Union, Deduplicate, TopN } from './components/transforms.js';
-export type { FilterProps, MapProps, FlatMapProps, AggregateProps, UnionProps, DeduplicateProps, TopNProps } from './components/transforms.js';
-
-// Components: field transforms
-export { Rename, Drop, Cast, Coalesce, AddField } from './components/field-transforms.js';
-export type { RenameProps, DropProps, CastProps, CoalesceProps, AddFieldProps } from './components/field-transforms.js';
-
-// Components: route
-export { Route } from './components/route.js';
-export type { RouteProps, RouteBranchProps, RouteDefaultProps } from './components/route.js';
-
-// Components: joins
-export { Join, TemporalJoin, LookupJoin, IntervalJoin } from './components/joins.js';
-export type { JoinProps, TemporalJoinProps, LookupJoinProps, IntervalJoinProps, JoinType, JoinHints, IntervalBounds } from './components/joins.js';
+export {
+  Aggregate,
+  Deduplicate,
+  Filter,
+  FlatMap,
+  Map,
+  TopN,
+  Union,
+} from "./components/transforms.js"
+export type {
+  ValidateProps,
+  ValidateRejectProps,
+  ValidationRules,
+} from "./components/validate.js"
+export { Validate } from "./components/validate.js"
+export type { ViewProps } from "./components/view.js"
+// Components: view, query, side-output, lateral-join, validate
+export { View } from "./components/view.js"
+export type {
+  SessionWindowProps,
+  SlideWindowProps,
+  TumbleWindowProps,
+} from "./components/windows.js"
 
 // Components: windows
-export { TumbleWindow, SlideWindow, SessionWindow } from './components/windows.js';
-export type { TumbleWindowProps, SlideWindowProps, SessionWindowProps } from './components/windows.js';
-
-// Components: catalogs
-export { PaimonCatalog, IcebergCatalog, HiveCatalog, JdbcCatalog, GenericCatalog } from './components/catalogs.js';
-export type { PaimonCatalogProps, IcebergCatalogProps, HiveCatalogProps, JdbcCatalogProps, GenericCatalogProps, CatalogHandle, CatalogResult, IcebergCatalogType } from './components/catalogs.js';
-
-// Components: catalog source
-export { CatalogSource } from './components/catalog-source.js';
-export type { CatalogSourceProps } from './components/catalog-source.js';
-
-// Components: escape hatches
-export { RawSQL, UDF } from './components/escape-hatches.js';
-export type { RawSQLProps, UDFProps } from './components/escape-hatches.js';
-
-// Components: CEP
-export { MatchRecognize } from './components/cep.js';
-export type { MatchRecognizeProps, MatchAfterStrategy } from './components/cep.js';
-
-// Components: view, query, side-output, lateral-join, validate
-export { View } from './components/view.js';
-export type { ViewProps } from './components/view.js';
-export { Query } from './components/query.js';
-export type { QueryProps, QuerySelectProps, QueryWhereProps, QueryGroupByProps, QueryHavingProps, QueryOrderByProps, WindowSpec, WindowFunctionExpr, ColumnExpr } from './components/query.js';
-export { SideOutput } from './components/side-output.js';
-export type { SideOutputProps, SideOutputSinkProps } from './components/side-output.js';
-export { LateralJoin } from './components/lateral-join.js';
-export type { LateralJoinProps } from './components/lateral-join.js';
-export { Validate } from './components/validate.js';
-export type { ValidateProps, ValidateRejectProps, ValidationRules } from './components/validate.js';
+export {
+  SessionWindow,
+  SlideWindow,
+  TumbleWindow,
+} from "./components/windows.js"
+export type {
+  AppSynthResult,
+  FlinkReactorAppProps,
+  PipelineArtifact,
+} from "./core/app.js"
+// Core: app
+export { synthesizeApp } from "./core/app.js"
+export type {
+  ConnectorConfig,
+  DeliveryStrategy,
+  FlinkReactorConfig,
+  InfraConfig,
+} from "./core/config.js"
+// Core: config & environment
+export { defineConfig } from "./core/config.js"
+export type {
+  EnvironmentConfig,
+  PipelineOverrides,
+} from "./core/environment.js"
+export {
+  defineEnvironment,
+  discoverEnvironments,
+  resolveEnvironment,
+} from "./core/environment.js"
+export type {
+  FeatureGateError,
+  JdbcConnectorInfo,
+} from "./core/flink-compat.js"
+// Core: Flink version compat
+export { FlinkVersionCompat } from "./core/flink-compat.js"
+// Core: JSX runtime
+export { createElement, Fragment, jsx, jsxs } from "./core/jsx-runtime.js"
+// Core: plugins
+export type {
+  AfterSynthHookContext,
+  FlinkReactorPlugin,
+  PipelineSynthHookResult,
+  PluginDdlGenerator,
+  PluginSqlGenerator,
+  PluginValidator,
+  SynthHookContext,
+} from "./core/plugin.js"
+export type { ResolvedPluginChain } from "./core/plugin-registry.js"
+export { EMPTY_PLUGIN_CHAIN, resolvePlugins } from "./core/plugin-registry.js"
+export type {
+  MetadataColumnDeclaration,
+  PrimaryKeyDeclaration,
+  SchemaDefinition,
+  SchemaOptions,
+  WatermarkDeclaration,
+} from "./core/schema.js"
+// Core: schema
+export { Field, isValidFlinkType, Schema } from "./core/schema.js"
+export type { GraphEdge, ValidationDiagnostic } from "./core/synth-context.js"
+// Core: synth context
+export { SynthContext } from "./core/synth-context.js"
+// Core: tree utilities
+export {
+  findNodes,
+  mapTree,
+  rekindTree,
+  replaceChild,
+  walkTree,
+  wrapNode,
+} from "./core/tree-utils.js"
+// Core: types
+export type {
+  BaseComponentProps,
+  ChangelogMode,
+  ConstructNode,
+  FlinkCompositeType,
+  FlinkMajorVersion,
+  FlinkParameterizedType,
+  FlinkPrimitiveType,
+  FlinkSchema,
+  FlinkType,
+  NodeKind,
+  Stream,
+  TypedConstructNode,
+} from "./core/types.js"
+export { createStream } from "./core/types.js"

@@ -1,23 +1,23 @@
 // ── Environment configuration ────────────────────────────────────────
 
 export interface PipelineOverrides {
-  readonly parallelism?: number;
-  readonly [key: string]: unknown;
+  readonly parallelism?: number
+  readonly [key: string]: unknown
 }
 
 export interface EnvironmentConfig {
-  readonly name: string;
+  readonly name: string
   readonly infra?: {
     readonly kafka?: {
-      readonly bootstrapServers?: string;
-    };
+      readonly bootstrapServers?: string
+    }
     readonly kubernetes?: {
-      readonly namespace?: string;
-      readonly image?: string;
-    };
-  };
+      readonly namespace?: string
+      readonly image?: string
+    }
+  }
   /** Pipeline-specific overrides. Use '*' for wildcard (all pipelines). */
-  readonly pipelineOverrides?: Record<string, PipelineOverrides>;
+  readonly pipelineOverrides?: Record<string, PipelineOverrides>
 }
 
 // ── Resolution ───────────────────────────────────────────────────────
@@ -32,40 +32,40 @@ export function resolveEnvironment(
   pipelineName: string,
   env: EnvironmentConfig,
 ): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
+  const result: Record<string, unknown> = {}
 
   // Apply infra-level overrides
   if (env.infra?.kafka?.bootstrapServers) {
-    result.bootstrapServers = env.infra.kafka.bootstrapServers;
+    result.bootstrapServers = env.infra.kafka.bootstrapServers
   }
   if (env.infra?.kubernetes?.namespace) {
-    result.namespace = env.infra.kubernetes.namespace;
+    result.namespace = env.infra.kubernetes.namespace
   }
 
-  const overrides = env.pipelineOverrides;
-  if (!overrides) return result;
+  const overrides = env.pipelineOverrides
+  if (!overrides) return result
 
   // Apply wildcard overrides first (lower priority)
-  const wildcard = overrides['*'];
+  const wildcard = overrides["*"]
   if (wildcard) {
     for (const [key, value] of Object.entries(wildcard)) {
       if (value !== undefined) {
-        result[key] = value;
+        result[key] = value
       }
     }
   }
 
   // Apply named pipeline overrides (higher priority, overwrites wildcard)
-  const named = overrides[pipelineName];
+  const named = overrides[pipelineName]
   if (named) {
     for (const [key, value] of Object.entries(named)) {
       if (value !== undefined) {
-        result[key] = value;
+        result[key] = value
       }
     }
   }
 
-  return result;
+  return result
 }
 
 // ── Auto-discovery ───────────────────────────────────────────────────
@@ -82,11 +82,11 @@ export function discoverEnvironments(
   files: readonly string[],
 ): Array<{ name: string; path: string }> {
   return files
-    .filter((f) => f.endsWith('.ts') && !f.endsWith('.d.ts'))
+    .filter((f) => f.endsWith(".ts") && !f.endsWith(".d.ts"))
     .map((f) => ({
-      name: f.replace(/\.ts$/, ''),
+      name: f.replace(/\.ts$/, ""),
       path: `${envDir}/${f}`,
-    }));
+    }))
 }
 
 // ── defineEnvironment ───────────────────────────────────────────────
@@ -96,6 +96,8 @@ export function discoverEnvironments(
  *
  * Returns a frozen EnvironmentConfig.
  */
-export function defineEnvironment(config: EnvironmentConfig): EnvironmentConfig {
-  return Object.freeze(config);
+export function defineEnvironment(
+  config: EnvironmentConfig,
+): EnvironmentConfig {
+  return Object.freeze(config)
 }

@@ -1,11 +1,11 @@
-import { createElement } from '../../core/jsx-runtime';
-import { Schema, Field } from '../../core/schema';
-import { Pipeline } from '../../components/pipeline';
-import { KafkaSource } from '../../components/sources';
-import { KafkaSink, JdbcSink, FileSystemSink } from '../../components/sinks';
-import { Aggregate, Filter } from '../../components/transforms';
-import { TumbleWindow } from '../../components/windows';
-import { Route } from '../../components/route';
+import { Pipeline } from "../../components/pipeline"
+import { Route } from "../../components/route"
+import { FileSystemSink, JdbcSink, KafkaSink } from "../../components/sinks"
+import { KafkaSource } from "../../components/sources"
+import { Aggregate } from "../../components/transforms"
+import { TumbleWindow } from "../../components/windows"
+import { createElement } from "../../core/jsx-runtime"
+import { Field, Schema } from "../../core/schema"
 
 const ClickstreamSchema = Schema({
   fields: {
@@ -19,10 +19,10 @@ const ClickstreamSchema = Schema({
     ip_address: Field.STRING(),
   },
   watermark: {
-    column: 'event_time',
+    column: "event_time",
     expression: "event_time - INTERVAL '10' SECOND",
   },
-});
+})
 
 export default (
   <Pipeline name="clickstream-lambda" parallelism={24}>
@@ -37,8 +37,8 @@ export default (
         <FileSystemSink
           path="s3://data-lake/clickstream/raw/"
           format="parquet"
-          partitionBy={['DATE(event_time)', 'HOUR(event_time)']}
-          rollingPolicy={{ size: '256MB', interval: '10min' }}
+          partitionBy={["DATE(event_time)", "HOUR(event_time)"]}
+          rollingPolicy={{ size: "256MB", interval: "10min" }}
         />
       </Route.Branch>
 
@@ -46,11 +46,11 @@ export default (
       <Route.Branch condition="true">
         <TumbleWindow size="1 minute" on="event_time">
           <Aggregate
-            groupBy={['page_url']}
+            groupBy={["page_url"]}
             select={{
-              page_url: 'page_url',
-              view_count: 'COUNT(*)',
-              unique_visitors: 'COUNT(DISTINCT user_id)',
+              page_url: "page_url",
+              view_count: "COUNT(*)",
+              unique_visitors: "COUNT(DISTINCT user_id)",
             }}
           />
         </TumbleWindow>
@@ -60,19 +60,19 @@ export default (
       {/* Sink 3: User activity upsert */}
       <Route.Branch condition="true">
         <Aggregate
-          groupBy={['user_id']}
+          groupBy={["user_id"]}
           select={{
-            user_id: 'user_id',
-            total_events: 'COUNT(*)',
-            session_count: 'COUNT(DISTINCT session_id)',
-            last_seen: 'MAX(event_time)',
+            user_id: "user_id",
+            total_events: "COUNT(*)",
+            session_count: "COUNT(DISTINCT session_id)",
+            last_seen: "MAX(event_time)",
           }}
         />
         <JdbcSink
           url="jdbc:postgresql://db:5432/analytics"
           table="user_activity_summary"
           upsertMode={true}
-          keyFields={['user_id']}
+          keyFields={["user_id"]}
         />
       </Route.Branch>
 
@@ -82,4 +82,4 @@ export default (
       </Route.Branch>
     </Route>
   </Pipeline>
-);
+)

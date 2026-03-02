@@ -1,11 +1,13 @@
-import type { ScaffoldOptions, TemplateFile } from '../commands/new.js';
-import { sharedFiles } from './shared.js';
+import type { ScaffoldOptions, TemplateFile } from "../commands/new.js"
+import { sharedFiles } from "./shared.js"
 
-export function getCdcLakehouseTemplates(opts: ScaffoldOptions): TemplateFile[] {
+export function getCdcLakehouseTemplates(
+  opts: ScaffoldOptions,
+): TemplateFile[] {
   return [
     ...sharedFiles(opts),
     {
-      path: 'schemas/orders.ts',
+      path: "schemas/orders.ts",
       content: `import { Schema, Field } from 'flink-reactor';
 
 export const OrderSchema = Schema({
@@ -23,7 +25,7 @@ export const OrderSchema = Schema({
 `,
     },
     {
-      path: 'pipelines/cdc-to-lakehouse/index.tsx',
+      path: "pipelines/cdc-to-lakehouse/index.tsx",
       content: `import { Pipeline, KafkaSource, PaimonCatalog, PaimonSink } from 'flink-reactor';
 import { OrderSchema } from '../../schemas/orders';
 
@@ -50,7 +52,7 @@ export default (
 `,
     },
     {
-      path: 'tests/pipelines/cdc-to-lakehouse.test.ts',
+      path: "tests/pipelines/cdc-to-lakehouse.test.ts",
       content: `import { describe, it, expect } from 'vitest';
 // import { synth } from 'flink-reactor/testing';
 
@@ -59,5 +61,5 @@ describe('cdc-to-lakehouse pipeline', () => {
 });
 `,
     },
-  ];
+  ]
 }

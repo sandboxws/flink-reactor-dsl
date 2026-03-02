@@ -1,11 +1,11 @@
-import { createElement } from '../../core/jsx-runtime';
-import { Schema, Field } from '../../core/schema';
-import { Pipeline } from '../../components/pipeline';
-import { GenericSource, JdbcSource } from '../../components/sources';
-import { FileSystemSink, JdbcSink } from '../../components/sinks';
-import { Aggregate } from '../../components/transforms';
-import { Join } from '../../components/joins';
-import { Route } from '../../components/route';
+import { Join } from "../../components/joins"
+import { Pipeline } from "../../components/pipeline"
+import { Route } from "../../components/route"
+import { FileSystemSink, JdbcSink } from "../../components/sinks"
+import { GenericSource, JdbcSource } from "../../components/sources"
+import { Aggregate } from "../../components/transforms"
+import { createElement } from "../../core/jsx-runtime"
+import { Field, Schema } from "../../core/schema"
 
 const SalesSchema = Schema({
   fields: {
@@ -18,7 +18,7 @@ const SalesSchema = Schema({
     sale_date: Field.DATE(),
     sale_timestamp: Field.TIMESTAMP(3),
   },
-});
+})
 
 const ProductSchema = Schema({
   fields: {
@@ -28,16 +28,16 @@ const ProductSchema = Schema({
     subcategory: Field.STRING(),
     brand: Field.STRING(),
   },
-});
+})
 
 const sales = (
   <GenericSource
     connector="filesystem"
     format="parquet"
     schema={SalesSchema}
-    options={{ 'path': 's3://data-warehouse/sales/2024/' }}
+    options={{ path: "s3://data-warehouse/sales/2024/" }}
   />
-);
+)
 
 const products = (
   <JdbcSource
@@ -45,16 +45,16 @@ const products = (
     table="products"
     schema={ProductSchema}
   />
-);
+)
 
 const enriched = (
   <Join
     left={sales}
     right={products}
     on="product_id = product_id"
-    hints={{ broadcast: 'right' }}
+    hints={{ broadcast: "right" }}
   />
-);
+)
 
 export default (
   <Pipeline name="sales-batch-etl" mode="batch" parallelism={32}>
@@ -63,32 +63,32 @@ export default (
       {/* Daily category sales → S3 Parquet */}
       <Route.Branch condition="true">
         <Aggregate
-          groupBy={['category', 'subcategory', 'sale_date']}
+          groupBy={["category", "subcategory", "sale_date"]}
           select={{
-            category: 'category',
-            subcategory: 'subcategory',
-            sale_date: 'sale_date',
-            total_revenue: 'SUM(amount)',
-            total_units: 'SUM(quantity)',
-            unique_customers: 'COUNT(DISTINCT customer_id)',
+            category: "category",
+            subcategory: "subcategory",
+            sale_date: "sale_date",
+            total_revenue: "SUM(amount)",
+            total_units: "SUM(quantity)",
+            unique_customers: "COUNT(DISTINCT customer_id)",
           }}
         />
         <FileSystemSink
           path="s3://data-warehouse/aggregates/daily_category_sales/"
           format="parquet"
-          partitionBy={['sale_date']}
+          partitionBy={["sale_date"]}
         />
       </Route.Branch>
 
       {/* Daily brand performance → PostgreSQL */}
       <Route.Branch condition="true">
         <Aggregate
-          groupBy={['brand', 'sale_date']}
+          groupBy={["brand", "sale_date"]}
           select={{
-            brand: 'brand',
-            sale_date: 'sale_date',
-            brand_revenue: 'SUM(amount)',
-            transaction_count: 'COUNT(*)',
+            brand: "brand",
+            sale_date: "sale_date",
+            brand_revenue: "SUM(amount)",
+            transaction_count: "COUNT(*)",
           }}
         />
         <JdbcSink
@@ -98,4 +98,4 @@ export default (
       </Route.Branch>
     </Route>
   </Pipeline>
-);
+)

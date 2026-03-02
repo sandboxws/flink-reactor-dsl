@@ -1,55 +1,63 @@
-import type { FlinkType, ChangelogMode, BaseComponentProps, ConstructNode } from '../core/types.js';
-import type { SchemaDefinition, WatermarkDeclaration } from '../core/schema.js';
-import { createElement, toSqlIdentifier } from '../core/jsx-runtime.js';
+import { createElement, toSqlIdentifier } from "../core/jsx-runtime.js"
+import type { SchemaDefinition, WatermarkDeclaration } from "../core/schema.js"
+import type {
+  BaseComponentProps,
+  ChangelogMode,
+  ConstructNode,
+  FlinkType,
+} from "../core/types.js"
 
 // ── CDC format → ChangelogMode inference ────────────────────────────
 
 const CDC_FORMATS: ReadonlySet<KafkaFormat> = new Set([
-  'debezium-json',
-  'canal-json',
-  'maxwell-json',
-]);
+  "debezium-json",
+  "canal-json",
+  "maxwell-json",
+])
 
-export function inferChangelogMode(format: KafkaFormat | undefined): ChangelogMode {
-  return CDC_FORMATS.has(format ?? 'json') ? 'retract' : 'append-only';
+export function inferChangelogMode(
+  format: KafkaFormat | undefined,
+): ChangelogMode {
+  return CDC_FORMATS.has(format ?? "json") ? "retract" : "append-only"
 }
 
 // ── Shared source types ─────────────────────────────────────────────
 
 export type KafkaFormat =
-  | 'json'
-  | 'avro'
-  | 'csv'
-  | 'debezium-json'
-  | 'canal-json'
-  | 'maxwell-json';
+  | "json"
+  | "avro"
+  | "csv"
+  | "debezium-json"
+  | "canal-json"
+  | "maxwell-json"
 
 export type KafkaStartupMode =
-  | 'latest-offset'
-  | 'earliest-offset'
-  | 'group-offsets'
-  | 'timestamp';
+  | "latest-offset"
+  | "earliest-offset"
+  | "group-offsets"
+  | "timestamp"
 
 export interface LookupCacheConfig {
-  readonly maxRows: number;
-  readonly ttl: string;
+  readonly maxRows: number
+  readonly ttl: string
 }
 
 // ── KafkaSource ─────────────────────────────────────────────────────
 
-export interface KafkaSourceProps<T extends Record<string, FlinkType> = Record<string, FlinkType>>
-  extends BaseComponentProps {
+export interface KafkaSourceProps<
+  T extends Record<string, FlinkType> = Record<string, FlinkType>,
+> extends BaseComponentProps {
   /** Optional SQL table name. Defaults to topic name normalized as a SQL identifier. */
-  readonly name?: string;
-  readonly topic: string;
-  readonly bootstrapServers?: string;
-  readonly format?: KafkaFormat;
-  readonly schema: SchemaDefinition<T>;
-  readonly watermark?: WatermarkDeclaration;
-  readonly startupMode?: KafkaStartupMode;
-  readonly consumerGroup?: string;
-  readonly primaryKey?: readonly string[];
-  readonly children?: ConstructNode | ConstructNode[];
+  readonly name?: string
+  readonly topic: string
+  readonly bootstrapServers?: string
+  readonly format?: KafkaFormat
+  readonly schema: SchemaDefinition<T>
+  readonly watermark?: WatermarkDeclaration
+  readonly startupMode?: KafkaStartupMode
+  readonly consumerGroup?: string
+  readonly primaryKey?: readonly string[]
+  readonly children?: ConstructNode | ConstructNode[]
 }
 
 /**
@@ -65,30 +73,32 @@ export interface KafkaSourceProps<T extends Record<string, FlinkType> = Record<s
 export function KafkaSource<T extends Record<string, FlinkType>>(
   props: KafkaSourceProps<T>,
 ): ConstructNode {
-  const { children, name, ...rest } = props;
-  const childArray = children == null
-    ? []
-    : Array.isArray(children)
-      ? children
-      : [children];
+  const { children, name, ...rest } = props
+  const childArray =
+    children == null ? [] : Array.isArray(children) ? children : [children]
 
-  const changelogMode = inferChangelogMode(props.format);
-  const _nameHint = name ?? toSqlIdentifier(props.topic);
+  const changelogMode = inferChangelogMode(props.format)
+  const _nameHint = name ?? toSqlIdentifier(props.topic)
 
-  return createElement('KafkaSource', { ...rest, changelogMode, _nameHint }, ...childArray);
+  return createElement(
+    "KafkaSource",
+    { ...rest, changelogMode, _nameHint },
+    ...childArray,
+  )
 }
 
 // ── JdbcSource ──────────────────────────────────────────────────────
 
-export interface JdbcSourceProps<T extends Record<string, FlinkType> = Record<string, FlinkType>>
-  extends BaseComponentProps {
+export interface JdbcSourceProps<
+  T extends Record<string, FlinkType> = Record<string, FlinkType>,
+> extends BaseComponentProps {
   /** Optional SQL table name. Defaults to the JDBC table name. */
-  readonly name?: string;
-  readonly url: string;
-  readonly table: string;
-  readonly schema: SchemaDefinition<T>;
-  readonly lookupCache?: LookupCacheConfig;
-  readonly children?: ConstructNode | ConstructNode[];
+  readonly name?: string
+  readonly url: string
+  readonly table: string
+  readonly schema: SchemaDefinition<T>
+  readonly lookupCache?: LookupCacheConfig
+  readonly children?: ConstructNode | ConstructNode[]
 }
 
 /**
@@ -100,29 +110,27 @@ export interface JdbcSourceProps<T extends Record<string, FlinkType> = Record<st
 export function JdbcSource<T extends Record<string, FlinkType>>(
   props: JdbcSourceProps<T>,
 ): ConstructNode {
-  const { children, name, ...rest } = props;
-  const childArray = children == null
-    ? []
-    : Array.isArray(children)
-      ? children
-      : [children];
+  const { children, name, ...rest } = props
+  const childArray =
+    children == null ? [] : Array.isArray(children) ? children : [children]
 
-  const _nameHint = name ?? toSqlIdentifier(props.table);
+  const _nameHint = name ?? toSqlIdentifier(props.table)
 
-  return createElement('JdbcSource', { ...rest, _nameHint }, ...childArray);
+  return createElement("JdbcSource", { ...rest, _nameHint }, ...childArray)
 }
 
 // ── GenericSource ───────────────────────────────────────────────────
 
-export interface GenericSourceProps<T extends Record<string, FlinkType> = Record<string, FlinkType>>
-  extends BaseComponentProps {
+export interface GenericSourceProps<
+  T extends Record<string, FlinkType> = Record<string, FlinkType>,
+> extends BaseComponentProps {
   /** Optional SQL table name. Defaults to the connector name. */
-  readonly name?: string;
-  readonly connector: string;
-  readonly format?: string;
-  readonly schema: SchemaDefinition<T>;
-  readonly options?: Record<string, string>;
-  readonly children?: ConstructNode | ConstructNode[];
+  readonly name?: string
+  readonly connector: string
+  readonly format?: string
+  readonly schema: SchemaDefinition<T>
+  readonly options?: Record<string, string>
+  readonly children?: ConstructNode | ConstructNode[]
 }
 
 /**
@@ -135,14 +143,11 @@ export interface GenericSourceProps<T extends Record<string, FlinkType> = Record
 export function GenericSource<T extends Record<string, FlinkType>>(
   props: GenericSourceProps<T>,
 ): ConstructNode {
-  const { children, name, ...rest } = props;
-  const childArray = children == null
-    ? []
-    : Array.isArray(children)
-      ? children
-      : [children];
+  const { children, name, ...rest } = props
+  const childArray =
+    children == null ? [] : Array.isArray(children) ? children : [children]
 
-  const _nameHint = name ?? toSqlIdentifier(props.connector);
+  const _nameHint = name ?? toSqlIdentifier(props.connector)
 
-  return createElement('GenericSource', { ...rest, _nameHint }, ...childArray);
+  return createElement("GenericSource", { ...rest, _nameHint }, ...childArray)
 }

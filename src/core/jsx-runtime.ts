@@ -1,4 +1,4 @@
-import type { ConstructNode, NodeKind } from './types.js';
+import type { ConstructNode, NodeKind } from "./types.js"
 
 // ── JSX type declarations ────────────────────────────────────────────
 
@@ -18,22 +18,23 @@ import type { ConstructNode, NodeKind } from './types.js';
  */
 declare global {
   namespace JSX {
-    type Element = ConstructNode;
+    type Element = ConstructNode
     interface IntrinsicElements {}
     interface ElementChildrenAttribute {
-      children: {};
+      // biome-ignore lint/complexity/noBannedTypes: {} is intentional for JSX ElementChildrenAttribute mapping
+      children: {}
     }
   }
 }
 
 // ── ID generation ────────────────────────────────────────────────────
 
-let nextNodeId = 0;
-const usedNodeIds: Set<string> = new Set();
+let nextNodeId = 0
+const usedNodeIds: Set<string> = new Set()
 
 export function resetNodeIdCounter(): void {
-  nextNodeId = 0;
-  usedNodeIds.clear();
+  nextNodeId = 0
+  usedNodeIds.clear()
 }
 
 /**
@@ -42,95 +43,97 @@ export function resetNodeIdCounter(): void {
  */
 export function toSqlIdentifier(value: string): string {
   return value
-    .replace(/[.\-/]/g, '_')
-    .replace(/[^a-zA-Z0-9_]/g, '')
-    .replace(/^_+|_+$/g, '')
-    .replace(/_+/g, '_');
+    .replace(/[.\-/]/g, "_")
+    .replace(/[^a-zA-Z0-9_]/g, "")
+    .replace(/^_+|_+$/g, "")
+    .replace(/_+/g, "_")
 }
 
 function generateNodeId(component: string, nameHint?: string): string {
   const base = nameHint
     ? toSqlIdentifier(nameHint)
-    : `${component}_${nextNodeId++}`;
+    : `${component}_${nextNodeId++}`
 
-  let id = base;
-  let suffix = 2;
+  let id = base
+  let suffix = 2
   while (usedNodeIds.has(id)) {
-    id = `${base}_${suffix}`;
-    suffix++;
+    id = `${base}_${suffix}`
+    suffix++
   }
 
-  usedNodeIds.add(id);
+  usedNodeIds.add(id)
   if (!nameHint) {
     // Counter already incremented above for auto-generated IDs
   } else {
-    nextNodeId++; // keep counter moving for unnamed nodes
+    nextNodeId++ // keep counter moving for unnamed nodes
   }
 
-  return id;
+  return id
 }
 
 // ── Component type → NodeKind mapping ────────────────────────────────
 
 const BUILTIN_KINDS: ReadonlyMap<string, NodeKind> = new Map([
-  ['Pipeline', 'Pipeline'],
-  ['KafkaSource', 'Source'],
-  ['JdbcSource', 'Source'],
-  ['GenericSource', 'Source'],
-  ['CatalogSource', 'Source'],
-  ['KafkaSink', 'Sink'],
-  ['JdbcSink', 'Sink'],
-  ['FileSystemSink', 'Sink'],
-  ['PaimonSink', 'Sink'],
-  ['IcebergSink', 'Sink'],
-  ['GenericSink', 'Sink'],
-  ['Filter', 'Transform'],
-  ['Map', 'Transform'],
-  ['FlatMap', 'Transform'],
-  ['Aggregate', 'Transform'],
-  ['Union', 'Transform'],
-  ['Deduplicate', 'Transform'],
-  ['TopN', 'Transform'],
-  ['Route', 'Transform'],
-  ['Join', 'Join'],
-  ['TemporalJoin', 'Join'],
-  ['LookupJoin', 'Join'],
-  ['IntervalJoin', 'Join'],
-  ['TumbleWindow', 'Window'],
-  ['SlideWindow', 'Window'],
-  ['SessionWindow', 'Window'],
-  ['PaimonCatalog', 'Catalog'],
-  ['IcebergCatalog', 'Catalog'],
-  ['HiveCatalog', 'Catalog'],
-  ['JdbcCatalog', 'Catalog'],
-  ['GenericCatalog', 'Catalog'],
-  ['Rename', 'Transform'],
-  ['Drop', 'Transform'],
-  ['Cast', 'Transform'],
-  ['Coalesce', 'Transform'],
-  ['AddField', 'Transform'],
-  ['Query', 'Transform'],
-  ['RawSQL', 'RawSQL'],
-  ['UDF', 'UDF'],
-  ['MatchRecognize', 'CEP'],
-  ['SideOutput', 'Transform'],
-  ['SideOutput.Sink', 'Transform'],
-  ['Validate', 'Transform'],
-  ['Validate.Reject', 'Transform'],
-  ['View', 'View'],
-  ['LateralJoin', 'Join'],
-]);
+  ["Pipeline", "Pipeline"],
+  ["KafkaSource", "Source"],
+  ["JdbcSource", "Source"],
+  ["GenericSource", "Source"],
+  ["CatalogSource", "Source"],
+  ["KafkaSink", "Sink"],
+  ["JdbcSink", "Sink"],
+  ["FileSystemSink", "Sink"],
+  ["PaimonSink", "Sink"],
+  ["IcebergSink", "Sink"],
+  ["GenericSink", "Sink"],
+  ["Filter", "Transform"],
+  ["Map", "Transform"],
+  ["FlatMap", "Transform"],
+  ["Aggregate", "Transform"],
+  ["Union", "Transform"],
+  ["Deduplicate", "Transform"],
+  ["TopN", "Transform"],
+  ["Route", "Transform"],
+  ["Join", "Join"],
+  ["TemporalJoin", "Join"],
+  ["LookupJoin", "Join"],
+  ["IntervalJoin", "Join"],
+  ["TumbleWindow", "Window"],
+  ["SlideWindow", "Window"],
+  ["SessionWindow", "Window"],
+  ["PaimonCatalog", "Catalog"],
+  ["IcebergCatalog", "Catalog"],
+  ["HiveCatalog", "Catalog"],
+  ["JdbcCatalog", "Catalog"],
+  ["GenericCatalog", "Catalog"],
+  ["Rename", "Transform"],
+  ["Drop", "Transform"],
+  ["Cast", "Transform"],
+  ["Coalesce", "Transform"],
+  ["AddField", "Transform"],
+  ["Query", "Transform"],
+  ["RawSQL", "RawSQL"],
+  ["UDF", "UDF"],
+  ["MatchRecognize", "CEP"],
+  ["SideOutput", "Transform"],
+  ["SideOutput.Sink", "Transform"],
+  ["Validate", "Transform"],
+  ["Validate.Reject", "Transform"],
+  ["View", "View"],
+  ["LateralJoin", "Join"],
+])
 
 /** Mutable map combining built-in + plugin-registered component kinds */
-let kindMap: Map<string, NodeKind> = new Map(BUILTIN_KINDS);
+let kindMap: Map<string, NodeKind> = new Map(BUILTIN_KINDS)
 
 /**
  * Register additional component kinds from plugins.
  * Merges plugin-provided component→kind mappings into the active kind map.
  */
-export function registerComponentKinds(components: ReadonlyMap<string, NodeKind>): void {
+export function registerComponentKinds(
+  components: ReadonlyMap<string, NodeKind>,
+): void {
   for (const [name, kind] of components) {
-    kindMap.set(name, kind);
+    kindMap.set(name, kind)
   }
 }
 
@@ -139,11 +142,11 @@ export function registerComponentKinds(components: ReadonlyMap<string, NodeKind>
  * Used in tests to clean up after plugin registration.
  */
 export function resetComponentKinds(): void {
-  kindMap = new Map(BUILTIN_KINDS);
+  kindMap = new Map(BUILTIN_KINDS)
 }
 
 function resolveKind(component: string): NodeKind {
-  return kindMap.get(component) ?? 'Transform';
+  return kindMap.get(component) ?? "Transform"
 }
 
 // ── createElement ────────────────────────────────────────────────────
@@ -159,36 +162,49 @@ function resolveKind(component: string): NodeKind {
  * implicit edges: parent → child in reading order.
  */
 export function createElement(
+  // biome-ignore lint/complexity/noBannedTypes: Function type is intentional for JSX component factories
   component: string | Function,
   props: Record<string, unknown> | null,
   ...children: (ConstructNode | ConstructNode[] | null | undefined)[]
 ): ConstructNode {
   // Function components: delegate to the factory so it can set _nameHint,
   // changelogMode, and other derived props before creating the node.
-  if (typeof component === 'function') {
+  if (typeof component === "function") {
     const flatChildren = children
       .flat(Infinity)
-      .filter((c): c is ConstructNode => c != null && typeof c === 'object' && '_tag' in c === false && 'id' in c);
+      .filter(
+        (c): c is ConstructNode =>
+          c != null &&
+          typeof c === "object" &&
+          "_tag" in c === false &&
+          "id" in c,
+      )
 
-    const mergedProps: Record<string, unknown> = { ...(props ?? {}) };
+    const mergedProps: Record<string, unknown> = { ...(props ?? {}) }
     if (flatChildren.length > 0) {
-      mergedProps.children = flatChildren;
+      mergedProps.children = flatChildren
     }
-    return component(mergedProps) as ConstructNode;
+    return component(mergedProps) as ConstructNode
   }
 
   // String components: create the node directly
-  const nameHint = props?._nameHint as string | undefined;
-  const id = generateNodeId(component, nameHint);
-  const kind = resolveKind(component);
+  const nameHint = props?._nameHint as string | undefined
+  const id = generateNodeId(component, nameHint)
+  const kind = resolveKind(component)
 
   const flatChildren = children
     .flat(Infinity)
-    .filter((c): c is ConstructNode => c != null && typeof c === 'object' && '_tag' in c === false && 'id' in c);
+    .filter(
+      (c): c is ConstructNode =>
+        c != null &&
+        typeof c === "object" &&
+        "_tag" in c === false &&
+        "id" in c,
+    )
 
-  const cleanProps = { ...(props ?? {}) };
-  delete cleanProps.children;
-  delete cleanProps._nameHint;
+  const cleanProps = { ...(props ?? {}) }
+  delete cleanProps.children
+  delete cleanProps._nameHint
 
   const node: ConstructNode = {
     id,
@@ -196,9 +212,9 @@ export function createElement(
     component,
     props: cleanProps,
     children: flatChildren,
-  };
+  }
 
-  return node;
+  return node
 }
 
 // ── Fragment ─────────────────────────────────────────────────────────
@@ -207,8 +223,10 @@ export function createElement(
  * Fragment groups multiple elements without adding a wrapper node.
  * Returns the children as-is for flattening by the parent createElement.
  */
-export function Fragment(props: { children?: ConstructNode[] }): ConstructNode[] {
-  return props.children ?? [];
+export function Fragment(props: {
+  children?: ConstructNode[]
+}): ConstructNode[] {
+  return props.children ?? []
 }
 
 // ── JSX automatic runtime exports ────────────────────────────────────
@@ -217,25 +235,23 @@ export function Fragment(props: { children?: ConstructNode[] }): ConstructNode[]
  * jsx() for the automatic JSX transform (single child).
  */
 export function jsx(
+  // biome-ignore lint/complexity/noBannedTypes: Function type is intentional for JSX component factories
   type: string | Function,
   props: Record<string, unknown>,
   key?: string,
 ): ConstructNode {
-  const { children, ...rest } = props;
-  const childArray = children == null
-    ? []
-    : Array.isArray(children)
-      ? children
-      : [children];
+  const { children, ...rest } = props
+  const childArray =
+    children == null ? [] : Array.isArray(children) ? children : [children]
 
   if (key !== undefined) {
-    rest.key = key;
+    rest.key = key
   }
 
-  return createElement(type, rest, ...childArray);
+  return createElement(type, rest, ...childArray)
 }
 
 /**
  * jsxs() for the automatic JSX transform (multiple children).
  */
-export const jsxs = jsx;
+export const jsxs = jsx

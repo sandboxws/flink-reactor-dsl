@@ -1,9 +1,9 @@
-import { createElement } from '../../core/jsx-runtime';
-import { Schema, Field } from '../../core/schema';
-import { Pipeline } from '../../components/pipeline';
-import { KafkaSource, JdbcSource } from '../../components/sources';
-import { KafkaSink } from '../../components/sinks';
-import { Join } from '../../components/joins';
+import { Join } from "../../components/joins"
+import { Pipeline } from "../../components/pipeline"
+import { KafkaSink } from "../../components/sinks"
+import { JdbcSource, KafkaSource } from "../../components/sources"
+import { createElement } from "../../core/jsx-runtime"
+import { Field, Schema } from "../../core/schema"
 
 const EventSchema = Schema({
   fields: {
@@ -13,7 +13,7 @@ const EventSchema = Schema({
     product_id: Field.STRING(),
     event_time: Field.TIMESTAMP(3),
   },
-});
+})
 
 const BlacklistSchema = Schema({
   fields: {
@@ -21,7 +21,7 @@ const BlacklistSchema = Schema({
     reason: Field.STRING(),
     blocked_until: Field.TIMESTAMP(3),
   },
-});
+})
 
 const events = (
   <KafkaSource
@@ -29,7 +29,7 @@ const events = (
     bootstrapServers="kafka:9092"
     schema={EventSchema}
   />
-);
+)
 
 const blacklist = (
   <JdbcSource
@@ -37,7 +37,7 @@ const blacklist = (
     table="blacklist"
     schema={BlacklistSchema}
   />
-);
+)
 
 export default (
   <Pipeline name="blacklist-filter" parallelism={32}>
@@ -46,8 +46,8 @@ export default (
       right={blacklist}
       on="user_id = user_id"
       type="anti"
-      hints={{ broadcast: 'right' }}
+      hints={{ broadcast: "right" }}
     />
     <KafkaSink topic="valid_events" />
   </Pipeline>
-);
+)

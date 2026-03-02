@@ -1,11 +1,13 @@
-import type { ScaffoldOptions, TemplateFile } from '../commands/new.js';
-import { sharedFiles } from './shared.js';
+import type { ScaffoldOptions, TemplateFile } from "../commands/new.js"
+import { sharedFiles } from "./shared.js"
 
-export function getRealtimeAnalyticsTemplates(opts: ScaffoldOptions): TemplateFile[] {
+export function getRealtimeAnalyticsTemplates(
+  opts: ScaffoldOptions,
+): TemplateFile[] {
   return [
     ...sharedFiles(opts),
     {
-      path: 'schemas/page-views.ts',
+      path: "schemas/page-views.ts",
       content: `import { Schema, Field } from 'flink-reactor';
 
 export const PageViewSchema = Schema({
@@ -28,7 +30,7 @@ export const PageViewStatsSchema = Schema({
 `,
     },
     {
-      path: 'pipelines/page-view-analytics/index.tsx',
+      path: "pipelines/page-view-analytics/index.tsx",
       content: `import { Pipeline, KafkaSource, TumbleWindow, Aggregate, JdbcSink } from 'flink-reactor';
 import { PageViewSchema } from '../../schemas/page-views';
 
@@ -59,7 +61,7 @@ export default (
 `,
     },
     {
-      path: 'tests/pipelines/page-view-analytics.test.ts',
+      path: "tests/pipelines/page-view-analytics.test.ts",
       content: `import { describe, it, expect } from 'vitest';
 // import { synth } from 'flink-reactor/testing';
 
@@ -68,5 +70,5 @@ describe('page-view-analytics pipeline', () => {
 });
 `,
     },
-  ];
+  ]
 }
