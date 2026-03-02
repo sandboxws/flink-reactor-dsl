@@ -12,6 +12,10 @@
     "declarationMap": true,
     "outDir": "dist",
     "rootDir": "src",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
     "noEmit": true,
     "isolatedModules": true
   },
