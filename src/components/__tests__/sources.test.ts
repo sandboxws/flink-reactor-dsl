@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { resetNodeIdCounter } from "../../core/jsx-runtime.js"
-import { Field, Schema } from "../../core/schema.js"
-import { GenericSource, JdbcSource, KafkaSource } from "../sources.js"
+import { GenericSource, JdbcSource, KafkaSource } from "@/components/sources.js"
+import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
+import { Field, Schema } from "@/core/schema.js"
 
 beforeEach(() => {
   resetNodeIdCounter()

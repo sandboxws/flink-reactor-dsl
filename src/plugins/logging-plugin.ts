@@ -1,6 +1,6 @@
-import type { FlinkReactorPlugin } from "../core/plugin.js"
-import { findNodes, mapTree } from "../core/tree-utils.js"
-import type { ConstructNode } from "../core/types.js"
+import type { FlinkReactorPlugin } from "@/core/plugin.js"
+import { findNodes, mapTree } from "@/core/tree-utils.js"
+import type { ConstructNode } from "@/core/types.js"
 
 // ── Configuration ───────────────────────────────────────────────────
 

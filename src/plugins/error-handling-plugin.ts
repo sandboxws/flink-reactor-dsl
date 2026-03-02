@@ -1,7 +1,7 @@
-import type { FlinkReactorPlugin } from "../core/plugin.js"
-import type { ValidationDiagnostic } from "../core/synth-context.js"
-import { findNodes, walkTree } from "../core/tree-utils.js"
-import type { ConstructNode } from "../core/types.js"
+import type { FlinkReactorPlugin } from "@/core/plugin.js"
+import type { ValidationDiagnostic } from "@/core/synth-context.js"
+import { findNodes, walkTree } from "@/core/tree-utils.js"
+import type { ConstructNode } from "@/core/types.js"
 
 // ── Restart strategy types ──────────────────────────────────────────
 

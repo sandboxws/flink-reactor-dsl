@@ -1,4 +1,7 @@
+import { resolve } from "node:path"
 import { defineConfig } from "tsup"
+
+const srcAlias = { "@": resolve("src") }
 
 export default defineConfig([
   // Library entry — importable as `import { ... } from 'flink-reactor'`
@@ -11,6 +14,9 @@ export default defineConfig([
     dts: true,
     sourcemap: true,
     splitting: false,
+    esbuildOptions(options) {
+      options.alias = srcAlias
+    },
   },
   // CLI entry — `flink-reactor` bin
   {
@@ -25,6 +31,9 @@ export default defineConfig([
     shims: true,
     banner: {
       js: "#!/usr/bin/env node",
+    },
+    esbuildOptions(options) {
+      options.alias = srcAlias
     },
   },
 ])

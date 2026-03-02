@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { UDF } from "../../components/escape-hatches.js"
-import { Pipeline } from "../../components/pipeline.js"
-import { FileSystemSink, KafkaSink } from "../../components/sinks.js"
-import { JdbcSource, KafkaSource } from "../../components/sources.js"
-import { resetNodeIdCounter } from "../../core/jsx-runtime.js"
-import { Field, Schema } from "../../core/schema.js"
-import { resolveConnectors } from "../connector-resolver.js"
+import { resolveConnectors } from "@/codegen/connector-resolver.js"
+import { UDF } from "@/components/escape-hatches.js"
+import { Pipeline } from "@/components/pipeline.js"
+import { FileSystemSink, KafkaSink } from "@/components/sinks.js"
+import { JdbcSource, KafkaSource } from "@/components/sources.js"
+import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
+import { Field, Schema } from "@/core/schema.js"
 
 beforeEach(() => {
   resetNodeIdCounter()

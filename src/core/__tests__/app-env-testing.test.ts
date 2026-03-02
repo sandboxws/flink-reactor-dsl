@@ -1,19 +1,19 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { Pipeline } from "../../components/pipeline.js"
-import { KafkaSink } from "../../components/sinks.js"
-import { KafkaSource } from "../../components/sources.js"
-import { Filter } from "../../components/transforms.js"
-import { synth } from "../../testing/synth.js"
-import { validate } from "../../testing/validate.js"
-import { synthesizeApp } from "../app.js"
-import { defineConfig, type InfraConfig } from "../config.js"
+import { Pipeline } from "@/components/pipeline.js"
+import { KafkaSink } from "@/components/sinks.js"
+import { KafkaSource } from "@/components/sources.js"
+import { Filter } from "@/components/transforms.js"
+import { synthesizeApp } from "@/core/app.js"
+import { defineConfig, type InfraConfig } from "@/core/config.js"
 import {
   discoverEnvironments,
   type EnvironmentConfig,
   resolveEnvironment,
-} from "../environment.js"
-import { resetNodeIdCounter } from "../jsx-runtime.js"
-import { Field, Schema } from "../schema.js"
+} from "@/core/environment.js"
+import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
+import { Field, Schema } from "@/core/schema.js"
+import { synth } from "@/testing/synth.js"
+import { validate } from "@/testing/validate.js"
 
 beforeEach(() => {
   resetNodeIdCounter()

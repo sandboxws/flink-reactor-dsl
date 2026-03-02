@@ -1,19 +1,19 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { Pipeline } from "../../components/pipeline.js"
-import { KafkaSink } from "../../components/sinks.js"
-import { KafkaSource } from "../../components/sources.js"
-import { resetNodeIdCounter } from "../../core/jsx-runtime.js"
-import { Field, Schema } from "../../core/schema.js"
-import type { ResolvedJar } from "../connector-resolver.js"
-import { resolveConnectors } from "../connector-resolver.js"
-import { generateCrd } from "../crd-generator.js"
+import type { ResolvedJar } from "@/codegen/connector-resolver.js"
+import { resolveConnectors } from "@/codegen/connector-resolver.js"
+import { generateCrd } from "@/codegen/crd-generator.js"
 import {
   applyInitContainerPatch,
   applyMavenMirror,
   applyPrivateRegistry,
   generateDockerfile,
   generateInitContainerPatch,
-} from "../delivery-strategies.js"
+} from "@/codegen/delivery-strategies.js"
+import { Pipeline } from "@/components/pipeline.js"
+import { KafkaSink } from "@/components/sinks.js"
+import { KafkaSource } from "@/components/sources.js"
+import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
+import { Field, Schema } from "@/core/schema.js"
 
 beforeEach(() => {
   resetNodeIdCounter()

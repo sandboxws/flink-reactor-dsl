@@ -3,9 +3,9 @@ import { writeFileSync } from "node:fs"
 import { join } from "node:path"
 import type { Command } from "commander"
 import pc from "picocolors"
-import { type GraphEdge, SynthContext } from "../../core/synth-context.js"
-import type { ConstructNode } from "../../core/types.js"
-import { loadPipeline, resolveProjectContext } from "../discovery.js"
+import { loadPipeline, resolveProjectContext } from "@/cli/discovery.js"
+import { type GraphEdge, SynthContext } from "@/core/synth-context.js"
+import type { ConstructNode } from "@/core/types.js"
 
 type GraphFormat = "ascii" | "dot" | "svg"
 

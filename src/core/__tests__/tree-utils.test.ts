@@ -5,8 +5,8 @@ import {
   replaceChild,
   walkTree,
   wrapNode,
-} from "../tree-utils.js"
-import type { ConstructNode } from "../types.js"
+} from "@/core/tree-utils.js"
+import type { ConstructNode } from "@/core/types.js"
 
 function makeNode(
   id: string,

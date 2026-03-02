@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { Pipeline } from "../../components/pipeline.js"
-import { KafkaSink } from "../../components/sinks.js"
-import { KafkaSource } from "../../components/sources.js"
-import { resetNodeIdCounter } from "../../core/jsx-runtime.js"
-import { Field, Schema } from "../../core/schema.js"
 import {
   generateCrd,
   generateCrdYaml,
   toMilliseconds,
-} from "../crd-generator.js"
+} from "@/codegen/crd-generator.js"
+import { Pipeline } from "@/components/pipeline.js"
+import { KafkaSink } from "@/components/sinks.js"
+import { KafkaSource } from "@/components/sources.js"
+import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
+import { Field, Schema } from "@/core/schema.js"
 
 beforeEach(() => {
   resetNodeIdCounter()

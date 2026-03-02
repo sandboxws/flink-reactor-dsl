@@ -2,8 +2,8 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import type { ScaffoldOptions } from "../new.js"
-import { scaffoldProject } from "../new.js"
+import type { ScaffoldOptions } from "@/cli/commands/new.js"
+import { scaffoldProject } from "@/cli/commands/new.js"
 
 describe("integration: new --template starter --yes", () => {
   let tempDir: string

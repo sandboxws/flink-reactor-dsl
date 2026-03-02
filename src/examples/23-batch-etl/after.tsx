@@ -1,11 +1,11 @@
-import { Join } from "../../components/joins"
-import { Pipeline } from "../../components/pipeline"
-import { Route } from "../../components/route"
-import { FileSystemSink, JdbcSink } from "../../components/sinks"
-import { GenericSource, JdbcSource } from "../../components/sources"
-import { Aggregate } from "../../components/transforms"
-import { createElement } from "../../core/jsx-runtime"
-import { Field, Schema } from "../../core/schema"
+import { Join } from "@/components/joins"
+import { Pipeline } from "@/components/pipeline"
+import { Route } from "@/components/route"
+import { FileSystemSink, JdbcSink } from "@/components/sinks"
+import { GenericSource, JdbcSource } from "@/components/sources"
+import { Aggregate } from "@/components/transforms"
+import { createElement } from "@/core/jsx-runtime"
+import { Field, Schema } from "@/core/schema"
 
 const SalesSchema = Schema({
   fields: {

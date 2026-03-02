@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
-import type { FlinkReactorPlugin } from "../plugin.js"
-import { EMPTY_PLUGIN_CHAIN, resolvePlugins } from "../plugin-registry.js"
-import type { ConstructNode } from "../types.js"
+import type { FlinkReactorPlugin } from "@/core/plugin.js"
+import { EMPTY_PLUGIN_CHAIN, resolvePlugins } from "@/core/plugin-registry.js"
+import type { ConstructNode } from "@/core/types.js"
 
 function makePlugin(
   overrides: Partial<FlinkReactorPlugin> & { name: string },

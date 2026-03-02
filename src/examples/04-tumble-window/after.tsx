@@ -1,10 +1,10 @@
-import { Pipeline } from "../../components/pipeline"
-import { KafkaSink } from "../../components/sinks"
-import { KafkaSource } from "../../components/sources"
-import { Aggregate, Filter } from "../../components/transforms"
-import { TumbleWindow } from "../../components/windows"
-import { createElement } from "../../core/jsx-runtime"
-import { Field, Schema } from "../../core/schema"
+import { Pipeline } from "@/components/pipeline"
+import { KafkaSink } from "@/components/sinks"
+import { KafkaSource } from "@/components/sources"
+import { Aggregate, Filter } from "@/components/transforms"
+import { TumbleWindow } from "@/components/windows"
+import { createElement } from "@/core/jsx-runtime"
+import { Field, Schema } from "@/core/schema"
 
 const ClickstreamSchema = Schema({
   fields: {

@@ -1,4 +1,4 @@
-import type { ScaffoldOptions, TemplateFile } from "../commands/new.js"
+import type { ScaffoldOptions, TemplateFile } from "@/cli/commands/new.js"
 import { makeConfig, makeGitignore } from "./shared.js"
 
 export function getMonorepoTemplates(opts: ScaffoldOptions): TemplateFile[] {

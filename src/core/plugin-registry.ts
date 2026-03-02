@@ -1,4 +1,4 @@
-import type { FlinkDeploymentCrd } from "../codegen/crd-generator.js"
+import type { FlinkDeploymentCrd } from "@/codegen/crd-generator.js"
 import type {
   FlinkReactorPlugin,
   PluginDdlGenerator,

@@ -2,9 +2,9 @@ import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import type { Command } from "commander"
 import pc from "picocolors"
-import { toYaml } from "../../codegen/crd-generator.js"
-import { type PipelineArtifact, synthesizeApp } from "../../core/app.js"
-import { loadPipeline, resolveProjectContext } from "../discovery.js"
+import { loadPipeline, resolveProjectContext } from "@/cli/discovery.js"
+import { toYaml } from "@/codegen/crd-generator.js"
+import { type PipelineArtifact, synthesizeApp } from "@/core/app.js"
 
 export function registerSynthCommand(program: Command): void {
   program
@@ -63,8 +63,8 @@ export async function runSynth(opts: {
     // If no pipelines were extracted (the node itself is the pipeline),
     // treat the whole tree as a single pipeline.
     if (result.pipelines.length === 0) {
-      const { generateSql } = await import("../../codegen/sql-generator.js")
-      const { generateCrd } = await import("../../codegen/crd-generator.js")
+      const { generateSql } = await import("@/codegen/sql-generator.js")
+      const { generateCrd } = await import("@/codegen/crd-generator.js")
 
       const flinkVersion = ctx.config?.flink?.version ?? "2.0"
       const sql = generateSql(pipelineNode, { flinkVersion })

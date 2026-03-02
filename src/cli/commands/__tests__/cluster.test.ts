@@ -1,11 +1,11 @@
 import { Command } from "commander"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { isClusterRunning } from "../../cluster/health-check.js"
+import { isClusterRunning } from "@/cli/cluster/health-check.js"
 import {
   SqlGatewayClient,
   splitSqlStatements,
-} from "../../cluster/sql-gateway-client.js"
-import { registerClusterCommand } from "../cluster.js"
+} from "@/cli/cluster/sql-gateway-client.js"
+import { registerClusterCommand } from "@/cli/commands/cluster.js"
 
 // ── splitSqlStatements ──────────────────────────────────────────────
 

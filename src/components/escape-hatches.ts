@@ -1,6 +1,6 @@
-import { createElement } from "../core/jsx-runtime.js"
-import type { SchemaDefinition } from "../core/schema.js"
-import type { BaseComponentProps, ConstructNode } from "../core/types.js"
+import { createElement } from "@/core/jsx-runtime.js"
+import type { SchemaDefinition } from "@/core/schema.js"
+import type { BaseComponentProps, ConstructNode } from "@/core/types.js"
 
 // ── RawSQL ──────────────────────────────────────────────────────────
 

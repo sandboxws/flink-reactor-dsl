@@ -1,10 +1,10 @@
-import { createElement } from "../core/jsx-runtime.js"
-import type { SchemaDefinition } from "../core/schema.js"
+import { createElement } from "@/core/jsx-runtime.js"
+import type { SchemaDefinition } from "@/core/schema.js"
 import type {
   BaseComponentProps,
   ConstructNode,
   FlinkType,
-} from "../core/types.js"
+} from "@/core/types.js"
 
 // ── Filter ──────────────────────────────────────────────────────────
 

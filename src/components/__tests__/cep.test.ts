@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { createElement, resetNodeIdCounter } from "../../core/jsx-runtime.js"
-import { SynthContext } from "../../core/synth-context.js"
-import { MatchRecognize } from "../cep.js"
+import { MatchRecognize } from "@/components/cep.js"
+import { createElement, resetNodeIdCounter } from "@/core/jsx-runtime.js"
+import { SynthContext } from "@/core/synth-context.js"
 
 beforeEach(() => {
   resetNodeIdCounter()

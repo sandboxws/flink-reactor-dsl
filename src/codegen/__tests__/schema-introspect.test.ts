@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { Pipeline } from "../../components/pipeline.js"
-import { Route } from "../../components/route.js"
-import { JdbcSink, KafkaSink } from "../../components/sinks.js"
-import { KafkaSource } from "../../components/sources.js"
-import { Aggregate, Filter, Map } from "../../components/transforms.js"
-import { resetNodeIdCounter } from "../../core/jsx-runtime.js"
-import { Field, Schema } from "../../core/schema.js"
-import { introspectPipelineSchemas } from "../schema-introspect.js"
+import { introspectPipelineSchemas } from "@/codegen/schema-introspect.js"
+import { Pipeline } from "@/components/pipeline.js"
+import { Route } from "@/components/route.js"
+import { JdbcSink, KafkaSink } from "@/components/sinks.js"
+import { KafkaSource } from "@/components/sources.js"
+import { Aggregate, Filter, Map } from "@/components/transforms.js"
+import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
+import { Field, Schema } from "@/core/schema.js"
 
 beforeEach(() => {
   resetNodeIdCounter()

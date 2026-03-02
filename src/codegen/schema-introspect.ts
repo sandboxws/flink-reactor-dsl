@@ -1,6 +1,6 @@
-import type { SchemaDefinition } from "../core/schema.js"
-import { SynthContext } from "../core/synth-context.js"
-import type { ConstructNode } from "../core/types.js"
+import type { SchemaDefinition } from "@/core/schema.js"
+import { SynthContext } from "@/core/synth-context.js"
+import type { ConstructNode } from "@/core/types.js"
 
 // ── Shared types ────────────────────────────────────────────────────
 

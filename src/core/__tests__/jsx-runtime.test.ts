@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { createElement, Fragment, resetNodeIdCounter } from "../jsx-runtime.js"
+import {
+  createElement,
+  Fragment,
+  resetNodeIdCounter,
+} from "@/core/jsx-runtime.js"
 
 beforeEach(() => {
   resetNodeIdCounter()

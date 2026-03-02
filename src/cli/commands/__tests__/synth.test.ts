@@ -9,7 +9,7 @@ import {
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import { runSynth } from "../synth.js"
+import { runSynth } from "@/cli/commands/synth.js"
 
 // The project root — we use absolute imports to the real jsx-runtime
 const projectRoot = resolve(__dirname, "../../../../")

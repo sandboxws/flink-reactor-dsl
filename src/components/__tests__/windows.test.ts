@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { resetNodeIdCounter } from "../../core/jsx-runtime.js"
-import { Field, Schema } from "../../core/schema.js"
-import { SynthContext } from "../../core/synth-context.js"
-import { KafkaSink } from "../sinks.js"
-import { KafkaSource } from "../sources.js"
-import { Aggregate } from "../transforms.js"
-import { SessionWindow, SlideWindow, TumbleWindow } from "../windows.js"
+import { KafkaSink } from "@/components/sinks.js"
+import { KafkaSource } from "@/components/sources.js"
+import { Aggregate } from "@/components/transforms.js"
+import {
+  SessionWindow,
+  SlideWindow,
+  TumbleWindow,
+} from "@/components/windows.js"
+import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
+import { Field, Schema } from "@/core/schema.js"
+import { SynthContext } from "@/core/synth-context.js"
 
 beforeEach(() => {
   resetNodeIdCounter()

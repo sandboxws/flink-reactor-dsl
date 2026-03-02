@@ -1,12 +1,12 @@
 import type { Command } from "commander"
 import pc from "picocolors"
-import { FlinkVersionCompat } from "../../core/flink-compat.js"
+import { loadPipeline, resolveProjectContext } from "@/cli/discovery.js"
+import { FlinkVersionCompat } from "@/core/flink-compat.js"
 import {
   SynthContext,
   type ValidationDiagnostic,
-} from "../../core/synth-context.js"
-import type { ConstructNode, FlinkMajorVersion } from "../../core/types.js"
-import { loadPipeline, resolveProjectContext } from "../discovery.js"
+} from "@/core/synth-context.js"
+import type { ConstructNode, FlinkMajorVersion } from "@/core/types.js"
 
 // ── Types ───────────────────────────────────────────────────────────
 

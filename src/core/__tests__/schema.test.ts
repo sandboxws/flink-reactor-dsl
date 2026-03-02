@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { Field, isValidFlinkType, Schema } from "../schema.js"
+import { Field, isValidFlinkType, Schema } from "@/core/schema.js"
 
 describe("Field type builders", () => {
   it("returns primitive types as strings", () => {

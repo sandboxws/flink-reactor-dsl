@@ -1,9 +1,9 @@
 import { describe, expectTypeOf, it } from "vitest"
-import { Pipeline } from "../../components/pipeline.js"
-import { KafkaSource } from "../../components/sources.js"
-import { Filter } from "../../components/transforms.js"
-import { createElement } from "../jsx-runtime.js"
-import type { ConstructNode, TypedConstructNode } from "../types.js"
+import { Pipeline } from "@/components/pipeline.js"
+import { KafkaSource } from "@/components/sources.js"
+import { Filter } from "@/components/transforms.js"
+import { createElement } from "@/core/jsx-runtime.js"
+import type { ConstructNode, TypedConstructNode } from "@/core/types.js"
 
 describe("JSX type safety — positive assertions", () => {
   it("createElement returns ConstructNode", () => {

@@ -8,7 +8,7 @@ import {
   checkProjectConfig,
   checkTypeScriptVersion,
   discoverPipelines,
-} from "../doctor.js"
+} from "@/cli/commands/doctor.js"
 
 describe("doctor checks", () => {
   describe("checkNodeVersion", () => {

@@ -1,4 +1,4 @@
-import type { ScaffoldOptions, TemplateFile } from "../commands/new.js"
+import type { ScaffoldOptions, TemplateFile } from "@/cli/commands/new.js"
 import { sharedFiles } from "./shared.js"
 
 export function getMinimalTemplates(opts: ScaffoldOptions): TemplateFile[] {

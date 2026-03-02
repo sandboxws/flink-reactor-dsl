@@ -1,15 +1,15 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { synth, validate } from "../../testing/index.js"
-import { synthesizeApp } from "../app.js"
-import { defineConfig } from "../config.js"
+import { synthesizeApp } from "@/core/app.js"
+import { defineConfig } from "@/core/config.js"
 import {
   createElement,
   resetComponentKinds,
   resetNodeIdCounter,
-} from "../jsx-runtime.js"
-import type { FlinkReactorPlugin } from "../plugin.js"
-import { Field, Schema } from "../schema.js"
-import type { ConstructNode } from "../types.js"
+} from "@/core/jsx-runtime.js"
+import type { FlinkReactorPlugin } from "@/core/plugin.js"
+import { Field, Schema } from "@/core/schema.js"
+import type { ConstructNode } from "@/core/types.js"
+import { synth, validate } from "@/testing/index.js"
 
 beforeEach(() => {
   resetNodeIdCounter()

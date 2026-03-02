@@ -2,11 +2,8 @@ import {
   type CrdGeneratorOptions,
   type FlinkDeploymentCrd,
   generateCrd,
-} from "../codegen/crd-generator.js"
-import {
-  type GenerateSqlResult,
-  generateSql,
-} from "../codegen/sql-generator.js"
+} from "@/codegen/crd-generator.js"
+import { type GenerateSqlResult, generateSql } from "@/codegen/sql-generator.js"
 import type { FlinkReactorConfig, InfraConfig } from "./config.js"
 import type { EnvironmentConfig } from "./environment.js"
 import { resolveEnvironment } from "./environment.js"

@@ -1,4 +1,4 @@
-import type { FlinkReactorPlugin } from "../core/plugin.js"
+import type { FlinkReactorPlugin } from "@/core/plugin.js"
 
 // ── Reporter configuration types ────────────────────────────────────
 

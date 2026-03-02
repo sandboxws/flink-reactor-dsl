@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { createElement, resetNodeIdCounter } from "../jsx-runtime.js"
-import { SynthContext } from "../synth-context.js"
-import type { ConstructNode } from "../types.js"
+import { createElement, resetNodeIdCounter } from "@/core/jsx-runtime.js"
+import { SynthContext } from "@/core/synth-context.js"
+import type { ConstructNode } from "@/core/types.js"
 
 beforeEach(() => {
   resetNodeIdCounter()

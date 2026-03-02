@@ -1,5 +1,5 @@
-import { createElement, toSqlIdentifier } from "../core/jsx-runtime.js"
-import type { BaseComponentProps, ConstructNode } from "../core/types.js"
+import { createElement, toSqlIdentifier } from "@/core/jsx-runtime.js"
+import type { BaseComponentProps, ConstructNode } from "@/core/types.js"
 import type { CatalogHandle } from "./catalogs.js"
 
 // ── Shared sink types ───────────────────────────────────────────────

@@ -7,7 +7,7 @@ import {
   resolveConnectorArtifacts,
   resolveFormatArtifacts,
   resolveJdbcDialectArtifacts,
-} from "../connector-registry.js"
+} from "@/codegen/connector-registry.js"
 
 // ── Connector Lookup ────────────────────────────────────────────────
 

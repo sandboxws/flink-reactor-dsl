@@ -1,10 +1,10 @@
-import { Pipeline } from "../../components/pipeline"
-import { Route } from "../../components/route"
-import { FileSystemSink } from "../../components/sinks"
-import { GenericSource } from "../../components/sources"
-import { Aggregate, Map } from "../../components/transforms"
-import { createElement } from "../../core/jsx-runtime"
-import { Field, Schema } from "../../core/schema"
+import { Pipeline } from "@/components/pipeline"
+import { Route } from "@/components/route"
+import { FileSystemSink } from "@/components/sinks"
+import { GenericSource } from "@/components/sources"
+import { Aggregate, Map } from "@/components/transforms"
+import { createElement } from "@/core/jsx-runtime"
+import { Field, Schema } from "@/core/schema"
 
 const InteractionSchema = Schema({
   fields: {

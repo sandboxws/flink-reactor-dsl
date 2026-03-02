@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { FlinkVersionCompat } from "../flink-compat.js"
+import { FlinkVersionCompat } from "@/core/flink-compat.js"
 
 describe("FlinkVersionCompat.normalizeConfig", () => {
   it("returns config as-is for Flink 2.0+", () => {

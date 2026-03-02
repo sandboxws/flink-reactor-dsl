@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url"
 import * as clack from "@clack/prompts"
 import type { Command } from "commander"
 import pc from "picocolors"
-import type { CdcDomain } from "../cluster/cdc-publisher.js"
+import type { CdcDomain } from "@/cli/cluster/cdc-publisher.js"
 
 // ── Resource path resolution ─────────────────────────────────────────
 // When bundled by tsup → dist/index.js, __dirname = <root>/dist
@@ -166,7 +166,7 @@ export async function runClusterUp(opts: {
   }
 
   // Wait for services to be healthy
-  const { waitForServices } = await import("../cluster/health-check.js")
+  const { waitForServices } = await import("@/cli/cluster/health-check.js")
   try {
     await waitForServices({
       flinkPort: parseInt(opts.port, 10),
@@ -243,7 +243,7 @@ export async function runClusterSeed(opts: {
 }): Promise<void> {
   clack.intro(pc.bgCyan(pc.black(" flink-reactor cluster seed ")))
 
-  const { isClusterRunning } = await import("../cluster/health-check.js")
+  const { isClusterRunning } = await import("@/cli/cluster/health-check.js")
   if (!(await isClusterRunning(8081))) {
     console.error(pc.red("Cluster is not running."))
     console.error(pc.dim("Start it first: flink-reactor cluster up"))
@@ -259,8 +259,10 @@ async function seedPipelines(opts: {
   only?: "streaming" | "batch" | "cdc"
   domain?: CdcDomain
 }): Promise<void> {
-  const { SqlGatewayClient } = await import("../cluster/sql-gateway-client.js")
-  const { publishCdcMessages } = await import("../cluster/cdc-publisher.js")
+  const { SqlGatewayClient } = await import(
+    "@/cli/cluster/sql-gateway-client.js"
+  )
+  const { publishCdcMessages } = await import("@/cli/cluster/cdc-publisher.js")
 
   const client = new SqlGatewayClient("http://localhost:8083")
   const category = opts.only
@@ -358,7 +360,7 @@ async function seedPipelines(opts: {
 export async function runClusterStatus(
   flinkPort: number = 8081,
 ): Promise<void> {
-  const { isClusterRunning } = await import("../cluster/health-check.js")
+  const { isClusterRunning } = await import("@/cli/cluster/health-check.js")
 
   if (!(await isClusterRunning(flinkPort))) {
     console.log(pc.yellow("Cluster is not reachable."))
@@ -458,7 +460,7 @@ export async function runClusterSubmit(
     return
   }
 
-  const { isClusterRunning } = await import("../cluster/health-check.js")
+  const { isClusterRunning } = await import("@/cli/cluster/health-check.js")
   if (!(await isClusterRunning(8081))) {
     console.error(pc.red("Cluster is not running."))
     console.error(pc.dim("Start it first: flink-reactor cluster up"))
@@ -466,7 +468,9 @@ export async function runClusterSubmit(
     return
   }
 
-  const { SqlGatewayClient } = await import("../cluster/sql-gateway-client.js")
+  const { SqlGatewayClient } = await import(
+    "@/cli/cluster/sql-gateway-client.js"
+  )
   const client = new SqlGatewayClient(`http://localhost:${sqlGatewayPort}`)
 
   const spinner = clack.spinner()

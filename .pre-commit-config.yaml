@@ -1,0 +1,13 @@
+repos:
+  - repo: local
+    hooks:
+      - id: biome-check
+        name: biome check
+        entry: pnpm biome check --no-errors-on-unmatched --files-ignore-unknown=true
+        language: system
+        types_or: [javascript, jsx, ts, tsx, json, css]
+      - id: biome-format
+        name: biome format
+        entry: pnpm biome format --no-errors-on-unmatched --files-ignore-unknown=true
+        language: system
+        types_or: [javascript, jsx, ts, tsx, json, css]

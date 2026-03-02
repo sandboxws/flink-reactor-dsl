@@ -2,13 +2,13 @@ import { existsSync } from "node:fs"
 import { join, resolve } from "node:path"
 import type { Command } from "commander"
 import pc from "picocolors"
+import { loadPipeline } from "@/cli/discovery.js"
 import {
   type IntrospectedColumn,
   type IntrospectedSchema,
   introspectPipelineSchemas,
-} from "../../codegen/schema-introspect.js"
-import type { ConstructNode } from "../../core/types.js"
-import { loadPipeline } from "../discovery.js"
+} from "@/codegen/schema-introspect.js"
+import type { ConstructNode } from "@/core/types.js"
 
 export function registerSchemaCommand(program: Command): void {
   program

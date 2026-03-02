@@ -2,7 +2,10 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import { detectPackageManager, resolvePackageName } from "../upgrade.js"
+import {
+  detectPackageManager,
+  resolvePackageName,
+} from "@/cli/commands/upgrade.js"
 
 describe("upgrade command", () => {
   let tempDir: string

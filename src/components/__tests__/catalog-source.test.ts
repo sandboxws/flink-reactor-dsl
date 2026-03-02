@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { resetNodeIdCounter } from "../../core/jsx-runtime.js"
-import { SynthContext } from "../../core/synth-context.js"
-import { CatalogSource } from "../catalog-source.js"
-import { HiveCatalog, PaimonCatalog } from "../catalogs.js"
-import { PaimonSink } from "../sinks.js"
+import { CatalogSource } from "@/components/catalog-source.js"
+import { HiveCatalog, PaimonCatalog } from "@/components/catalogs.js"
+import { PaimonSink } from "@/components/sinks.js"
+import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
+import { SynthContext } from "@/core/synth-context.js"
 
 beforeEach(() => {
   resetNodeIdCounter()

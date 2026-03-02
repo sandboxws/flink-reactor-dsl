@@ -1,7 +1,7 @@
 import { test } from "vitest"
-import { Pipeline } from "../../components/pipeline.js"
-import { Filter } from "../../components/transforms.js"
-import { createElement } from "../jsx-runtime.js"
+import { Pipeline } from "@/components/pipeline.js"
+import { Filter } from "@/components/transforms.js"
+import { createElement } from "@/core/jsx-runtime.js"
 
 // Intrinsic element rejection — lowercase HTML tags must produce type errors
 

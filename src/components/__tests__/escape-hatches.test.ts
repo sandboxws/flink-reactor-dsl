@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { createElement, resetNodeIdCounter } from "../../core/jsx-runtime.js"
-import { Field, Schema } from "../../core/schema.js"
-import { SynthContext } from "../../core/synth-context.js"
-import { RawSQL, UDF } from "../escape-hatches.js"
+import { RawSQL, UDF } from "@/components/escape-hatches.js"
+import { createElement, resetNodeIdCounter } from "@/core/jsx-runtime.js"
+import { Field, Schema } from "@/core/schema.js"
+import { SynthContext } from "@/core/synth-context.js"
 
 beforeEach(() => {
   resetNodeIdCounter()

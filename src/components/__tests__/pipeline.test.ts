@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { resetNodeIdCounter } from "../../core/jsx-runtime.js"
-import { Field, Schema } from "../../core/schema.js"
-import { SynthContext } from "../../core/synth-context.js"
-import { Pipeline } from "../pipeline.js"
-import { FileSystemSink, JdbcSink, KafkaSink } from "../sinks.js"
-import { KafkaSource } from "../sources.js"
+import { Pipeline } from "@/components/pipeline.js"
+import { FileSystemSink, JdbcSink, KafkaSink } from "@/components/sinks.js"
+import { KafkaSource } from "@/components/sources.js"
+import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
+import { Field, Schema } from "@/core/schema.js"
+import { SynthContext } from "@/core/synth-context.js"
 
 beforeEach(() => {
   resetNodeIdCounter()

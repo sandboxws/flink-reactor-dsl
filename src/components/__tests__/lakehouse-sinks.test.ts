@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { resetNodeIdCounter } from "../../core/jsx-runtime.js"
-import { IcebergCatalog, PaimonCatalog } from "../catalogs.js"
-import { IcebergSink, PaimonSink } from "../sinks.js"
+import { IcebergCatalog, PaimonCatalog } from "@/components/catalogs.js"
+import { IcebergSink, PaimonSink } from "@/components/sinks.js"
+import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
 
 beforeEach(() => {
   resetNodeIdCounter()

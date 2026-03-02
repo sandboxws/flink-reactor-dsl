@@ -1,28 +1,28 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { CatalogSource } from "../../components/catalog-source.js"
-import { PaimonCatalog } from "../../components/catalogs.js"
-import { MatchRecognize } from "../../components/cep.js"
-import { RawSQL, UDF } from "../../components/escape-hatches.js"
-import { IntervalJoin, Join, LookupJoin } from "../../components/joins.js"
-import { LateralJoin } from "../../components/lateral-join.js"
-import { Pipeline } from "../../components/pipeline.js"
-import { Route } from "../../components/route.js"
-import { SideOutput } from "../../components/side-output.js"
-import { JdbcSink, KafkaSink } from "../../components/sinks.js"
-import { KafkaSource } from "../../components/sources.js"
+import { generateSql } from "@/codegen/sql-generator.js"
+import { CatalogSource } from "@/components/catalog-source.js"
+import { PaimonCatalog } from "@/components/catalogs.js"
+import { MatchRecognize } from "@/components/cep.js"
+import { RawSQL, UDF } from "@/components/escape-hatches.js"
+import { IntervalJoin, Join, LookupJoin } from "@/components/joins.js"
+import { LateralJoin } from "@/components/lateral-join.js"
+import { Pipeline } from "@/components/pipeline.js"
+import { Route } from "@/components/route.js"
+import { SideOutput } from "@/components/side-output.js"
+import { JdbcSink, KafkaSink } from "@/components/sinks.js"
+import { KafkaSource } from "@/components/sources.js"
 import {
   Aggregate,
   Deduplicate,
   Filter,
   Map,
   TopN,
-} from "../../components/transforms.js"
-import { Validate } from "../../components/validate.js"
-import { View } from "../../components/view.js"
-import { TumbleWindow } from "../../components/windows.js"
-import { resetNodeIdCounter } from "../../core/jsx-runtime.js"
-import { Field, Schema } from "../../core/schema.js"
-import { generateSql } from "../sql-generator.js"
+} from "@/components/transforms.js"
+import { Validate } from "@/components/validate.js"
+import { View } from "@/components/view.js"
+import { TumbleWindow } from "@/components/windows.js"
+import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
+import { Field, Schema } from "@/core/schema.js"
 
 beforeEach(() => {
   resetNodeIdCounter()

@@ -1,9 +1,9 @@
 import { existsSync, readdirSync, statSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { createJiti } from "jiti"
-import type { FlinkReactorConfig } from "../core/config.js"
-import type { EnvironmentConfig } from "../core/environment.js"
-import type { ConstructNode } from "../core/types.js"
+import type { FlinkReactorConfig } from "@/core/config.js"
+import type { EnvironmentConfig } from "@/core/environment.js"
+import type { ConstructNode } from "@/core/types.js"
 
 // jiti handles .ts/.tsx imports at runtime — automatic JSX transform
 // injects `import { jsx } from 'flink-reactor/jsx-runtime'` automatically

@@ -1,10 +1,10 @@
-import { Pipeline } from "../../components/pipeline"
-import { Route } from "../../components/route"
-import { JdbcSink, KafkaSink } from "../../components/sinks"
-import { KafkaSource } from "../../components/sources"
-import { Aggregate } from "../../components/transforms"
-import { createElement } from "../../core/jsx-runtime"
-import { Field, Schema } from "../../core/schema"
+import { Pipeline } from "@/components/pipeline"
+import { Route } from "@/components/route"
+import { JdbcSink, KafkaSink } from "@/components/sinks"
+import { KafkaSource } from "@/components/sources"
+import { Aggregate } from "@/components/transforms"
+import { createElement } from "@/core/jsx-runtime"
+import { Field, Schema } from "@/core/schema"
 
 const ProductCdcSchema = Schema({
   fields: {

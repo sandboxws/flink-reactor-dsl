@@ -1,4 +1,4 @@
-import type { ConstructNode, FlinkMajorVersion } from "../core/types.js"
+import type { ConstructNode, FlinkMajorVersion } from "@/core/types.js"
 import {
   artifactToJarName,
   artifactToMavenUrl,

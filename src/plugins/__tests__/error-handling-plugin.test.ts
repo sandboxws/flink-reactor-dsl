@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { synthesizeApp } from "../../core/app.js"
+import { synthesizeApp } from "@/core/app.js"
 import {
   createElement,
   resetComponentKinds,
   resetNodeIdCounter,
-} from "../../core/jsx-runtime.js"
-import { Field, Schema } from "../../core/schema.js"
-import type { ConstructNode } from "../../core/types.js"
-import { synth, validate } from "../../testing/index.js"
-import { errorHandlingPlugin } from "../error-handling-plugin.js"
+} from "@/core/jsx-runtime.js"
+import { Field, Schema } from "@/core/schema.js"
+import type { ConstructNode } from "@/core/types.js"
+import { errorHandlingPlugin } from "@/plugins/error-handling-plugin.js"
+import { synth, validate } from "@/testing/index.js"
 
 beforeEach(() => {
   resetNodeIdCounter()

@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { resetNodeIdCounter } from "../../core/jsx-runtime.js"
 import {
   GenericCatalog,
   HiveCatalog,
   IcebergCatalog,
   JdbcCatalog,
   PaimonCatalog,
-} from "../catalogs.js"
+} from "@/components/catalogs.js"
+import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
 
 beforeEach(() => {
   resetNodeIdCounter()

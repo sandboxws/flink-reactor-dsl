@@ -1,4 +1,4 @@
-import type { ScaffoldOptions, TemplateFile } from "../commands/new.js"
+import type { ScaffoldOptions, TemplateFile } from "@/cli/commands/new.js"
 
 export interface SharedFileOptions {
   /** Include @flink-reactor/dashboard dependency and scripts. Default: true */

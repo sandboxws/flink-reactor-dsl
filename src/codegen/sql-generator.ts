@@ -1,8 +1,8 @@
-import { FlinkVersionCompat } from "../core/flink-compat.js"
-import type { PluginDdlGenerator, PluginSqlGenerator } from "../core/plugin.js"
-import type { SchemaDefinition } from "../core/schema.js"
-import { SynthContext } from "../core/synth-context.js"
-import type { ConstructNode, FlinkMajorVersion } from "../core/types.js"
+import { FlinkVersionCompat } from "@/core/flink-compat.js"
+import type { PluginDdlGenerator, PluginSqlGenerator } from "@/core/plugin.js"
+import type { SchemaDefinition } from "@/core/schema.js"
+import { SynthContext } from "@/core/synth-context.js"
+import type { ConstructNode, FlinkMajorVersion } from "@/core/types.js"
 import {
   collectTransformChain,
   findDeepestSource,

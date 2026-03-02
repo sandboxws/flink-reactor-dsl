@@ -1,14 +1,14 @@
-import type { FlinkReactorPlugin } from "../core/plugin.js"
-import { EMPTY_PLUGIN_CHAIN, resolvePlugins } from "../core/plugin-registry.js"
+import type { FlinkReactorPlugin } from "@/core/plugin.js"
+import { EMPTY_PLUGIN_CHAIN, resolvePlugins } from "@/core/plugin-registry.js"
 import {
   SynthContext,
   type ValidationDiagnostic,
-} from "../core/synth-context.js"
-import type { ConstructNode } from "../core/types.js"
+} from "@/core/synth-context.js"
+import type { ConstructNode } from "@/core/types.js"
 
 // ── Diagnostic type (re-export for convenience) ──────────────────────
 
-export type { ValidationDiagnostic as Diagnostic } from "../core/synth-context.js"
+export type { ValidationDiagnostic as Diagnostic } from "@/core/synth-context.js"
 
 // ── validate() test helper ───────────────────────────────────────────
 

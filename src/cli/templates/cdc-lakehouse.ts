@@ -1,4 +1,4 @@
-import type { ScaffoldOptions, TemplateFile } from "../commands/new.js"
+import type { ScaffoldOptions, TemplateFile } from "@/cli/commands/new.js"
 import { sharedFiles } from "./shared.js"
 
 export function getCdcLakehouseTemplates(
@@ -27,7 +27,7 @@ export const OrderSchema = Schema({
     {
       path: "pipelines/cdc-to-lakehouse/index.tsx",
       content: `import { Pipeline, KafkaSource, PaimonCatalog, PaimonSink } from 'flink-reactor';
-import { OrderSchema } from '../../schemas/orders';
+import { OrderSchema } from '@/schemas/orders';
 
 const lakehouse = PaimonCatalog({ name: 'lakehouse', warehouse: 's3://my-bucket/warehouse' });
 

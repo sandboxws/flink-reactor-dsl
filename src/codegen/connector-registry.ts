@@ -1,4 +1,4 @@
-import type { FlinkMajorVersion } from "../core/types.js"
+import type { FlinkMajorVersion } from "@/core/types.js"
 
 // ── Types ───────────────────────────────────────────────────────────
 

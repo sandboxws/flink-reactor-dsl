@@ -1,11 +1,11 @@
 import { expectTypeOf, test } from "vitest"
-import { createElement } from "../../core/jsx-runtime.js"
-import type { ConstructNode, TypedConstructNode } from "../../core/types.js"
-import { Query } from "../query.js"
-import { Route } from "../route.js"
-import { SideOutput } from "../side-output.js"
-import { KafkaSink } from "../sinks.js"
-import { Validate } from "../validate.js"
+import { Query } from "@/components/query.js"
+import { Route } from "@/components/route.js"
+import { SideOutput } from "@/components/side-output.js"
+import { KafkaSink } from "@/components/sinks.js"
+import { Validate } from "@/components/validate.js"
+import { createElement } from "@/core/jsx-runtime.js"
+import type { ConstructNode, TypedConstructNode } from "@/core/types.js"
 
 // ── Route JSX compiles correctly ─────────────────────────────────────
 

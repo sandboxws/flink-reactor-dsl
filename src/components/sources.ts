@@ -1,11 +1,11 @@
-import { createElement, toSqlIdentifier } from "../core/jsx-runtime.js"
-import type { SchemaDefinition, WatermarkDeclaration } from "../core/schema.js"
+import { createElement, toSqlIdentifier } from "@/core/jsx-runtime.js"
+import type { SchemaDefinition, WatermarkDeclaration } from "@/core/schema.js"
 import type {
   BaseComponentProps,
   ChangelogMode,
   ConstructNode,
   FlinkType,
-} from "../core/types.js"
+} from "@/core/types.js"
 
 // ── CDC format → ChangelogMode inference ────────────────────────────
 

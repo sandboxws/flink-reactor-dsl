@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { resetNodeIdCounter } from "../../core/jsx-runtime.js"
-import { FileSystemSink, GenericSink, JdbcSink, KafkaSink } from "../sinks.js"
+import {
+  FileSystemSink,
+  GenericSink,
+  JdbcSink,
+  KafkaSink,
+} from "@/components/sinks.js"
+import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
 
 beforeEach(() => {
   resetNodeIdCounter()

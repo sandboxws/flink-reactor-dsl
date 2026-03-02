@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { resetNodeIdCounter } from "../../core/jsx-runtime.js"
-import { Field, Schema } from "../../core/schema.js"
-import { SynthContext } from "../../core/synth-context.js"
-import { KafkaSink } from "../sinks.js"
-import { KafkaSource } from "../sources.js"
+import { KafkaSink } from "@/components/sinks.js"
+import { KafkaSource } from "@/components/sources.js"
 import {
   Aggregate,
   Deduplicate,
@@ -12,7 +9,10 @@ import {
   Map,
   TopN,
   Union,
-} from "../transforms.js"
+} from "@/components/transforms.js"
+import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
+import { Field, Schema } from "@/core/schema.js"
+import { SynthContext } from "@/core/synth-context.js"
 
 beforeEach(() => {
   resetNodeIdCounter()

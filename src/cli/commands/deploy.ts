@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import type { Command } from "commander"
 import pc from "picocolors"
-import { discoverPipelines } from "../discovery.js"
+import { discoverPipelines } from "@/cli/discovery.js"
 import { runSynth } from "./synth.js"
 
 // ── Command registration ────────────────────────────────────────────

@@ -1,16 +1,16 @@
 import {
   type FlinkDeploymentCrd,
   generateCrd,
-} from "../codegen/crd-generator.js"
-import { generateSql } from "../codegen/sql-generator.js"
+} from "@/codegen/crd-generator.js"
+import { generateSql } from "@/codegen/sql-generator.js"
 import {
   registerComponentKinds,
   resetComponentKinds,
-} from "../core/jsx-runtime.js"
-import type { FlinkReactorPlugin } from "../core/plugin.js"
-import { EMPTY_PLUGIN_CHAIN, resolvePlugins } from "../core/plugin-registry.js"
-import { rekindTree } from "../core/tree-utils.js"
-import type { ConstructNode, FlinkMajorVersion } from "../core/types.js"
+} from "@/core/jsx-runtime.js"
+import type { FlinkReactorPlugin } from "@/core/plugin.js"
+import { EMPTY_PLUGIN_CHAIN, resolvePlugins } from "@/core/plugin-registry.js"
+import { rekindTree } from "@/core/tree-utils.js"
+import type { ConstructNode, FlinkMajorVersion } from "@/core/types.js"
 
 // ── synth() test helper ──────────────────────────────────────────────
 

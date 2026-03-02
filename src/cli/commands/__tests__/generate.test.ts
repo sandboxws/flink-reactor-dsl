@@ -15,7 +15,7 @@ import {
   generatePattern,
   generatePipeline,
   generateSchema,
-} from "../generate.js"
+} from "@/cli/commands/generate.js"
 
 describe("generate commands", () => {
   let tempDir: string

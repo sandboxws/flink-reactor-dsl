@@ -1,6 +1,6 @@
-import type { PipelineProps } from "../components/pipeline.js"
-import { FlinkVersionCompat } from "../core/flink-compat.js"
-import type { ConstructNode, FlinkMajorVersion } from "../core/types.js"
+import type { PipelineProps } from "@/components/pipeline.js"
+import { FlinkVersionCompat } from "@/core/flink-compat.js"
+import type { ConstructNode, FlinkMajorVersion } from "@/core/types.js"
 
 // ── Types ───────────────────────────────────────────────────────────
 

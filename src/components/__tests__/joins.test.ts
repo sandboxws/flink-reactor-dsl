@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { createElement, resetNodeIdCounter } from "../../core/jsx-runtime.js"
-import { SynthContext } from "../../core/synth-context.js"
-import { IntervalJoin, Join, LookupJoin, TemporalJoin } from "../joins.js"
+import {
+  IntervalJoin,
+  Join,
+  LookupJoin,
+  TemporalJoin,
+} from "@/components/joins.js"
+import { createElement, resetNodeIdCounter } from "@/core/jsx-runtime.js"
+import { SynthContext } from "@/core/synth-context.js"
 
 beforeEach(() => {
   resetNodeIdCounter()

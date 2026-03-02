@@ -1,9 +1,9 @@
-import { createElement } from "../core/jsx-runtime.js"
+import { createElement } from "@/core/jsx-runtime.js"
 import type {
   BaseComponentProps,
   ConstructNode,
   TypedConstructNode,
-} from "../core/types.js"
+} from "@/core/types.js"
 
 /** Branded node types for Route's structural children */
 type RouteBranchNode = TypedConstructNode<"Route.Branch">

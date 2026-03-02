@@ -1,10 +1,10 @@
-import { IntervalJoin } from "../../components/joins"
-import { Pipeline } from "../../components/pipeline"
-import { KafkaSink } from "../../components/sinks"
-import { KafkaSource } from "../../components/sources"
-import { Map } from "../../components/transforms"
-import { createElement } from "../../core/jsx-runtime"
-import { Field, Schema } from "../../core/schema"
+import { IntervalJoin } from "@/components/joins"
+import { Pipeline } from "@/components/pipeline"
+import { KafkaSink } from "@/components/sinks"
+import { KafkaSource } from "@/components/sources"
+import { Map } from "@/components/transforms"
+import { createElement } from "@/core/jsx-runtime"
+import { Field, Schema } from "@/core/schema"
 
 const OrderSchema = Schema({
   fields: {

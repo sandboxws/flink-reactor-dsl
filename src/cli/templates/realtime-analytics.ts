@@ -1,4 +1,4 @@
-import type { ScaffoldOptions, TemplateFile } from "../commands/new.js"
+import type { ScaffoldOptions, TemplateFile } from "@/cli/commands/new.js"
 import { sharedFiles } from "./shared.js"
 
 export function getRealtimeAnalyticsTemplates(
@@ -32,7 +32,7 @@ export const PageViewStatsSchema = Schema({
     {
       path: "pipelines/page-view-analytics/index.tsx",
       content: `import { Pipeline, KafkaSource, TumbleWindow, Aggregate, JdbcSink } from 'flink-reactor';
-import { PageViewSchema } from '../../schemas/page-views';
+import { PageViewSchema } from '@/schemas/page-views';
 
 export default (
   <Pipeline name="page-view-analytics">

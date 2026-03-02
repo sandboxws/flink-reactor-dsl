@@ -1,11 +1,11 @@
-import { LookupJoin } from "../../components/joins"
-import { Pipeline } from "../../components/pipeline"
-import { Route } from "../../components/route"
-import { FileSystemSink, KafkaSink } from "../../components/sinks"
-import { KafkaSource } from "../../components/sources"
-import { Filter } from "../../components/transforms"
-import { createElement } from "../../core/jsx-runtime"
-import { Field, Schema } from "../../core/schema"
+import { LookupJoin } from "@/components/joins"
+import { Pipeline } from "@/components/pipeline"
+import { Route } from "@/components/route"
+import { FileSystemSink, KafkaSink } from "@/components/sinks"
+import { KafkaSource } from "@/components/sources"
+import { Filter } from "@/components/transforms"
+import { createElement } from "@/core/jsx-runtime"
+import { Field, Schema } from "@/core/schema"
 
 const EventSchema = Schema({
   fields: {

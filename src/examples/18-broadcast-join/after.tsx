@@ -1,9 +1,9 @@
-import { Join } from "../../components/joins"
-import { Pipeline } from "../../components/pipeline"
-import { KafkaSink } from "../../components/sinks"
-import { JdbcSource, KafkaSource } from "../../components/sources"
-import { createElement } from "../../core/jsx-runtime"
-import { Field, Schema } from "../../core/schema"
+import { Join } from "@/components/joins"
+import { Pipeline } from "@/components/pipeline"
+import { KafkaSink } from "@/components/sinks"
+import { JdbcSource, KafkaSource } from "@/components/sources"
+import { createElement } from "@/core/jsx-runtime"
+import { Field, Schema } from "@/core/schema"
 
 const EventSchema = Schema({
   fields: {

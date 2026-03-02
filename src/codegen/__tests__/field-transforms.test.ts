@@ -1,18 +1,18 @@
 import { beforeEach, describe, expect, it } from "vitest"
+import { introspectPipelineSchemas } from "@/codegen/schema-introspect.js"
+import { generateSql } from "@/codegen/sql-generator.js"
 import {
   AddField,
   Cast,
   Coalesce,
   Drop,
   Rename,
-} from "../../components/field-transforms.js"
-import { Pipeline } from "../../components/pipeline.js"
-import { KafkaSink } from "../../components/sinks.js"
-import { KafkaSource } from "../../components/sources.js"
-import { resetNodeIdCounter } from "../../core/jsx-runtime.js"
-import { Field, Schema } from "../../core/schema.js"
-import { introspectPipelineSchemas } from "../schema-introspect.js"
-import { generateSql } from "../sql-generator.js"
+} from "@/components/field-transforms.js"
+import { Pipeline } from "@/components/pipeline.js"
+import { KafkaSink } from "@/components/sinks.js"
+import { KafkaSource } from "@/components/sources.js"
+import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
+import { Field, Schema } from "@/core/schema.js"
 
 beforeEach(() => {
   resetNodeIdCounter()

@@ -9,11 +9,11 @@ import {
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import { createElement } from "../../../core/jsx-runtime.js"
-import { SynthContext } from "../../../core/synth-context.js"
-import { generateAscii, generateDot } from "../graph.js"
-import { runSynth } from "../synth.js"
-import { runValidate } from "../validate.js"
+import { generateAscii, generateDot } from "@/cli/commands/graph.js"
+import { runSynth } from "@/cli/commands/synth.js"
+import { runValidate } from "@/cli/commands/validate.js"
+import { createElement } from "@/core/jsx-runtime.js"
+import { SynthContext } from "@/core/synth-context.js"
 
 const projectRoot = resolve(__dirname, "../../../../")
 

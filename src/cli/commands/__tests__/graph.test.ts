@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest"
-import { createElement } from "../../../core/jsx-runtime.js"
-import { SynthContext } from "../../../core/synth-context.js"
-import type { ConstructNode } from "../../../core/types.js"
-import { generateAscii, generateDot } from "../graph.js"
+import { generateAscii, generateDot } from "@/cli/commands/graph.js"
+import { createElement } from "@/core/jsx-runtime.js"
+import { SynthContext } from "@/core/synth-context.js"
+import type { ConstructNode } from "@/core/types.js"
 
 function buildGraphData(pipelineNode: ConstructNode) {
   const ctx = new SynthContext()

@@ -1,5 +1,5 @@
-import { createElement } from "../core/jsx-runtime.js"
-import type { BaseComponentProps, ConstructNode } from "../core/types.js"
+import { createElement } from "@/core/jsx-runtime.js"
+import type { BaseComponentProps, ConstructNode } from "@/core/types.js"
 
 // ── View ────────────────────────────────────────────────────────────
 

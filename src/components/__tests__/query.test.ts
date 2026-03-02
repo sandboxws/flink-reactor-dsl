@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { resetNodeIdCounter } from "../../core/jsx-runtime.js"
-import { Field, Schema } from "../../core/schema.js"
-import type { WindowFunctionExpr } from "../query.js"
-import { Query } from "../query.js"
+import type { WindowFunctionExpr } from "@/components/query.js"
+import { Query } from "@/components/query.js"
+import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
+import { Field, Schema } from "@/core/schema.js"
 
 const OutputSchema = Schema({
   fields: {
