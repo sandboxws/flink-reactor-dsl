@@ -39,7 +39,7 @@
     "lint": "tsc --noEmit",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "release": "changeset publish",
+    "release": "changeset publish && node scripts/publish-root.mjs",
     "cluster:up": "flink-reactor cluster up --seed",
     "cluster:down": "flink-reactor cluster down --volumes",
     "dev:dashboard:live": "flink-reactor cluster up --seed && pnpm --filter dashboard dev",
