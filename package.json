@@ -46,6 +46,7 @@
     "cluster:up": "flink-reactor cluster up --seed",
     "cluster:down": "flink-reactor cluster down --volumes",
     "dev:dashboard:live": "flink-reactor cluster up --seed && pnpm --filter dashboard dev",
+    "dev:dashboard:local": "FLINK_REST_URL=http://localhost:8081 pnpm --filter dashboard dev",
     "ui:embed": "pnpm --filter @flink-reactor/ui-embeddings embed",
     "ui:search": "pnpm --filter @flink-reactor/ui-embeddings search",
     "ui:benchmark": "pnpm --filter @flink-reactor/ui-embeddings benchmark",
