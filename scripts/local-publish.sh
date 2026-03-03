@@ -44,12 +44,12 @@ start_verdaccio
 # --- Publish ---
 echo ""
 echo "Publishing flink-reactor..."
-npm publish --registry "$REGISTRY" 2>&1
+npm publish --registry "$REGISTRY" --provenance=false 2>&1
 
 echo ""
 echo "Publishing @flink-reactor/dashboard..."
 cd "$PROJECT_ROOT/apps/dashboard"
-npm publish --registry "$REGISTRY" 2>&1
+npm publish --registry "$REGISTRY" --provenance=false 2>&1
 
 echo ""
 echo "Done! Install packages with:"
