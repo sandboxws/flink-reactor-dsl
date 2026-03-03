@@ -42,7 +42,7 @@ export async function runSynth(opts: {
   const allArtifacts: PipelineArtifact[] = []
 
   for (const discovered of ctx.pipelines) {
-    const pipelineNode = await loadPipeline(discovered.entryPoint)
+    const pipelineNode = await loadPipeline(discovered.entryPoint, projectDir)
 
     const result = synthesizeApp(
       {

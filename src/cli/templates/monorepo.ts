@@ -72,6 +72,10 @@ export function getMonorepoTemplates(opts: ScaffoldOptions): TemplateFile[] {
       resolveJsonModule: true,
       jsx: "react-jsx",
       jsxImportSource: "flink-reactor",
+      baseUrl: ".",
+      paths: {
+        "@/*": ["./*"],
+      },
     },
     include: ["apps/**/*", "packages/**/*"],
   }

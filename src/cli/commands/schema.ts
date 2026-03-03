@@ -36,7 +36,7 @@ export async function runSchema(
 
   let pipelineNode: ConstructNode
   try {
-    pipelineNode = await loadPipeline(filePath)
+    pipelineNode = await loadPipeline(filePath, projectDir)
   } catch (err) {
     console.error(pc.red(`Error loading pipeline: ${(err as Error).message}`))
     process.exitCode = 1

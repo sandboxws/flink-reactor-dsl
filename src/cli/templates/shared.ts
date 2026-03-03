@@ -63,6 +63,10 @@ export function makeTsconfig(_opts: ScaffoldOptions): string {
       resolveJsonModule: true,
       jsx: "react-jsx",
       jsxImportSource: "flink-reactor",
+      baseUrl: ".",
+      paths: {
+        "@/*": ["./*"],
+      },
     },
     include: ["pipelines/**/*", "schemas/**/*", "env/**/*", "patterns/**/*"],
   }

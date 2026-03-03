@@ -61,7 +61,7 @@ export async function runValidate(opts: {
   let hasErrors = false
 
   for (const discovered of projectCtx.pipelines) {
-    const pipelineNode = await loadPipeline(discovered.entryPoint)
+    const pipelineNode = await loadPipeline(discovered.entryPoint, projectDir)
     const result = validatePipeline(pipelineNode, discovered.name, flinkVersion)
     results.push(result)
 

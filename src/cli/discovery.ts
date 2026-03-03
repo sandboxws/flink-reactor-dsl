@@ -1,15 +1,31 @@
 import { existsSync, readdirSync, statSync } from "node:fs"
 import { join, resolve } from "node:path"
+import type { Jiti } from "jiti"
 import { createJiti } from "jiti"
 import type { FlinkReactorConfig } from "@/core/config.js"
 import type { EnvironmentConfig } from "@/core/environment.js"
 import type { ConstructNode } from "@/core/types.js"
 
-// jiti handles .ts/.tsx imports at runtime — automatic JSX transform
-// injects `import { jsx } from 'flink-reactor/jsx-runtime'` automatically
-const jiti = createJiti(import.meta.url, {
-  jsx: { runtime: "automatic", importSource: "flink-reactor" },
-})
+// Cache jiti instances per project directory to avoid re-creation
+const jitiCache = new Map<string, Jiti>()
+
+/**
+ * Create a jiti instance scoped to a project directory.
+ * Configures `@/` path alias to resolve from the project root,
+ * matching the tsconfig.json paths we generate in scaffolded projects.
+ */
+function getJiti(projectDir: string): Jiti {
+  const key = resolve(projectDir)
+  let instance = jitiCache.get(key)
+  if (!instance) {
+    instance = createJiti(import.meta.url, {
+      jsx: { runtime: "automatic", importSource: "flink-reactor" },
+      alias: { "@": key },
+    })
+    jitiCache.set(key, instance)
+  }
+  return instance
+}
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -77,6 +93,7 @@ export async function loadConfig(
     return null
   }
 
+  const jiti = getJiti(projectDir)
   const mod = (await jiti.import(resolve(configPath))) as Record<
     string,
     unknown
@@ -102,6 +119,7 @@ export async function loadEnvironment(
     throw new Error(`Environment file not found: env/${envName}.ts`)
   }
 
+  const jiti = getJiti(projectDir)
   const mod = (await jiti.import(resolve(envPath))) as Record<string, unknown>
   return (mod.default ?? mod) as EnvironmentConfig
 }
@@ -111,8 +129,15 @@ export async function loadEnvironment(
 /**
  * Dynamically import a pipeline entry point and return its construct tree.
  * The pipeline's index.tsx should export a default ConstructNode.
+ *
+ * @param entryPoint - Absolute path to the pipeline's index.tsx
+ * @param projectDir - Project root directory (for resolving `@/` path aliases)
  */
-export async function loadPipeline(entryPoint: string): Promise<ConstructNode> {
+export async function loadPipeline(
+  entryPoint: string,
+  projectDir: string,
+): Promise<ConstructNode> {
+  const jiti = getJiti(projectDir)
   const mod = (await jiti.import(resolve(entryPoint))) as Record<
     string,
     unknown

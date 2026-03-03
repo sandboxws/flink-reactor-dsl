@@ -47,7 +47,7 @@ export async function runGraph(opts: {
   const outputs: string[] = []
 
   for (const discovered of projectCtx.pipelines) {
-    const pipelineNode = await loadPipeline(discovered.entryPoint)
+    const pipelineNode = await loadPipeline(discovered.entryPoint, projectDir)
     const ctx = new SynthContext()
     ctx.buildFromTree(pipelineNode)
 
