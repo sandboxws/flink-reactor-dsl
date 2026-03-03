@@ -3,13 +3,13 @@
  */
 export interface ComponentInfo {
   /** Path relative to packages/ui/src */
-  path: string;
+  path: string
   /** Other components this depends on */
-  deps: string[];
+  deps: string[]
   /** npm peer dependencies required */
-  peerDeps?: string[];
+  peerDeps?: string[]
   /** Description for CLI help */
-  description?: string;
+  description?: string
 }
 
 export const COMPONENT_REGISTRY: Record<string, ComponentInfo> = {
@@ -182,7 +182,7 @@ export const COMPONENT_REGISTRY: Record<string, ComponentInfo> = {
     deps: ["cn"],
     description: "Time range preset selector",
   },
-};
+}
 
 /**
  * Style files to copy
@@ -191,46 +191,46 @@ export const STYLE_FILES = [
   "styles/tokens.css",
   "styles/components.css",
   "styles/index.css",
-];
+]
 
 /**
  * Collect all dependencies for a set of components
  */
 export function collectDependencies(components: string[]): Set<string> {
-  const deps = new Set<string>();
-  const queue = [...components];
+  const deps = new Set<string>()
+  const queue = [...components]
 
   while (queue.length > 0) {
-    const comp = queue.shift()!;
-    if (deps.has(comp)) continue;
+    const comp = queue.shift()!
+    if (deps.has(comp)) continue
 
-    const info = COMPONENT_REGISTRY[comp];
-    if (!info) continue;
+    const info = COMPONENT_REGISTRY[comp]
+    if (!info) continue
 
-    deps.add(comp);
-    queue.push(...info.deps);
+    deps.add(comp)
+    queue.push(...info.deps)
   }
 
-  return deps;
+  return deps
 }
 
 /**
  * Get npm packages required for a set of components
  */
 export function collectPeerDeps(components: string[]): string[] {
-  const peerDeps = new Set<string>();
+  const peerDeps = new Set<string>()
 
   // Always include tailwind-merge for cn utility
-  peerDeps.add("tailwind-merge@^3.0.0");
+  peerDeps.add("tailwind-merge@^3.0.0")
 
   for (const comp of components) {
-    const info = COMPONENT_REGISTRY[comp];
+    const info = COMPONENT_REGISTRY[comp]
     if (info?.peerDeps) {
       for (const dep of info.peerDeps) {
-        peerDeps.add(dep);
+        peerDeps.add(dep)
       }
     }
   }
 
-  return [...peerDeps];
+  return [...peerDeps]
 }

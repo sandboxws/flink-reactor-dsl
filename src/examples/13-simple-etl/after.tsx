@@ -1,9 +1,9 @@
-import { createElement } from '../../core/jsx-runtime';
-import { Schema, Field } from '../../core/schema';
-import { Pipeline } from '../../components/pipeline';
-import { KafkaSource } from '../../components/sources';
-import { GenericSink } from '../../components/sinks';
-import { Filter } from '../../components/transforms';
+import { Pipeline } from "@/components/pipeline"
+import { GenericSink } from "@/components/sinks"
+import { KafkaSource } from "@/components/sources"
+import { Filter } from "@/components/transforms"
+import { createElement } from "@/core/jsx-runtime"
+import { Field, Schema } from "@/core/schema"
 
 const LogSchema = Schema({
   fields: {
@@ -13,7 +13,7 @@ const LogSchema = Schema({
     message: Field.STRING(),
     service_name: Field.STRING(),
   },
-});
+})
 
 export default (
   <Pipeline name="error-log-etl">
@@ -26,9 +26,9 @@ export default (
     <GenericSink
       connector="elasticsearch-7"
       options={{
-        'hosts': 'http://elasticsearch:9200',
-        'index': 'error_logs',
+        hosts: "http://elasticsearch:9200",
+        index: "error_logs",
       }}
     />
   </Pipeline>
-);
+)

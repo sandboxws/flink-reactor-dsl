@@ -1,13 +1,13 @@
-import type { BaseComponentProps, ConstructNode } from '../core/types.js';
-import { createElement } from '../core/jsx-runtime.js';
+import { createElement } from "@/core/jsx-runtime.js"
+import type { BaseComponentProps, ConstructNode } from "@/core/types.js"
 
 // ── View ────────────────────────────────────────────────────────────
 
 export interface ViewProps extends BaseComponentProps {
   /** View name (used as table reference in downstream `from` props) */
-  readonly name: string;
+  readonly name: string
   /** Upstream query that defines the view */
-  readonly children?: ConstructNode | ConstructNode[];
+  readonly children?: ConstructNode | ConstructNode[]
 }
 
 /**
@@ -36,15 +36,12 @@ export interface ViewProps extends BaseComponentProps {
  */
 export function View(props: ViewProps): ConstructNode {
   if (!props.name) {
-    throw new Error('View requires a name');
+    throw new Error("View requires a name")
   }
 
-  const { children, ...rest } = props;
-  const childArray = children == null
-    ? []
-    : Array.isArray(children)
-      ? children
-      : [children];
+  const { children, ...rest } = props
+  const childArray =
+    children == null ? [] : Array.isArray(children) ? children : [children]
 
-  return createElement('View', { ...rest }, ...childArray);
+  return createElement("View", { ...rest }, ...childArray)
 }

@@ -1,62 +1,67 @@
-import { Command } from 'commander';
-import pc from 'picocolors';
-import { existsSync, watch, type FSWatcher } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { execSync, type ChildProcess, spawn } from 'node:child_process';
-import {
-  resolveProjectContext,
-  discoverPipelines,
-} from '../discovery.js';
-import { runSynth } from './synth.js';
-import { runValidate } from './validate.js';
-import { runGraph } from './graph.js';
-import { buildResolvedDashboardJson } from '../../core/config-resolver.js';
-import { writeResolvedDashboardConfig } from '../config-writer.js';
+import { type ChildProcess, execSync, spawn } from "node:child_process"
+import { existsSync, type FSWatcher, watch } from "node:fs"
+import { join, resolve } from "node:path"
+import type { Command } from "commander"
+import pc from "picocolors"
+import { writeResolvedDashboardConfig } from "@/cli/config-writer.js"
+import { discoverPipelines, resolveProjectContext } from "@/cli/discovery.js"
+import { buildResolvedDashboardJson } from "@/core/config-resolver.js"
+import { runGraph } from "./graph.js"
+import { runSynth } from "./synth.js"
+import { runValidate } from "./validate.js"
 
 // ── Command registration ────────────────────────────────────────────
 
 export function registerDevCommand(program: Command): void {
   program
-    .command('dev')
-    .description('Start development mode with file watching')
-    .option('-p, --pipeline <name>', 'Watch a specific pipeline')
-    .option('-e, --env <name>', 'Environment name (default: auto-select)')
-    .option('--no-cluster', 'Skip starting local Flink cluster')
-    .option('--no-dashboard', 'Skip starting FlinkReactor dashboard')
-    .option('--port <port>', 'Flink dashboard port', '8081')
-    .action(async (opts: { pipeline?: string; env?: string; cluster: boolean; dashboard: boolean; port: string }) => {
-      await runDev(opts);
-    });
+    .command("dev")
+    .description("Start development mode with file watching")
+    .option("-p, --pipeline <name>", "Watch a specific pipeline")
+    .option("-e, --env <name>", "Environment name (default: auto-select)")
+    .option("--no-cluster", "Skip starting local Flink cluster")
+    .option("--no-dashboard", "Skip starting FlinkReactor dashboard")
+    .option("--port <port>", "Flink dashboard port", "8081")
+    .action(
+      async (opts: {
+        pipeline?: string
+        env?: string
+        cluster: boolean
+        dashboard: boolean
+        port: string
+      }) => {
+        await runDev(opts)
+      },
+    )
 }
 
 // ── Dev server state ────────────────────────────────────────────────
 
 interface DevState {
-  projectDir: string;
-  pipeline?: string;
-  envName?: string;
-  cluster: boolean;
-  dashboard: boolean;
-  port: string;
-  dashboardPort: string;
-  resolvedDashboardConfigPath: string | null;
-  watchers: FSWatcher[];
-  clusterProcess: ChildProcess | null;
-  dashboardProcess: ChildProcess | null;
-  shuttingDown: boolean;
+  projectDir: string
+  pipeline?: string
+  envName?: string
+  cluster: boolean
+  dashboard: boolean
+  port: string
+  dashboardPort: string
+  resolvedDashboardConfigPath: string | null
+  watchers: FSWatcher[]
+  clusterProcess: ChildProcess | null
+  dashboardProcess: ChildProcess | null
+  shuttingDown: boolean
 }
 
 // ── Dev logic ───────────────────────────────────────────────────────
 
 export async function runDev(opts: {
-  pipeline?: string;
-  env?: string;
-  cluster: boolean;
-  dashboard?: boolean;
-  port: string;
-  projectDir?: string;
+  pipeline?: string
+  env?: string
+  cluster: boolean
+  dashboard?: boolean
+  port: string
+  projectDir?: string
 }): Promise<void> {
-  const projectDir = opts.projectDir ?? process.cwd();
+  const projectDir = opts.projectDir ?? process.cwd()
 
   const state: DevState = {
     projectDir,
@@ -65,57 +70,57 @@ export async function runDev(opts: {
     cluster: opts.cluster,
     dashboard: opts.dashboard !== false,
     port: opts.port,
-    dashboardPort: '3001',
+    dashboardPort: "3001",
     resolvedDashboardConfigPath: null,
     watchers: [],
     clusterProcess: null,
     dashboardProcess: null,
     shuttingDown: false,
-  };
+  }
 
-  console.log(pc.bold('\n  flink-reactor dev\n'));
+  console.log(pc.bold("\n  flink-reactor dev\n"))
 
   // Write resolved dashboard config if environments block exists
-  await writeResolvedConfig(state);
+  await writeResolvedConfig(state)
 
   // Start Flink cluster if requested
   if (state.cluster) {
-    state.clusterProcess = await startCluster(state);
+    state.clusterProcess = await startCluster(state)
   }
 
   // Run initial synthesis
-  console.log(pc.dim('Running initial synthesis...\n'));
+  console.log(pc.dim("Running initial synthesis...\n"))
   await runSynth({
     pipeline: state.pipeline,
     env: state.envName,
-    outdir: 'dist',
+    outdir: "dist",
     projectDir,
-  });
+  })
 
   // Start dashboard if available and not disabled
   if (state.dashboard) {
-    state.dashboardProcess = startDashboard(state);
+    state.dashboardProcess = startDashboard(state)
   }
 
   // Set up file watchers
-  setupWatchers(state);
+  setupWatchers(state)
 
   // Set up keyboard shortcuts
-  setupKeyboard(state);
+  setupKeyboard(state)
 
-  printHelp();
+  printHelp()
 
   // Keep process alive
   await new Promise<void>((resolve) => {
     const check = (): void => {
       if (state.shuttingDown) {
-        resolve();
+        resolve()
       } else {
-        setTimeout(check, 500);
+        setTimeout(check, 500)
       }
-    };
-    check();
-  });
+    }
+    check()
+  })
 }
 
 // ── Resolved config ─────────────────────────────────────────────────
@@ -124,290 +129,318 @@ async function writeResolvedConfig(state: DevState): Promise<void> {
   const ctx = await resolveProjectContext(state.projectDir, {
     pipeline: state.pipeline,
     env: state.envName,
-  });
+  })
 
   if (ctx.resolvedConfig) {
-    const json = buildResolvedDashboardJson(ctx.resolvedConfig);
-    const configPath = writeResolvedDashboardConfig(state.projectDir, json);
-    state.resolvedDashboardConfigPath = configPath;
-    console.log(pc.dim(`  Resolved config: ${configPath}`));
+    const json = buildResolvedDashboardJson(ctx.resolvedConfig)
+    const configPath = writeResolvedDashboardConfig(state.projectDir, json)
+    state.resolvedDashboardConfigPath = configPath
+    console.log(pc.dim(`  Resolved config: ${configPath}`))
     if (ctx.resolvedConfig.environmentName) {
-      console.log(pc.dim(`  Environment: ${ctx.resolvedConfig.environmentName}`));
+      console.log(
+        pc.dim(`  Environment: ${ctx.resolvedConfig.environmentName}`),
+      )
     }
-    console.log('');
+    console.log("")
   }
 }
 
 // ── Docker cluster ──────────────────────────────────────────────────
 
 async function startCluster(state: DevState): Promise<ChildProcess | null> {
-  const composePath = join(state.projectDir, 'docker-compose.flink.yml');
+  const composePath = join(state.projectDir, "docker-compose.flink.yml")
 
   if (!existsSync(composePath)) {
-    console.log(pc.yellow('No docker-compose.flink.yml found. Skipping cluster start.'));
-    console.log(pc.dim('Create one or use --no-cluster to skip.\n'));
-    return null;
+    console.log(
+      pc.yellow("No docker-compose.flink.yml found. Skipping cluster start."),
+    )
+    console.log(pc.dim("Create one or use --no-cluster to skip.\n"))
+    return null
   }
 
-  console.log(pc.dim(`Starting Flink cluster on port ${state.port}...`));
+  console.log(pc.dim(`Starting Flink cluster on port ${state.port}...`))
 
   try {
-    const child = spawn('docker', ['compose', '-f', composePath, 'up', '-d'], {
+    const child = spawn("docker", ["compose", "-f", composePath, "up", "-d"], {
       cwd: state.projectDir,
-      stdio: 'pipe',
+      stdio: "pipe",
       env: { ...process.env, FLINK_PORT: state.port },
-    });
+    })
 
-    child.on('error', () => {
-      console.log(pc.yellow('Docker not available. Skipping cluster start.'));
-    });
+    child.on("error", () => {
+      console.log(pc.yellow("Docker not available. Skipping cluster start."))
+    })
 
     // Wait briefly for startup
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    console.log(pc.green(`Flink dashboard: http://localhost:${state.port}\n`));
-    return child;
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+    console.log(pc.green(`Flink dashboard: http://localhost:${state.port}\n`))
+    return child
   } catch {
-    console.log(pc.yellow('Failed to start Flink cluster. Continuing without it.'));
-    return null;
+    console.log(
+      pc.yellow("Failed to start Flink cluster. Continuing without it."),
+    )
+    return null
   }
 }
 
 // ── Dashboard ────────────────────────────────────────────────────────
 
 function isDashboardInstalled(projectDir: string): boolean {
-  return existsSync(join(projectDir, 'node_modules', '.bin', 'flink-reactor-dashboard'));
+  return existsSync(
+    join(projectDir, "node_modules", ".bin", "flink-reactor-dashboard"),
+  )
 }
 
 function startDashboard(state: DevState): ChildProcess | null {
   if (!isDashboardInstalled(state.projectDir)) {
-    return null;
+    return null
   }
 
-  const args = ['start', '--port', state.dashboardPort];
-  const dashEnv: Record<string, string | undefined> = { ...process.env };
+  const args = ["start", "--port", state.dashboardPort]
+  const dashEnv: Record<string, string | undefined> = { ...process.env }
 
   // Pass resolved config path to dashboard
   if (state.resolvedDashboardConfigPath) {
-    dashEnv['FLINK_REACTOR_CONFIG'] = resolve(state.resolvedDashboardConfigPath);
+    dashEnv.FLINK_REACTOR_CONFIG = resolve(state.resolvedDashboardConfigPath)
   }
 
   // If no Flink cluster is running, use mock mode
   if (!state.clusterProcess) {
-    args.push('--mock');
+    args.push("--mock")
   } else {
-    dashEnv['FLINK_REST_URL'] = `http://localhost:${state.port}`;
+    dashEnv.FLINK_REST_URL = `http://localhost:${state.port}`
   }
 
   try {
     const child = spawn(
-      join(state.projectDir, 'node_modules', '.bin', 'flink-reactor-dashboard'),
+      join(state.projectDir, "node_modules", ".bin", "flink-reactor-dashboard"),
       args,
-      { cwd: state.projectDir, stdio: 'pipe', env: dashEnv },
-    );
+      { cwd: state.projectDir, stdio: "pipe", env: dashEnv },
+    )
 
-    child.on('error', () => {
+    child.on("error", () => {
       // Dashboard failed to start — non-fatal
-    });
+    })
 
-    console.log(pc.green(`  FlinkReactor Dashboard: http://localhost:${state.dashboardPort}`));
+    console.log(
+      pc.green(
+        `  FlinkReactor Dashboard: http://localhost:${state.dashboardPort}`,
+      ),
+    )
     if (!state.clusterProcess) {
-      console.log(pc.dim('  (running in mock mode — no Flink cluster detected)'));
+      console.log(
+        pc.dim("  (running in mock mode — no Flink cluster detected)"),
+      )
     }
-    console.log('');
+    console.log("")
 
-    return child;
+    return child
   } catch {
-    return null;
+    return null
   }
 }
 
 // ── File watchers ───────────────────────────────────────────────────
 
 function setupWatchers(state: DevState): void {
-  const dirs = ['pipelines', 'schemas', 'patterns'];
+  const dirs = ["pipelines", "schemas", "patterns"]
 
   for (const dir of dirs) {
-    const watchDir = join(state.projectDir, dir);
-    if (!existsSync(watchDir)) continue;
+    const watchDir = join(state.projectDir, dir)
+    if (!existsSync(watchDir)) continue
 
     try {
-      const watcher = watch(watchDir, { recursive: true }, (event, filename) => {
-        if (state.shuttingDown) return;
-        if (!filename) return;
+      const watcher = watch(
+        watchDir,
+        { recursive: true },
+        (_event, filename) => {
+          if (state.shuttingDown) return
+          if (!filename) return
 
-        console.log(pc.dim(`\n[${new Date().toLocaleTimeString()}] Change detected: ${dir}/${filename}`));
-        onFileChange(state);
-      });
+          console.log(
+            pc.dim(
+              `\n[${new Date().toLocaleTimeString()}] Change detected: ${dir}/${filename}`,
+            ),
+          )
+          onFileChange(state)
+        },
+      )
 
-      state.watchers.push(watcher);
-      console.log(pc.dim(`  Watching ${dir}/`));
+      state.watchers.push(watcher)
+      console.log(pc.dim(`  Watching ${dir}/`))
     } catch {
       // Directory might not exist or watch not supported
     }
   }
 
-  console.log('');
+  console.log("")
 }
 
-let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
 function onFileChange(state: DevState): void {
-  if (debounceTimer) clearTimeout(debounceTimer);
+  if (debounceTimer) clearTimeout(debounceTimer)
 
   debounceTimer = setTimeout(async () => {
-    console.log(pc.dim('Re-synthesizing...\n'));
+    console.log(pc.dim("Re-synthesizing...\n"))
     // Re-write resolved dashboard config on file changes
-    await writeResolvedConfig(state);
+    await writeResolvedConfig(state)
     await runSynth({
       pipeline: state.pipeline,
       env: state.envName,
-      outdir: 'dist',
+      outdir: "dist",
       projectDir: state.projectDir,
-    });
-  }, 300);
+    })
+  }, 300)
 }
 
 // ── Keyboard shortcuts ──────────────────────────────────────────────
 
 function setupKeyboard(state: DevState): void {
-  if (!process.stdin.isTTY) return;
+  if (!process.stdin.isTTY) return
 
-  process.stdin.setRawMode(true);
-  process.stdin.resume();
-  process.stdin.setEncoding('utf-8');
+  process.stdin.setRawMode(true)
+  process.stdin.resume()
+  process.stdin.setEncoding("utf-8")
 
-  process.stdin.on('data', async (key: string) => {
-    if (state.shuttingDown) return;
+  process.stdin.on("data", async (key: string) => {
+    if (state.shuttingDown) return
 
     switch (key) {
-      case 'r':
-        console.log(pc.dim('\n[manual] Re-synthesizing...\n'));
+      case "r":
+        console.log(pc.dim("\n[manual] Re-synthesizing...\n"))
         await runSynth({
           pipeline: state.pipeline,
-          outdir: 'dist',
+          outdir: "dist",
           projectDir: state.projectDir,
-        });
-        break;
+        })
+        break
 
-      case 'v':
-        console.log(pc.dim('\n[manual] Validating...\n'));
+      case "v":
+        console.log(pc.dim("\n[manual] Validating...\n"))
         await runValidate({
           pipeline: state.pipeline,
           projectDir: state.projectDir,
-        });
-        break;
+        })
+        break
 
-      case 'g':
-        console.log(pc.dim('\n[manual] Generating graph...\n'));
+      case "g":
+        console.log(pc.dim("\n[manual] Generating graph...\n"))
         await runGraph({
           pipeline: state.pipeline,
-          format: 'ascii',
+          format: "ascii",
           projectDir: state.projectDir,
-        });
-        break;
+        })
+        break
 
-      case 'o':
+      case "o":
         openUrl(
           state.dashboardProcess
             ? `http://localhost:${state.dashboardPort}`
             : null,
-          'FlinkReactor Dashboard',
-          'Install @flink-reactor/dashboard to use the dashboard.',
-        );
-        break;
+          "FlinkReactor Dashboard",
+          "Install @flink-reactor/dashboard to use the dashboard.",
+        )
+        break
 
-      case 'f':
-        openUrl(`http://localhost:${state.port}`, 'Flink UI');
-        break;
+      case "f":
+        openUrl(`http://localhost:${state.port}`, "Flink UI")
+        break
 
-      case 's':
-        await showSqlPreview(state);
-        break;
+      case "s":
+        await showSqlPreview(state)
+        break
 
-      case 'q':
-      case '\u0003': // Ctrl+C
-        await shutdown(state);
-        break;
+      case "q":
+      case "\u0003": // Ctrl+C
+        await shutdown(state)
+        break
 
-      case 'h':
-      case '?':
-        printHelp();
-        break;
+      case "h":
+      case "?":
+        printHelp()
+        break
     }
-  });
+  })
 }
 
 function printHelp(): void {
-  console.log(pc.dim('  Keyboard shortcuts:'));
-  console.log(pc.dim('    r  re-synthesize'));
-  console.log(pc.dim('    v  validate'));
-  console.log(pc.dim('    g  show graph'));
-  console.log(pc.dim('    o  open FlinkReactor dashboard'));
-  console.log(pc.dim('    f  open Flink UI'));
-  console.log(pc.dim('    s  SQL preview'));
-  console.log(pc.dim('    q  quit'));
-  console.log('');
+  console.log(pc.dim("  Keyboard shortcuts:"))
+  console.log(pc.dim("    r  re-synthesize"))
+  console.log(pc.dim("    v  validate"))
+  console.log(pc.dim("    g  show graph"))
+  console.log(pc.dim("    o  open FlinkReactor dashboard"))
+  console.log(pc.dim("    f  open Flink UI"))
+  console.log(pc.dim("    s  SQL preview"))
+  console.log(pc.dim("    q  quit"))
+  console.log("")
 }
 
 function openUrl(url: string | null, label: string, hint?: string): void {
   if (!url) {
-    if (hint) console.log(pc.yellow(`\n${hint}`));
-    return;
+    if (hint) console.log(pc.yellow(`\n${hint}`))
+    return
   }
 
-  console.log(pc.dim(`\nOpening ${label} (${url})...`));
+  console.log(pc.dim(`\nOpening ${label} (${url})...`))
 
   try {
-    const platform = process.platform;
-    const cmd = platform === 'darwin' ? 'open' :
-      platform === 'win32' ? 'start' : 'xdg-open';
-    execSync(`${cmd} ${url}`, { stdio: 'ignore' });
+    const platform = process.platform
+    const cmd =
+      platform === "darwin"
+        ? "open"
+        : platform === "win32"
+          ? "start"
+          : "xdg-open"
+    execSync(`${cmd} ${url}`, { stdio: "ignore" })
   } catch {
-    console.log(pc.dim(`Open manually: ${url}`));
+    console.log(pc.dim(`Open manually: ${url}`))
   }
 }
 
 async function showSqlPreview(state: DevState): Promise<void> {
-  const { readFileSync } = await import('node:fs');
-  const pipelines = discoverPipelines(state.projectDir, state.pipeline);
+  const { readFileSync } = await import("node:fs")
+  const pipelines = discoverPipelines(state.projectDir, state.pipeline)
 
   for (const p of pipelines) {
-    const sqlPath = join(state.projectDir, 'dist', p.name, 'pipeline.sql');
+    const sqlPath = join(state.projectDir, "dist", p.name, "pipeline.sql")
     if (!existsSync(sqlPath)) {
-      console.log(pc.yellow(`\nNo synthesized SQL for ${p.name}. Run synth first.`));
-      continue;
+      console.log(
+        pc.yellow(`\nNo synthesized SQL for ${p.name}. Run synth first.`),
+      )
+      continue
     }
 
-    const sql = readFileSync(sqlPath, 'utf-8');
-    console.log(`\n${pc.bold(p.name)} ${pc.dim('─'.repeat(30))}`);
-    console.log(sql);
+    const sql = readFileSync(sqlPath, "utf-8")
+    console.log(`\n${pc.bold(p.name)} ${pc.dim("─".repeat(30))}`)
+    console.log(sql)
   }
 }
 
 // ── Shutdown ────────────────────────────────────────────────────────
 
 async function shutdown(state: DevState): Promise<void> {
-  state.shuttingDown = true;
-  console.log(pc.dim('\nShutting down...'));
+  state.shuttingDown = true
+  console.log(pc.dim("\nShutting down..."))
 
   // Close file watchers
   for (const watcher of state.watchers) {
-    watcher.close();
+    watcher.close()
   }
 
   // Stop dashboard
   if (state.dashboardProcess) {
-    state.dashboardProcess.kill('SIGTERM');
+    state.dashboardProcess.kill("SIGTERM")
   }
 
   // Stop cluster
   if (state.clusterProcess) {
-    const composePath = join(state.projectDir, 'docker-compose.flink.yml');
+    const composePath = join(state.projectDir, "docker-compose.flink.yml")
     try {
       execSync(`docker compose -f "${composePath}" down`, {
         cwd: state.projectDir,
-        stdio: 'pipe',
-      });
+        stdio: "pipe",
+      })
     } catch {
       // Best-effort cleanup
     }
@@ -415,8 +448,8 @@ async function shutdown(state: DevState): Promise<void> {
 
   // Restore terminal
   if (process.stdin.isTTY) {
-    process.stdin.setRawMode(false);
+    process.stdin.setRawMode(false)
   }
 
-  process.exit(0);
+  process.exit(0)
 }

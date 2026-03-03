@@ -1,43 +1,50 @@
-import type { BaseComponentProps, ConstructNode, TypedConstructNode } from '../core/types.js';
-import type { SchemaDefinition } from '../core/schema.js';
-import { createElement } from '../core/jsx-runtime.js';
+import { createElement } from "@/core/jsx-runtime.js"
+import type { SchemaDefinition } from "@/core/schema.js"
+import type {
+  BaseComponentProps,
+  ConstructNode,
+  TypedConstructNode,
+} from "@/core/types.js"
 
 // ── Validate.Reject ─────────────────────────────────────────────────
 
 export interface ValidateRejectProps extends BaseComponentProps {
-  readonly children?: ConstructNode | ConstructNode[];
+  readonly children?: ConstructNode | ConstructNode[]
 }
 
-function ValidateReject(props: ValidateRejectProps): TypedConstructNode<'Validate.Reject'> {
-  const { children, ...rest } = props;
-  const childArray = children == null
-    ? []
-    : Array.isArray(children)
-      ? children
-      : [children];
+function ValidateReject(
+  props: ValidateRejectProps,
+): TypedConstructNode<"Validate.Reject"> {
+  const { children, ...rest } = props
+  const childArray =
+    children == null ? [] : Array.isArray(children) ? children : [children]
 
-  return createElement('Validate.Reject', { ...rest }, ...childArray) as TypedConstructNode<'Validate.Reject'>;
+  return createElement(
+    "Validate.Reject",
+    { ...rest },
+    ...childArray,
+  ) as TypedConstructNode<"Validate.Reject">
 }
 
 // ── Validation rules ────────────────────────────────────────────────
 
 export interface ValidationRules {
   /** Columns that must not be NULL */
-  readonly notNull?: readonly string[];
+  readonly notNull?: readonly string[]
   /** Column → [min, max] inclusive bounds */
-  readonly range?: Record<string, readonly [number, number]>;
+  readonly range?: Record<string, readonly [number, number]>
   /** Named rule → SQL boolean expression */
-  readonly expression?: Record<string, string>;
+  readonly expression?: Record<string, string>
 }
 
 // ── Validate ────────────────────────────────────────────────────────
 
 export interface ValidateProps extends BaseComponentProps {
   /** Validation rules — notNull, range, and/or expression */
-  readonly rules: ValidationRules;
+  readonly rules: ValidationRules
   /** Schema of valid output */
-  readonly outputSchema?: SchemaDefinition;
-  readonly children?: ConstructNode | ConstructNode[];
+  readonly outputSchema?: SchemaDefinition
+  readonly children?: ConstructNode | ConstructNode[]
 }
 
 /**
@@ -56,35 +63,30 @@ export interface ValidateProps extends BaseComponentProps {
  */
 function ValidateFactory(props: ValidateProps): ConstructNode {
   if (!props.rules) {
-    throw new Error('Validate requires rules');
+    throw new Error("Validate requires rules")
   }
 
-  const { rules, children, ...rest } = props;
+  const { rules, children, ...rest } = props
 
   const hasAnyRule =
     (rules.notNull && rules.notNull.length > 0) ||
     (rules.range && Object.keys(rules.range).length > 0) ||
-    (rules.expression && Object.keys(rules.expression).length > 0);
+    (rules.expression && Object.keys(rules.expression).length > 0)
 
   if (!hasAnyRule) {
-    throw new Error('Validate requires at least one validation rule');
+    throw new Error("Validate requires at least one validation rule")
   }
 
-  const childArray = children == null
-    ? []
-    : Array.isArray(children)
-      ? children
-      : [children];
+  const childArray =
+    children == null ? [] : Array.isArray(children) ? children : [children]
 
-  const hasReject = childArray.some(
-    (c) => c.component === 'Validate.Reject',
-  );
+  const hasReject = childArray.some((c) => c.component === "Validate.Reject")
 
   if (!hasReject) {
-    throw new Error('Validate requires a Validate.Reject child');
+    throw new Error("Validate requires a Validate.Reject child")
   }
 
-  return createElement('Validate', { rules, ...rest }, ...childArray);
+  return createElement("Validate", { rules, ...rest }, ...childArray)
 }
 
 /**
@@ -107,7 +109,7 @@ function ValidateFactory(props: ValidateProps): ConstructNode {
  * ```
  */
 export const Validate: typeof ValidateFactory & {
-  Reject: typeof ValidateReject;
+  Reject: typeof ValidateReject
 } = Object.assign(ValidateFactory, {
   Reject: ValidateReject,
-});
+})

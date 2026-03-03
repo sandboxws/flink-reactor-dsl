@@ -1,30 +1,34 @@
-import type { BaseComponentProps, ConstructNode, TapConfig } from '../core/types.js';
-import { createElement } from '../core/jsx-runtime.js';
+import { createElement } from "@/core/jsx-runtime.js"
+import type {
+  BaseComponentProps,
+  ConstructNode,
+  TapConfig,
+} from "@/core/types.js"
 
 // ── Regular Join ────────────────────────────────────────────────────
 
-export type JoinType = 'inner' | 'left' | 'right' | 'full' | 'anti' | 'semi';
+export type JoinType = "inner" | "left" | "right" | "full" | "anti" | "semi"
 
 export interface JoinHints {
-  readonly broadcast?: 'left' | 'right';
+  readonly broadcast?: "left" | "right"
 }
 
 export interface JoinProps extends BaseComponentProps {
   /** Left input stream (construct node) */
-  readonly left: ConstructNode;
+  readonly left: ConstructNode
   /** Right input stream (construct node) */
-  readonly right: ConstructNode;
+  readonly right: ConstructNode
   /** SQL join condition (e.g. "a.user_id = b.user_id") */
-  readonly on: string;
+  readonly on: string
   /** Join type (default: 'inner') */
-  readonly type?: JoinType;
+  readonly type?: JoinType
   /** Query hints for join optimization */
-  readonly hints?: JoinHints;
+  readonly hints?: JoinHints
   /** State TTL for join state expiry (e.g. '1h', '30min') */
-  readonly stateTtl?: string;
+  readonly stateTtl?: string
   /** Enable operator tailing for this join */
-  readonly tap?: boolean | TapConfig;
-  readonly children?: ConstructNode | ConstructNode[];
+  readonly tap?: boolean | TapConfig
+  readonly children?: ConstructNode | ConstructNode[]
 }
 
 /**
@@ -36,41 +40,38 @@ export interface JoinProps extends BaseComponentProps {
  */
 export function Join(props: JoinProps): ConstructNode {
   if (!props.left || !props.right) {
-    throw new Error('Join requires both left and right inputs');
+    throw new Error("Join requires both left and right inputs")
   }
 
-  const { children, left, right, ...rest } = props;
-  const childArray = children == null
-    ? []
-    : Array.isArray(children)
-      ? children
-      : [children];
+  const { children, left, right, ...rest } = props
+  const childArray =
+    children == null ? [] : Array.isArray(children) ? children : [children]
 
   // Attach left and right as children for DAG edge creation,
   // followed by any downstream children
   return createElement(
-    'Join',
+    "Join",
     { ...rest, left: left.id, right: right.id },
     left,
     right,
     ...childArray,
-  );
+  )
 }
 
 // ── Temporal Join ───────────────────────────────────────────────────
 
 export interface TemporalJoinProps extends BaseComponentProps {
   /** The driving stream */
-  readonly stream: ConstructNode;
+  readonly stream: ConstructNode
   /** The versioned table stream */
-  readonly temporal: ConstructNode;
+  readonly temporal: ConstructNode
   /** SQL join condition */
-  readonly on: string;
+  readonly on: string
   /** Time attribute column for FOR SYSTEM_TIME AS OF */
-  readonly asOf: string;
+  readonly asOf: string
   /** Enable operator tailing for this join */
-  readonly tap?: boolean | TapConfig;
-  readonly children?: ConstructNode | ConstructNode[];
+  readonly tap?: boolean | TapConfig
+  readonly children?: ConstructNode | ConstructNode[]
 }
 
 /**
@@ -78,54 +79,51 @@ export interface TemporalJoinProps extends BaseComponentProps {
  * using point-in-time lookup (FOR SYSTEM_TIME AS OF).
  */
 export function TemporalJoin(props: TemporalJoinProps): ConstructNode {
-  const { children, stream, temporal, ...rest } = props;
-  const childArray = children == null
-    ? []
-    : Array.isArray(children)
-      ? children
-      : [children];
+  const { children, stream, temporal, ...rest } = props
+  const childArray =
+    children == null ? [] : Array.isArray(children) ? children : [children]
 
   return createElement(
-    'TemporalJoin',
+    "TemporalJoin",
     { ...rest, stream: stream.id, temporal: temporal.id },
     stream,
     temporal,
     ...childArray,
-  );
+  )
 }
 
 // ── Lookup Join ─────────────────────────────────────────────────────
 
 export interface LookupAsyncConfig {
-  readonly enabled: boolean;
-  readonly capacity?: number;
-  readonly timeout?: string;
+  readonly enabled: boolean
+  readonly capacity?: number
+  readonly timeout?: string
 }
 
 export interface LookupCacheConfig {
-  readonly type: 'lru';
-  readonly maxRows: number;
-  readonly ttl: string;
+  readonly type: "lru"
+  readonly maxRows: number
+  readonly ttl: string
 }
 
 export interface LookupJoinProps extends BaseComponentProps {
   /** The driving input stream */
-  readonly input: ConstructNode;
+  readonly input: ConstructNode
   /** Dimension table name */
-  readonly table: string;
+  readonly table: string
   /** JDBC connection URL for the dimension table */
-  readonly url: string;
+  readonly url: string
   /** SQL join condition */
-  readonly on: string;
+  readonly on: string
   /** Output field mapping */
-  readonly select?: Record<string, string>;
+  readonly select?: Record<string, string>
   /** Async lookup configuration */
-  readonly async?: LookupAsyncConfig;
+  readonly async?: LookupAsyncConfig
   /** Lookup cache configuration */
-  readonly cache?: LookupCacheConfig;
+  readonly cache?: LookupCacheConfig
   /** Enable operator tailing for this join */
-  readonly tap?: boolean | TapConfig;
-  readonly children?: ConstructNode | ConstructNode[];
+  readonly tap?: boolean | TapConfig
+  readonly children?: ConstructNode | ConstructNode[]
 }
 
 /**
@@ -135,44 +133,41 @@ export interface LookupJoinProps extends BaseComponentProps {
  * for the FOR SYSTEM_TIME AS OF proc_time clause.
  */
 export function LookupJoin(props: LookupJoinProps): ConstructNode {
-  const { children, input, ...rest } = props;
-  const childArray = children == null
-    ? []
-    : Array.isArray(children)
-      ? children
-      : [children];
+  const { children, input, ...rest } = props
+  const childArray =
+    children == null ? [] : Array.isArray(children) ? children : [children]
 
   return createElement(
-    'LookupJoin',
+    "LookupJoin",
     { ...rest, input: input.id, procTime: true },
     input,
     ...childArray,
-  );
+  )
 }
 
 // ── Interval Join ───────────────────────────────────────────────────
 
 export interface IntervalBounds {
   /** Lower bound expression (e.g. "order_time") */
-  readonly from: string;
+  readonly from: string
   /** Upper bound expression (e.g. "order_time + INTERVAL '7' DAY") */
-  readonly to: string;
+  readonly to: string
 }
 
 export interface IntervalJoinProps extends BaseComponentProps {
   /** Left input stream */
-  readonly left: ConstructNode;
+  readonly left: ConstructNode
   /** Right input stream */
-  readonly right: ConstructNode;
+  readonly right: ConstructNode
   /** SQL join condition */
-  readonly on: string;
+  readonly on: string
   /** Time interval bounds for the join window */
-  readonly interval: IntervalBounds;
+  readonly interval: IntervalBounds
   /** Join type (default: 'inner') */
-  readonly type?: 'inner' | 'left' | 'right' | 'full';
+  readonly type?: "inner" | "left" | "right" | "full"
   /** Enable operator tailing for this join */
-  readonly tap?: boolean | TapConfig;
-  readonly children?: ConstructNode | ConstructNode[];
+  readonly tap?: boolean | TapConfig
+  readonly children?: ConstructNode | ConstructNode[]
 }
 
 /**
@@ -182,18 +177,15 @@ export interface IntervalJoinProps extends BaseComponentProps {
  * the specified interval bounds (BETWEEN ... AND ...).
  */
 export function IntervalJoin(props: IntervalJoinProps): ConstructNode {
-  const { children, left, right, ...rest } = props;
-  const childArray = children == null
-    ? []
-    : Array.isArray(children)
-      ? children
-      : [children];
+  const { children, left, right, ...rest } = props
+  const childArray =
+    children == null ? [] : Array.isArray(children) ? children : [children]
 
   return createElement(
-    'IntervalJoin',
+    "IntervalJoin",
     { ...rest, left: left.id, right: right.id },
     left,
     right,
     ...childArray,
-  );
+  )
 }

@@ -1,10 +1,10 @@
-import { createElement } from '../../core/jsx-runtime';
-import { Schema, Field } from '../../core/schema';
-import { Pipeline } from '../../components/pipeline';
-import { KafkaSource } from '../../components/sources';
-import { KafkaSink } from '../../components/sinks';
-import { Aggregate, Filter } from '../../components/transforms';
-import { TumbleWindow } from '../../components/windows';
+import { Pipeline } from "@/components/pipeline"
+import { KafkaSink } from "@/components/sinks"
+import { KafkaSource } from "@/components/sources"
+import { Aggregate, Filter } from "@/components/transforms"
+import { TumbleWindow } from "@/components/windows"
+import { createElement } from "@/core/jsx-runtime"
+import { Field, Schema } from "@/core/schema"
 
 const ClickstreamSchema = Schema({
   fields: {
@@ -14,10 +14,10 @@ const ClickstreamSchema = Schema({
     event_time: Field.TIMESTAMP(3),
   },
   watermark: {
-    column: 'event_time',
+    column: "event_time",
     expression: "event_time - INTERVAL '10' SECOND",
   },
-});
+})
 
 export default (
   <Pipeline name="active-users-per-minute" parallelism={12}>
@@ -28,15 +28,15 @@ export default (
     />
     <TumbleWindow size="1 minute" on="event_time">
       <Aggregate
-        groupBy={['user_id']}
+        groupBy={["user_id"]}
         select={{
-          user_id: 'user_id',
-          page_views: 'COUNT(*)',
-          unique_pages: 'COUNT(DISTINCT page_url)',
+          user_id: "user_id",
+          page_views: "COUNT(*)",
+          unique_pages: "COUNT(DISTINCT page_url)",
         }}
       />
     </TumbleWindow>
     <Filter condition="page_views > 5" />
     <KafkaSink topic="active_users_per_minute" />
   </Pipeline>
-);
+)

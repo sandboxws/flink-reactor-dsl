@@ -1,0 +1,99 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.3.14/schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": {
+    "ignoreUnknown": true,
+    "includes": [
+      "**",
+      "!node_modules",
+      "!.next",
+      "!dist",
+      "!build",
+      "!.source",
+      "!**/.embeddings"
+    ]
+  },
+  "css": { "parser": { "tailwindDirectives": true } },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineEnding": "lf"
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "jsxQuoteStyle": "double",
+      "semicolons": "asNeeded",
+      "trailingCommas": "all"
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "correctness": {
+        "noUnusedImports": "error",
+        "noUnusedVariables": "warn"
+      },
+      "style": {
+        "noUselessElse": "error",
+        "useConsistentArrayType": "error",
+        "noDefaultExport": "error",
+        "noNonNullAssertion": "warn"
+      },
+      "a11y": {
+        "useButtonType": "warn",
+        "noSvgWithoutTitle": "warn",
+        "useSemanticElements": "warn",
+        "noLabelWithoutControl": "warn",
+        "noStaticElementInteractions": "warn",
+        "useKeyWithClickEvents": "warn"
+      },
+      "security": {
+        "noDangerouslySetInnerHtml": "warn"
+      },
+      "suspicious": {
+        "noConsole": "error",
+        "noConfusingVoidType": "off",
+        "noShadowRestrictedNames": "warn",
+        "noAssignInExpressions": "warn",
+        "noArrayIndexKey": "warn"
+      }
+    }
+  },
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
+  "overrides": [
+    {
+      "includes": [
+        "src/cli/**",
+        "packages/create-fr-app/src/**",
+        "tools/**/src/**",
+        "scripts/**"
+      ],
+      "linter": { "rules": { "suspicious": { "noConsole": "off" } } }
+    },
+    {
+      "includes": [
+        "src/examples/**",
+        "pipelines/*/index.tsx",
+        "**/*.config.ts",
+        "**/*.config.mjs",
+        "**/source.config.ts"
+      ],
+      "linter": { "rules": { "style": { "noDefaultExport": "off" } } }
+    },
+    {
+      "includes": [
+        "src/examples/**/*.tsx",
+        "src/core/__tests__/jsx-types.test-d.tsx",
+        "src/components/__tests__/jsx-children-types.test-d.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "correctness": { "noUnusedImports": "off" }
+        }
+      }
+    }
+  ]
+}

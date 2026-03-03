@@ -1,8 +1,8 @@
-import { createElement } from '../../core/jsx-runtime';
-import { Schema, Field } from '../../core/schema';
-import { Pipeline } from '../../components/pipeline';
-import { KafkaSource } from '../../components/sources';
-import { KafkaSink } from '../../components/sinks';
+import { Pipeline } from "@/components/pipeline"
+import { KafkaSink } from "@/components/sinks"
+import { KafkaSource } from "@/components/sources"
+import { createElement } from "@/core/jsx-runtime"
+import { Field, Schema } from "@/core/schema"
 
 const UserEventSchema = Schema({
   fields: {
@@ -12,7 +12,7 @@ const UserEventSchema = Schema({
     payload: Field.STRING(),
     event_time: Field.TIMESTAMP(3),
   },
-});
+})
 
 export default (
   <Pipeline name="simple-source-sink" parallelism={4}>
@@ -23,4 +23,4 @@ export default (
     />
     <KafkaSink topic="user_events_processed" />
   </Pipeline>
-);
+)

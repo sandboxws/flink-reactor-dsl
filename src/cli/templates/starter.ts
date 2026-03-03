@@ -1,11 +1,11 @@
-import type { ScaffoldOptions, TemplateFile } from '../commands/new.js';
-import { sharedFiles } from './shared.js';
+import type { ScaffoldOptions, TemplateFile } from "@/cli/commands/new.js"
+import { sharedFiles } from "./shared.js"
 
 export function getStarterTemplates(opts: ScaffoldOptions): TemplateFile[] {
   return [
     ...sharedFiles(opts),
     {
-      path: 'schemas/events.ts',
+      path: "schemas/events.ts",
       content: `import { Schema, Field } from 'flink-reactor';
 
 export const EventSchema = Schema({
@@ -20,9 +20,9 @@ export const EventSchema = Schema({
 `,
     },
     {
-      path: 'pipelines/hello-world/index.tsx',
+      path: "pipelines/hello-world/index.tsx",
       content: `import { Pipeline, KafkaSource, KafkaSink, Filter } from 'flink-reactor';
-import { EventSchema } from '../../schemas/events';
+import { EventSchema } from '@/schemas/events';
 
 export default (
   <Pipeline name="hello-world">
@@ -42,7 +42,7 @@ export default (
 `,
     },
     {
-      path: 'tests/pipelines/hello-world.test.ts',
+      path: "tests/pipelines/hello-world.test.ts",
       content: `import { describe, it, expect } from 'vitest';
 // import { synth } from 'flink-reactor/testing';
 
@@ -51,5 +51,5 @@ describe('hello-world pipeline', () => {
 });
 `,
     },
-  ];
+  ]
 }

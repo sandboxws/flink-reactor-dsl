@@ -1,11 +1,11 @@
-import { createElement } from '../../core/jsx-runtime';
-import { Schema, Field } from '../../core/schema';
-import { Pipeline } from '../../components/pipeline';
-import { KafkaSource } from '../../components/sources';
-import { KafkaSink, JdbcSink } from '../../components/sinks';
-import { Map, Aggregate } from '../../components/transforms';
-import { TumbleWindow } from '../../components/windows';
-import { Route } from '../../components/route';
+import { Pipeline } from "@/components/pipeline"
+import { Route } from "@/components/route"
+import { JdbcSink, KafkaSink } from "@/components/sinks"
+import { KafkaSource } from "@/components/sources"
+import { Aggregate, Map } from "@/components/transforms"
+import { TumbleWindow } from "@/components/windows"
+import { createElement } from "@/core/jsx-runtime"
+import { Field, Schema } from "@/core/schema"
 
 const OrderSchema = Schema({
   fields: {
@@ -19,10 +19,10 @@ const OrderSchema = Schema({
     order_status: Field.STRING(),
   },
   watermark: {
-    column: 'order_time',
+    column: "order_time",
     expression: "order_time - INTERVAL '10' SECOND",
   },
-});
+})
 
 export default (
   <Pipeline name="order-routing" parallelism={16}>
@@ -31,15 +31,17 @@ export default (
       bootstrapServers="kafka:9092"
       schema={OrderSchema}
     />
-    <Map select={{
-      order_id: 'order_id',
-      customer_id: 'customer_id',
-      product_id: 'product_id',
-      total_amount: 'quantity * unit_price',
-      order_time: 'order_time',
-      region: 'region',
-      order_status: 'order_status',
-    }} />
+    <Map
+      select={{
+        order_id: "order_id",
+        customer_id: "customer_id",
+        product_id: "product_id",
+        total_amount: "quantity * unit_price",
+        order_time: "order_time",
+        region: "region",
+        order_status: "order_status",
+      }}
+    />
     <Route>
       <Route.Branch condition="total_amount >= 1000">
         <KafkaSink topic="high_value_orders" />
@@ -50,11 +52,11 @@ export default (
       <Route.Default>
         <TumbleWindow size="1 minute" on="order_time">
           <Aggregate
-            groupBy={['region']}
+            groupBy={["region"]}
             select={{
-              region: 'region',
-              revenue: 'SUM(total_amount)',
-              order_count: 'COUNT(*)',
+              region: "region",
+              revenue: "SUM(total_amount)",
+              order_count: "COUNT(*)",
             }}
           />
         </TumbleWindow>
@@ -65,4 +67,4 @@ export default (
       </Route.Default>
     </Route>
   </Pipeline>
-);
+)

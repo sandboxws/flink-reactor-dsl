@@ -1,11 +1,11 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { resetNodeIdCounter } from '../../core/jsx-runtime.js';
-import { Schema, Field } from '../../core/schema.js';
-import { KafkaSource, JdbcSource, GenericSource } from '../sources.js';
+import { beforeEach, describe, expect, it } from "vitest"
+import { GenericSource, JdbcSource, KafkaSource } from "@/components/sources.js"
+import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
+import { Field, Schema } from "@/core/schema.js"
 
 beforeEach(() => {
-  resetNodeIdCounter();
-});
+  resetNodeIdCounter()
+})
 
 const EventSchema = Schema({
   fields: {
@@ -14,112 +14,112 @@ const EventSchema = Schema({
     eventType: Field.STRING(),
     eventTime: Field.TIMESTAMP(3),
   },
-});
+})
 
-describe('KafkaSource', () => {
-  it('creates a Source node with topic and schema', () => {
-    const node = KafkaSource({ topic: 'events', schema: EventSchema });
+describe("KafkaSource", () => {
+  it("creates a Source node with topic and schema", () => {
+    const node = KafkaSource({ topic: "events", schema: EventSchema })
 
-    expect(node.kind).toBe('Source');
-    expect(node.component).toBe('KafkaSource');
-    expect(node.props.topic).toBe('events');
-    expect(node.props.schema).toBe(EventSchema);
-  });
+    expect(node.kind).toBe("Source")
+    expect(node.component).toBe("KafkaSource")
+    expect(node.props.topic).toBe("events")
+    expect(node.props.schema).toBe(EventSchema)
+  })
 
-  it('stores all optional Kafka props', () => {
+  it("stores all optional Kafka props", () => {
     const node = KafkaSource({
-      topic: 'events',
+      topic: "events",
       schema: EventSchema,
-      bootstrapServers: 'kafka:9092',
-      format: 'avro',
-      startupMode: 'earliest-offset',
-      consumerGroup: 'my-group',
-    });
+      bootstrapServers: "kafka:9092",
+      format: "avro",
+      startupMode: "earliest-offset",
+      consumerGroup: "my-group",
+    })
 
-    expect(node.props.bootstrapServers).toBe('kafka:9092');
-    expect(node.props.format).toBe('avro');
-    expect(node.props.startupMode).toBe('earliest-offset');
-    expect(node.props.consumerGroup).toBe('my-group');
-  });
+    expect(node.props.bootstrapServers).toBe("kafka:9092")
+    expect(node.props.format).toBe("avro")
+    expect(node.props.startupMode).toBe("earliest-offset")
+    expect(node.props.consumerGroup).toBe("my-group")
+  })
 
-  it('stores watermark metadata on the construct node', () => {
+  it("stores watermark metadata on the construct node", () => {
     const node = KafkaSource({
-      topic: 'events',
+      topic: "events",
       schema: EventSchema,
       watermark: {
-        column: 'eventTime',
-        expression: 'eventTime - INTERVAL \'5\' SECOND',
+        column: "eventTime",
+        expression: "eventTime - INTERVAL '5' SECOND",
       },
-    });
+    })
 
     expect(node.props.watermark).toEqual({
-      column: 'eventTime',
+      column: "eventTime",
       expression: "eventTime - INTERVAL '5' SECOND",
-    });
-  });
+    })
+  })
 
-  it('supports debezium-json format for CDC', () => {
+  it("supports debezium-json format for CDC", () => {
     const node = KafkaSource({
-      topic: 'db.inventory.orders',
+      topic: "db.inventory.orders",
       schema: EventSchema,
-      format: 'debezium-json',
-    });
+      format: "debezium-json",
+    })
 
-    expect(node.props.format).toBe('debezium-json');
-  });
-});
+    expect(node.props.format).toBe("debezium-json")
+  })
+})
 
-describe('JdbcSource', () => {
-  it('creates a Source node with url, table, and schema', () => {
+describe("JdbcSource", () => {
+  it("creates a Source node with url, table, and schema", () => {
     const node = JdbcSource({
-      url: 'jdbc:postgresql://localhost:5432/mydb',
-      table: 'users',
+      url: "jdbc:postgresql://localhost:5432/mydb",
+      table: "users",
       schema: EventSchema,
-    });
+    })
 
-    expect(node.kind).toBe('Source');
-    expect(node.component).toBe('JdbcSource');
-    expect(node.props.url).toBe('jdbc:postgresql://localhost:5432/mydb');
-    expect(node.props.table).toBe('users');
-  });
+    expect(node.kind).toBe("Source")
+    expect(node.component).toBe("JdbcSource")
+    expect(node.props.url).toBe("jdbc:postgresql://localhost:5432/mydb")
+    expect(node.props.table).toBe("users")
+  })
 
-  it('stores lookup cache config for dimension table use', () => {
+  it("stores lookup cache config for dimension table use", () => {
     const node = JdbcSource({
-      url: 'jdbc:mysql://localhost:3306/mydb',
-      table: 'dim_users',
+      url: "jdbc:mysql://localhost:3306/mydb",
+      table: "dim_users",
       schema: EventSchema,
-      lookupCache: { maxRows: 10000, ttl: '1h' },
-    });
+      lookupCache: { maxRows: 10000, ttl: "1h" },
+    })
 
-    expect(node.props.lookupCache).toEqual({ maxRows: 10000, ttl: '1h' });
-  });
-});
+    expect(node.props.lookupCache).toEqual({ maxRows: 10000, ttl: "1h" })
+  })
+})
 
-describe('GenericSource', () => {
-  it('creates a Source node with connector, format, and options', () => {
+describe("GenericSource", () => {
+  it("creates a Source node with connector, format, and options", () => {
     const node = GenericSource({
-      connector: 'filesystem',
-      format: 'csv',
+      connector: "filesystem",
+      format: "csv",
       schema: EventSchema,
-      options: { path: '/data/input/', 'csv.field-delimiter': '|' },
-    });
+      options: { path: "/data/input/", "csv.field-delimiter": "|" },
+    })
 
-    expect(node.kind).toBe('Source');
-    expect(node.component).toBe('GenericSource');
-    expect(node.props.connector).toBe('filesystem');
-    expect(node.props.format).toBe('csv');
+    expect(node.kind).toBe("Source")
+    expect(node.component).toBe("GenericSource")
+    expect(node.props.connector).toBe("filesystem")
+    expect(node.props.format).toBe("csv")
     expect(node.props.options).toEqual({
-      path: '/data/input/',
-      'csv.field-delimiter': '|',
-    });
-  });
+      path: "/data/input/",
+      "csv.field-delimiter": "|",
+    })
+  })
 
-  it('stores the schema for DDL generation', () => {
+  it("stores the schema for DDL generation", () => {
     const node = GenericSource({
-      connector: 'datagen',
+      connector: "datagen",
       schema: EventSchema,
-    });
+    })
 
-    expect(node.props.schema).toBe(EventSchema);
-  });
-});
+    expect(node.props.schema).toBe(EventSchema)
+  })
+})

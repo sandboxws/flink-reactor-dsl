@@ -1,5 +1,5 @@
-import type { BaseComponentProps, ConstructNode } from '../core/types.js';
-import { createElement } from '../core/jsx-runtime.js';
+import { createElement } from "@/core/jsx-runtime.js"
+import type { BaseComponentProps, ConstructNode } from "@/core/types.js"
 
 // ── Catalog handle ──────────────────────────────────────────────────
 
@@ -9,29 +9,29 @@ import { createElement } from '../core/jsx-runtime.js';
  * to form catalog-qualified table names (catalog.database.table).
  */
 export interface CatalogHandle {
-  readonly _tag: 'CatalogHandle';
-  readonly catalogName: string;
-  readonly nodeId: string;
+  readonly _tag: "CatalogHandle"
+  readonly catalogName: string
+  readonly nodeId: string
 }
 
 function createCatalogHandle(name: string, nodeId: string): CatalogHandle {
-  return { _tag: 'CatalogHandle', catalogName: name, nodeId };
+  return { _tag: "CatalogHandle", catalogName: name, nodeId }
 }
 
 // ── Catalog result ──────────────────────────────────────────────────
 
 export interface CatalogResult {
-  readonly node: ConstructNode;
-  readonly handle: CatalogHandle;
+  readonly node: ConstructNode
+  readonly handle: CatalogHandle
 }
 
 // ── PaimonCatalog ───────────────────────────────────────────────────
 
 export interface PaimonCatalogProps extends BaseComponentProps {
-  readonly name: string;
-  readonly warehouse: string;
-  readonly metastore?: 'filesystem' | 'hive';
-  readonly children?: ConstructNode | ConstructNode[];
+  readonly name: string
+  readonly warehouse: string
+  readonly metastore?: "filesystem" | "hive"
+  readonly children?: ConstructNode | ConstructNode[]
 }
 
 /**
@@ -41,27 +41,24 @@ export interface PaimonCatalogProps extends BaseComponentProps {
  * (default) or a Hive metastore for metadata management.
  */
 export function PaimonCatalog(props: PaimonCatalogProps): CatalogResult {
-  const { children, ...rest } = props;
-  const childArray = children == null
-    ? []
-    : Array.isArray(children)
-      ? children
-      : [children];
+  const { children, ...rest } = props
+  const childArray =
+    children == null ? [] : Array.isArray(children) ? children : [children]
 
-  const node = createElement('PaimonCatalog', { ...rest }, ...childArray);
-  const handle = createCatalogHandle(props.name, node.id);
-  return { node, handle };
+  const node = createElement("PaimonCatalog", { ...rest }, ...childArray)
+  const handle = createCatalogHandle(props.name, node.id)
+  return { node, handle }
 }
 
 // ── IcebergCatalog ──────────────────────────────────────────────────
 
-export type IcebergCatalogType = 'hive' | 'hadoop' | 'rest';
+export type IcebergCatalogType = "hive" | "hadoop" | "rest"
 
 export interface IcebergCatalogProps extends BaseComponentProps {
-  readonly name: string;
-  readonly catalogType: IcebergCatalogType;
-  readonly uri: string;
-  readonly children?: ConstructNode | ConstructNode[];
+  readonly name: string
+  readonly catalogType: IcebergCatalogType
+  readonly uri: string
+  readonly children?: ConstructNode | ConstructNode[]
 }
 
 /**
@@ -71,24 +68,21 @@ export interface IcebergCatalogProps extends BaseComponentProps {
  * `uri` is the connection URI for the catalog service.
  */
 export function IcebergCatalog(props: IcebergCatalogProps): CatalogResult {
-  const { children, ...rest } = props;
-  const childArray = children == null
-    ? []
-    : Array.isArray(children)
-      ? children
-      : [children];
+  const { children, ...rest } = props
+  const childArray =
+    children == null ? [] : Array.isArray(children) ? children : [children]
 
-  const node = createElement('IcebergCatalog', { ...rest }, ...childArray);
-  const handle = createCatalogHandle(props.name, node.id);
-  return { node, handle };
+  const node = createElement("IcebergCatalog", { ...rest }, ...childArray)
+  const handle = createCatalogHandle(props.name, node.id)
+  return { node, handle }
 }
 
 // ── HiveCatalog ─────────────────────────────────────────────────────
 
 export interface HiveCatalogProps extends BaseComponentProps {
-  readonly name: string;
-  readonly hiveConfDir: string;
-  readonly children?: ConstructNode | ConstructNode[];
+  readonly name: string
+  readonly hiveConfDir: string
+  readonly children?: ConstructNode | ConstructNode[]
 }
 
 /**
@@ -97,25 +91,22 @@ export interface HiveCatalogProps extends BaseComponentProps {
  * `hiveConfDir` points to the directory containing hive-site.xml.
  */
 export function HiveCatalog(props: HiveCatalogProps): CatalogResult {
-  const { children, ...rest } = props;
-  const childArray = children == null
-    ? []
-    : Array.isArray(children)
-      ? children
-      : [children];
+  const { children, ...rest } = props
+  const childArray =
+    children == null ? [] : Array.isArray(children) ? children : [children]
 
-  const node = createElement('HiveCatalog', { ...rest }, ...childArray);
-  const handle = createCatalogHandle(props.name, node.id);
-  return { node, handle };
+  const node = createElement("HiveCatalog", { ...rest }, ...childArray)
+  const handle = createCatalogHandle(props.name, node.id)
+  return { node, handle }
 }
 
 // ── JdbcCatalog ─────────────────────────────────────────────────────
 
 export interface JdbcCatalogProps extends BaseComponentProps {
-  readonly name: string;
-  readonly baseUrl: string;
-  readonly defaultDatabase: string;
-  readonly children?: ConstructNode | ConstructNode[];
+  readonly name: string
+  readonly baseUrl: string
+  readonly defaultDatabase: string
+  readonly children?: ConstructNode | ConstructNode[]
 }
 
 /**
@@ -125,25 +116,22 @@ export interface JdbcCatalogProps extends BaseComponentProps {
  * `defaultDatabase` is the initial database to use.
  */
 export function JdbcCatalog(props: JdbcCatalogProps): CatalogResult {
-  const { children, ...rest } = props;
-  const childArray = children == null
-    ? []
-    : Array.isArray(children)
-      ? children
-      : [children];
+  const { children, ...rest } = props
+  const childArray =
+    children == null ? [] : Array.isArray(children) ? children : [children]
 
-  const node = createElement('JdbcCatalog', { ...rest }, ...childArray);
-  const handle = createCatalogHandle(props.name, node.id);
-  return { node, handle };
+  const node = createElement("JdbcCatalog", { ...rest }, ...childArray)
+  const handle = createCatalogHandle(props.name, node.id)
+  return { node, handle }
 }
 
 // ── GenericCatalog ──────────────────────────────────────────────────
 
 export interface GenericCatalogProps extends BaseComponentProps {
-  readonly name: string;
-  readonly type: string;
-  readonly options?: Record<string, string>;
-  readonly children?: ConstructNode | ConstructNode[];
+  readonly name: string
+  readonly type: string
+  readonly options?: Record<string, string>
+  readonly children?: ConstructNode | ConstructNode[]
 }
 
 /**
@@ -154,14 +142,11 @@ export interface GenericCatalogProps extends BaseComponentProps {
  * to the CREATE CATALOG DDL during code generation.
  */
 export function GenericCatalog(props: GenericCatalogProps): CatalogResult {
-  const { children, ...rest } = props;
-  const childArray = children == null
-    ? []
-    : Array.isArray(children)
-      ? children
-      : [children];
+  const { children, ...rest } = props
+  const childArray =
+    children == null ? [] : Array.isArray(children) ? children : [children]
 
-  const node = createElement('GenericCatalog', { ...rest }, ...childArray);
-  const handle = createCatalogHandle(props.name, node.id);
-  return { node, handle };
+  const node = createElement("GenericCatalog", { ...rest }, ...childArray)
+  const handle = createCatalogHandle(props.name, node.id)
+  return { node, handle }
 }

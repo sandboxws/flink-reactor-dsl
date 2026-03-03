@@ -1,31 +1,47 @@
-import { readdirSync, existsSync, statSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { createJiti } from 'jiti';
-import type { FlinkReactorConfig } from '../core/config.js';
-import type { EnvironmentConfig } from '../core/environment.js';
-import type { ConstructNode } from '../core/types.js';
-import type { ResolvedConfig } from '../core/config-resolver.js';
-import { resolveConfig } from '../core/config-resolver.js';
+import { existsSync, readdirSync, statSync } from "node:fs"
+import { join, resolve } from "node:path"
+import type { Jiti } from "jiti"
+import { createJiti } from "jiti"
+import type { FlinkReactorConfig } from "@/core/config.js"
+import type { ResolvedConfig } from "@/core/config-resolver.js"
+import { resolveConfig } from "@/core/config-resolver.js"
+import type { EnvironmentConfig } from "@/core/environment.js"
+import type { ConstructNode } from "@/core/types.js"
 
-// jiti handles .ts/.tsx imports at runtime — automatic JSX transform
-// injects `import { jsx } from 'flink-reactor/jsx-runtime'` automatically
-const jiti = createJiti(import.meta.url, {
-  jsx: { runtime: 'automatic', importSource: 'flink-reactor' },
-});
+// Cache jiti instances per project directory to avoid re-creation
+const jitiCache = new Map<string, Jiti>()
+
+/**
+ * Create a jiti instance scoped to a project directory.
+ * Configures `@/` path alias to resolve from the project root,
+ * matching the tsconfig.json paths we generate in scaffolded projects.
+ */
+function getJiti(projectDir: string): Jiti {
+  const key = resolve(projectDir)
+  let instance = jitiCache.get(key)
+  if (!instance) {
+    instance = createJiti(import.meta.url, {
+      jsx: { runtime: "automatic", importSource: "flink-reactor" },
+      alias: { "@": key },
+    })
+    jitiCache.set(key, instance)
+  }
+  return instance
+}
 
 // ── Types ───────────────────────────────────────────────────────────
 
 export interface DiscoveredPipeline {
-  readonly name: string;
-  readonly entryPoint: string;
+  readonly name: string
+  readonly entryPoint: string
 }
 
 export interface ProjectContext {
-  readonly projectDir: string;
-  readonly config: FlinkReactorConfig | null;
-  readonly env: EnvironmentConfig | null;
-  readonly resolvedConfig: ResolvedConfig | null;
-  readonly pipelines: readonly DiscoveredPipeline[];
+  readonly projectDir: string
+  readonly config: FlinkReactorConfig | null
+  readonly env: EnvironmentConfig | null
+  readonly resolvedConfig: ResolvedConfig | null
+  readonly pipelines: readonly DiscoveredPipeline[]
 }
 
 // ── Pipeline discovery ──────────────────────────────────────────────
@@ -38,31 +54,31 @@ export function discoverPipelines(
   projectDir: string,
   targetPipeline?: string,
 ): DiscoveredPipeline[] {
-  const pipelinesDir = join(projectDir, 'pipelines');
+  const pipelinesDir = join(projectDir, "pipelines")
 
   if (!existsSync(pipelinesDir)) {
-    return [];
+    return []
   }
 
-  const entries = readdirSync(pipelinesDir);
-  const pipelines: DiscoveredPipeline[] = [];
+  const entries = readdirSync(pipelinesDir)
+  const pipelines: DiscoveredPipeline[] = []
 
   for (const entry of entries) {
-    const entryPath = join(pipelinesDir, entry);
-    if (!statSync(entryPath).isDirectory()) continue;
+    const entryPath = join(pipelinesDir, entry)
+    if (!statSync(entryPath).isDirectory()) continue
 
-    const indexPath = join(entryPath, 'index.tsx');
-    if (!existsSync(indexPath)) continue;
+    const indexPath = join(entryPath, "index.tsx")
+    if (!existsSync(indexPath)) continue
 
-    if (targetPipeline && entry !== targetPipeline) continue;
+    if (targetPipeline && entry !== targetPipeline) continue
 
     pipelines.push({
       name: entry,
       entryPoint: indexPath,
-    });
+    })
   }
 
-  return pipelines.sort((a, b) => a.name.localeCompare(b.name));
+  return pipelines.sort((a, b) => a.name.localeCompare(b.name))
 }
 
 // ── Config loading ──────────────────────────────────────────────────
@@ -74,14 +90,18 @@ export function discoverPipelines(
 export async function loadConfig(
   projectDir: string,
 ): Promise<FlinkReactorConfig | null> {
-  const configPath = join(projectDir, 'flink-reactor.config.ts');
+  const configPath = join(projectDir, "flink-reactor.config.ts")
 
   if (!existsSync(configPath)) {
-    return null;
+    return null
   }
 
-  const mod = await jiti.import(resolve(configPath)) as Record<string, unknown>;
-  return (mod.default ?? mod) as FlinkReactorConfig;
+  const jiti = getJiti(projectDir)
+  const mod = (await jiti.import(resolve(configPath))) as Record<
+    string,
+    unknown
+  >
+  return (mod.default ?? mod) as FlinkReactorConfig
 }
 
 // ── Environment loading ─────────────────────────────────────────────
@@ -94,16 +114,17 @@ export async function loadEnvironment(
   projectDir: string,
   envName?: string,
 ): Promise<EnvironmentConfig | null> {
-  if (!envName) return null;
+  if (!envName) return null
 
-  const envPath = join(projectDir, 'env', `${envName}.ts`);
+  const envPath = join(projectDir, "env", `${envName}.ts`)
 
   if (!existsSync(envPath)) {
-    throw new Error(`Environment file not found: env/${envName}.ts`);
+    throw new Error(`Environment file not found: env/${envName}.ts`)
   }
 
-  const mod = await jiti.import(resolve(envPath)) as Record<string, unknown>;
-  return (mod.default ?? mod) as EnvironmentConfig;
+  const jiti = getJiti(projectDir)
+  const mod = (await jiti.import(resolve(envPath))) as Record<string, unknown>
+  return (mod.default ?? mod) as EnvironmentConfig
 }
 
 // ── Pipeline loading ────────────────────────────────────────────────
@@ -111,12 +132,20 @@ export async function loadEnvironment(
 /**
  * Dynamically import a pipeline entry point and return its construct tree.
  * The pipeline's index.tsx should export a default ConstructNode.
+ *
+ * @param entryPoint - Absolute path to the pipeline's index.tsx
+ * @param projectDir - Project root directory (for resolving `@/` path aliases)
  */
 export async function loadPipeline(
   entryPoint: string,
+  projectDir: string,
 ): Promise<ConstructNode> {
-  const mod = await jiti.import(resolve(entryPoint)) as Record<string, unknown>;
-  return mod.default as ConstructNode;
+  const jiti = getJiti(projectDir)
+  const mod = (await jiti.import(resolve(entryPoint))) as Record<
+    string,
+    unknown
+  >
+  return mod.default as ConstructNode
 }
 
 // ── Full project context ────────────────────────────────────────────
@@ -125,12 +154,14 @@ export async function loadPipeline(
  * Auto-select the default environment name when --env is not specified.
  * Priority: 'development' > 'local' > first alphabetical.
  */
-function autoSelectEnvironment(environments: Record<string, unknown>): string | undefined {
-  const names = Object.keys(environments);
-  if (names.length === 0) return undefined;
-  if (names.includes('development')) return 'development';
-  if (names.includes('local')) return 'local';
-  return names.sort()[0];
+function autoSelectEnvironment(
+  environments: Record<string, unknown>,
+): string | undefined {
+  const names = Object.keys(environments)
+  if (names.length === 0) return undefined
+  if (names.includes("development")) return "development"
+  if (names.includes("local")) return "local"
+  return names.sort()[0]
 }
 
 /**
@@ -143,37 +174,39 @@ function autoSelectEnvironment(environments: Record<string, unknown>): string | 
 export async function resolveProjectContext(
   projectDir: string,
   options?: {
-    readonly pipeline?: string;
-    readonly env?: string;
+    readonly pipeline?: string
+    readonly env?: string
   },
 ): Promise<ProjectContext> {
-  const config = await loadConfig(projectDir);
-  const pipelines = discoverPipelines(projectDir, options?.pipeline);
+  const config = await loadConfig(projectDir)
+  const pipelines = discoverPipelines(projectDir, options?.pipeline)
 
   // Unified config path: resolve environments block
-  let resolvedConfig: ResolvedConfig | null = null;
-  let env: EnvironmentConfig | null = null;
+  let resolvedConfig: ResolvedConfig | null = null
+  let env: EnvironmentConfig | null = null
 
   if (config?.environments && Object.keys(config.environments).length > 0) {
-    const envName = options?.env ?? autoSelectEnvironment(config.environments);
+    const envName = options?.env ?? autoSelectEnvironment(config.environments)
     if (envName) {
-      resolvedConfig = resolveConfig(config, envName);
+      resolvedConfig = resolveConfig(config, envName)
     }
 
     // Print deprecation warning if legacy env files also exist
-    const envDir = join(projectDir, 'env');
+    const envDir = join(projectDir, "env")
     if (existsSync(envDir)) {
-      const files = readdirSync(envDir).filter((f) => f.endsWith('.ts') && !f.endsWith('.d.ts'));
+      const files = readdirSync(envDir).filter(
+        (f) => f.endsWith(".ts") && !f.endsWith(".d.ts"),
+      )
       if (files.length > 0) {
         console.warn(
-          '\x1b[33m⚠ Deprecation: env/*.ts files detected alongside environments block in config.\n' +
-          '  The environments block takes priority. Consider removing env/*.ts files.\x1b[0m\n',
-        );
+          "\x1b[33m\u26a0 Deprecation: env/*.ts files detected alongside environments block in config.\n" +
+            "  The environments block takes priority. Consider removing env/*.ts files.\x1b[0m\n",
+        )
       }
     }
   } else {
     // Legacy path: load env/*.ts files
-    env = await loadEnvironment(projectDir, options?.env);
+    env = await loadEnvironment(projectDir, options?.env)
   }
 
   return {
@@ -182,5 +215,5 @@ export async function resolveProjectContext(
     env,
     resolvedConfig,
     pipelines,
-  };
+  }
 }

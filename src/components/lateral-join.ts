@@ -1,23 +1,27 @@
-import type { FlinkType, BaseComponentProps, ConstructNode } from '../core/types.js';
-import type { SchemaDefinition } from '../core/schema.js';
-import { createElement } from '../core/jsx-runtime.js';
+import { createElement } from "@/core/jsx-runtime.js"
+import type { SchemaDefinition } from "@/core/schema.js"
+import type {
+  BaseComponentProps,
+  ConstructNode,
+  FlinkType,
+} from "@/core/types.js"
 
 // ── LateralJoin ─────────────────────────────────────────────────────
 
 export interface LateralJoinProps extends BaseComponentProps {
   /** Upstream stream to join against */
-  readonly input: ConstructNode;
+  readonly input: ConstructNode
   /** TVF name (registered via UDF or built-in like VECTOR_SEARCH) */
-  readonly function: string;
+  readonly function: string
   /** Arguments passed to the TVF (column refs or literals) */
-  readonly args: readonly (string | number)[];
+  readonly args: readonly (string | number)[]
   /** Output column names and types from the TVF */
-  readonly as: Record<string, FlinkType>;
+  readonly as: Record<string, FlinkType>
   /** Join type: 'cross' (default) or 'left' */
-  readonly type?: 'cross' | 'left';
+  readonly type?: "cross" | "left"
   /** Schema of the combined output */
-  readonly outputSchema?: SchemaDefinition;
-  readonly children?: ConstructNode | ConstructNode[];
+  readonly outputSchema?: SchemaDefinition
+  readonly children?: ConstructNode | ConstructNode[]
 }
 
 /**
@@ -43,29 +47,26 @@ export interface LateralJoinProps extends BaseComponentProps {
  */
 export function LateralJoin(props: LateralJoinProps): ConstructNode {
   if (!props.input) {
-    throw new Error('LateralJoin requires an input');
+    throw new Error("LateralJoin requires an input")
   }
   if (!props.function) {
-    throw new Error('LateralJoin requires a function name');
+    throw new Error("LateralJoin requires a function name")
   }
   if (!props.args || props.args.length === 0) {
-    throw new Error('LateralJoin requires at least one argument');
+    throw new Error("LateralJoin requires at least one argument")
   }
   if (!props.as || Object.keys(props.as).length === 0) {
-    throw new Error('LateralJoin requires output column definitions (as)');
+    throw new Error("LateralJoin requires output column definitions (as)")
   }
 
-  const { children, input, ...rest } = props;
-  const childArray = children == null
-    ? []
-    : Array.isArray(children)
-      ? children
-      : [children];
+  const { children, input, ...rest } = props
+  const childArray =
+    children == null ? [] : Array.isArray(children) ? children : [children]
 
   return createElement(
-    'LateralJoin',
+    "LateralJoin",
     { ...rest, input: input.id },
     input,
     ...childArray,
-  );
+  )
 }

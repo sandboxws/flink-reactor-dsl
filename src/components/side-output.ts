@@ -1,34 +1,41 @@
-import type { BaseComponentProps, ConstructNode, TypedConstructNode } from '../core/types.js';
-import type { SchemaDefinition } from '../core/schema.js';
-import { createElement } from '../core/jsx-runtime.js';
+import { createElement } from "@/core/jsx-runtime.js"
+import type { SchemaDefinition } from "@/core/schema.js"
+import type {
+  BaseComponentProps,
+  ConstructNode,
+  TypedConstructNode,
+} from "@/core/types.js"
 
 // ── SideOutput.Sink ─────────────────────────────────────────────────
 
 export interface SideOutputSinkProps extends BaseComponentProps {
-  readonly children?: ConstructNode | ConstructNode[];
+  readonly children?: ConstructNode | ConstructNode[]
 }
 
-function SideOutputSink(props: SideOutputSinkProps): TypedConstructNode<'SideOutput.Sink'> {
-  const { children, ...rest } = props;
-  const childArray = children == null
-    ? []
-    : Array.isArray(children)
-      ? children
-      : [children];
+function SideOutputSink(
+  props: SideOutputSinkProps,
+): TypedConstructNode<"SideOutput.Sink"> {
+  const { children, ...rest } = props
+  const childArray =
+    children == null ? [] : Array.isArray(children) ? children : [children]
 
-  return createElement('SideOutput.Sink', { ...rest }, ...childArray) as TypedConstructNode<'SideOutput.Sink'>;
+  return createElement(
+    "SideOutput.Sink",
+    { ...rest },
+    ...childArray,
+  ) as TypedConstructNode<"SideOutput.Sink">
 }
 
 // ── SideOutput ──────────────────────────────────────────────────────
 
 export interface SideOutputProps extends BaseComponentProps {
   /** SQL predicate — matching records go to side sink */
-  readonly condition: string;
+  readonly condition: string
   /** Label injected as `_side_tag` column in side output */
-  readonly tag?: string;
+  readonly tag?: string
   /** Schema for side output (defaults to input + metadata) */
-  readonly outputSchema?: SchemaDefinition;
-  readonly children?: ConstructNode | ConstructNode[];
+  readonly outputSchema?: SchemaDefinition
+  readonly children?: ConstructNode | ConstructNode[]
 }
 
 /**
@@ -48,25 +55,20 @@ export interface SideOutputProps extends BaseComponentProps {
  */
 function SideOutputFactory(props: SideOutputProps): ConstructNode {
   if (!props.condition) {
-    throw new Error('SideOutput requires a condition');
+    throw new Error("SideOutput requires a condition")
   }
 
-  const { children, ...rest } = props;
-  const childArray = children == null
-    ? []
-    : Array.isArray(children)
-      ? children
-      : [children];
+  const { children, ...rest } = props
+  const childArray =
+    children == null ? [] : Array.isArray(children) ? children : [children]
 
-  const hasSideSink = childArray.some(
-    (c) => c.component === 'SideOutput.Sink',
-  );
+  const hasSideSink = childArray.some((c) => c.component === "SideOutput.Sink")
 
   if (!hasSideSink) {
-    throw new Error('SideOutput requires a SideOutput.Sink child');
+    throw new Error("SideOutput requires a SideOutput.Sink child")
   }
 
-  return createElement('SideOutput', { ...rest }, ...childArray);
+  return createElement("SideOutput", { ...rest }, ...childArray)
 }
 
 /**
@@ -83,7 +85,7 @@ function SideOutputFactory(props: SideOutputProps): ConstructNode {
  * ```
  */
 export const SideOutput: typeof SideOutputFactory & {
-  Sink: typeof SideOutputSink;
+  Sink: typeof SideOutputSink
 } = Object.assign(SideOutputFactory, {
   Sink: SideOutputSink,
-});
+})

@@ -1,2 +1,7 @@
-export { synth, type SynthResult, type SynthOptions } from './synth.js';
-export { validate, type ValidateResult, type ValidateOptions, type Diagnostic } from './validate.js';
+export { type SynthOptions, type SynthResult, synth } from "./synth.js"
+export {
+  type Diagnostic,
+  type ValidateOptions,
+  type ValidateResult,
+  validate,
+} from "./validate.js"
