@@ -80,7 +80,10 @@ export function registerClusterCommand(program: Command): void {
   cluster
     .command("seed")
     .description("Submit example SQL pipelines and publish CDC data")
-    .option("--only <category>", "Filter by category: streaming, batch, or cdc")
+    .option(
+      "--only <category>",
+      "Filter by category: streaming, batch, cdc, or cdc-kafka",
+    )
     .option(
       "--domain <domain>",
       "Filter by domain: ecommerce, iot, or all",
@@ -88,7 +91,7 @@ export function registerClusterCommand(program: Command): void {
     )
     .action(async (opts: { only?: string; domain: string }) => {
       await runClusterSeed({
-        only: opts.only as "streaming" | "batch" | "cdc" | undefined,
+        only: opts.only as SeedCategory | undefined,
         domain: opts.domain as CdcDomain,
       })
     })
@@ -237,8 +240,10 @@ export async function runClusterDown(opts: {
 
 // ── cluster seed ─────────────────────────────────────────────────────
 
+type SeedCategory = "streaming" | "batch" | "cdc" | "cdc-kafka"
+
 export async function runClusterSeed(opts: {
-  only?: "streaming" | "batch" | "cdc"
+  only?: SeedCategory
   domain?: CdcDomain
 }): Promise<void> {
   clack.intro(pc.bgCyan(pc.black(" flink-reactor cluster seed ")))
@@ -256,20 +261,21 @@ export async function runClusterSeed(opts: {
 }
 
 async function seedPipelines(opts: {
-  only?: "streaming" | "batch" | "cdc"
+  only?: SeedCategory
   domain?: CdcDomain
 }): Promise<void> {
-  const { SqlGatewayClient } = await import(
-    "@/cli/cluster/sql-gateway-client.js"
-  )
   const { publishCdcMessages } = await import("@/cli/cluster/cdc-publisher.js")
 
-  const client = new SqlGatewayClient("http://localhost:8083")
   const category = opts.only
   const domain = opts.domain ?? "all"
+  const publishCdc =
+    !category ||
+    category === "cdc" ||
+    category === "cdc-kafka" ||
+    category === "streaming"
 
   // Step 1: Publish CDC batch data (needed before CDC pipelines)
-  if (!category || category === "cdc" || category === "streaming") {
+  if (publishCdc) {
     const spinner = clack.spinner()
     spinner.start("Publishing CDC seed data to Kafka...")
     try {
@@ -289,68 +295,75 @@ async function seedPipelines(opts: {
     }
   }
 
-  // Step 2: Submit SQL pipelines
-  const categories = category
-    ? [category === "cdc" ? "streaming" : category]
-    : ["streaming", "batch"]
+  // Step 2: Submit SQL pipelines (skip for cdc-kafka)
+  if (category !== "cdc-kafka") {
+    const { SqlGatewayClient } = await import(
+      "@/cli/cluster/sql-gateway-client.js"
+    )
+    const client = new SqlGatewayClient("http://localhost:8083")
 
-  let submitted = 0
-  let failed = 0
+    const categories = category
+      ? [category === "cdc" ? "streaming" : category]
+      : ["streaming", "batch"]
 
-  for (const cat of categories) {
-    const dir = join(pipelinesDir(), cat)
-    if (!existsSync(dir)) continue
+    let submitted = 0
+    let failed = 0
 
-    const files = readdirSync(dir)
-      .filter((f) => f.endsWith(".sql"))
-      .sort()
+    for (const cat of categories) {
+      const dir = join(pipelinesDir(), cat)
+      if (!existsSync(dir)) continue
 
-    // When --only cdc, only submit Kafka-based pipelines
-    let filtered =
-      category === "cdc" ? files.filter((f) => f.includes("kafka")) : files
+      const files = readdirSync(dir)
+        .filter((f) => f.endsWith(".sql"))
+        .sort()
 
-    // Apply domain filter: iot- prefixed files → iot domain, others → ecommerce
-    if (domain !== "all") {
-      filtered = filtered.filter((f) => {
-        const name = f.replace(/^\d+-/, "") // Strip numeric prefix
-        const isIoT = name.startsWith("iot-")
-        return domain === "iot" ? isIoT : !isIoT
-      })
-    }
+      // When --only cdc, only submit Kafka-based pipelines
+      let filtered =
+        category === "cdc" ? files.filter((f) => f.includes("kafka")) : files
 
-    for (const file of filtered) {
-      const filePath = join(dir, file)
-      const name = file.replace(".sql", "")
-      const spinner = clack.spinner()
-      spinner.start(`Submitting ${pc.dim(`${cat}/${name}`)}...`)
+      // Apply domain filter: iot- prefixed files → iot domain, others → ecommerce
+      if (domain !== "all") {
+        filtered = filtered.filter((f) => {
+          const name = f.replace(/^\d+-/, "") // Strip numeric prefix
+          const isIoT = name.startsWith("iot-")
+          return domain === "iot" ? isIoT : !isIoT
+        })
+      }
 
-      try {
-        const result = await client.submitSqlFile(filePath)
-        if (result.status === "ERROR") {
-          const errMsg = result.errorMessage ?? "Unknown error"
-          spinner.stop(`  ${pc.red("✗")} ${cat}/${name} → ${pc.dim(errMsg)}`)
+      for (const file of filtered) {
+        const filePath = join(dir, file)
+        const name = file.replace(".sql", "")
+        const spinner = clack.spinner()
+        spinner.start(`Submitting ${pc.dim(`${cat}/${name}`)}...`)
+
+        try {
+          const result = await client.submitSqlFile(filePath)
+          if (result.status === "ERROR") {
+            const errMsg = result.errorMessage ?? "Unknown error"
+            spinner.stop(`  ${pc.red("✗")} ${cat}/${name} → ${pc.dim(errMsg)}`)
+            failed++
+          } else {
+            spinner.stop(
+              `  ${pc.green("✓")} ${cat}/${name} → ${pc.dim(result.status)}`,
+            )
+            submitted++
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
+          spinner.stop(`  ${pc.red("✗")} ${cat}/${name} → ${pc.dim(msg)}`)
           failed++
-        } else {
-          spinner.stop(
-            `  ${pc.green("✓")} ${cat}/${name} → ${pc.dim(result.status)}`,
-          )
-          submitted++
         }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        spinner.stop(`  ${pc.red("✗")} ${cat}/${name} → ${pc.dim(msg)}`)
-        failed++
       }
     }
+
+    console.log("")
+    console.log(
+      `  Submitted: ${pc.green(String(submitted))}  Failed: ${failed > 0 ? pc.red(String(failed)) : pc.dim("0")}`,
+    )
   }
 
-  console.log("")
-  console.log(
-    `  Submitted: ${pc.green(String(submitted))}  Failed: ${failed > 0 ? pc.red(String(failed)) : pc.dim("0")}`,
-  )
-
   // Step 3: Start continuous CDC publisher in background
-  if (!category || category === "cdc" || category === "streaming") {
+  if (publishCdc) {
     startBackgroundCdcPublisher(domain)
   }
 }
