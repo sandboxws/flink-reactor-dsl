@@ -103,12 +103,12 @@ export default (
     <KafkaSource
       topic="input-topic"
       schema={/* TODO: import schema */}
-      bootstrapServers="localhost:9092"
+      bootstrapServers="kafka:9092"
       consumerGroup="${name}"
     />
     <KafkaSink
       topic="output-topic"
-      bootstrapServers="localhost:9092"
+      bootstrapServers="kafka:9092"
     />
   </Pipeline>
 );
@@ -123,7 +123,7 @@ export default (
     <KafkaSource
       topic="input-topic"
       schema={/* TODO: import schema */}
-      bootstrapServers="localhost:9092"
+      bootstrapServers="kafka:9092"
       consumerGroup="${name}"
     />
     <JdbcSink

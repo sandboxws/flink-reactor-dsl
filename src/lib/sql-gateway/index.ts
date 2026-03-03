@@ -1,8 +1,8 @@
-export { SqlGatewayClient, SqlGatewayClientError } from './client.js';
-export type { SqlGatewayClientOptions } from './client.js';
-export { SessionPool } from './session-pool.js';
-export type { SessionPoolOptions } from './session-pool.js';
-export { splitSqlStatements } from './sql-utils.js';
+export type { SqlGatewayClientOptions } from "./client.js"
+export { SqlGatewayClient, SqlGatewayClientError } from "./client.js"
+export type { SessionPoolOptions } from "./session-pool.js"
+export { SessionPool } from "./session-pool.js"
+export { splitSqlStatements } from "./sql-utils.js"
 export type {
   ColumnInfo,
   OperationHandle,
@@ -17,4 +17,4 @@ export type {
   SessionHandle,
   SqlGatewayError,
   StatementStatus,
-} from './types.js';
+} from "./types.js"

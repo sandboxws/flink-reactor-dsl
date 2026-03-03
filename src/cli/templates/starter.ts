@@ -5,37 +5,39 @@ export function getStarterTemplates(opts: ScaffoldOptions): TemplateFile[] {
   return [
     ...sharedFiles(opts),
     {
-      path: "schemas/events.ts",
+      path: "schemas/products.ts",
       content: `import { Schema, Field } from 'flink-reactor';
 
-export const EventSchema = Schema({
+export const ProductSchema = Schema({
   fields: {
-    id: Field.BIGINT(),
-    userId: Field.STRING(),
-    eventType: Field.STRING(),
-    payload: Field.STRING(),
-    timestamp: Field.TIMESTAMP(3),
+    id: Field.INT(),
+    name: Field.STRING(),
+    category: Field.STRING(),
+    price: Field.DOUBLE(),
+    quantity: Field.INT(),
   },
+  primaryKey: { columns: ['id'] },
 });
 `,
     },
     {
       path: "pipelines/hello-world/index.tsx",
       content: `import { Pipeline, KafkaSource, KafkaSink, Filter } from 'flink-reactor';
-import { EventSchema } from '@/schemas/events';
+import { ProductSchema } from '@/schemas/products';
 
 export default (
   <Pipeline name="hello-world">
     <KafkaSource
-      topic="events"
-      schema={EventSchema}
-      bootstrapServers="localhost:9092"
+      topic="cdc.inventory.products"
+      schema={ProductSchema}
+      format="debezium-json"
+      bootstrapServers="kafka:9092"
       consumerGroup="hello-world"
     />
-    <Filter condition="eventType <> 'internal'" />
+    <Filter condition="quantity > 0" />
     <KafkaSink
-      topic="filtered-events"
-      bootstrapServers="localhost:9092"
+      topic="in-stock-products"
+      bootstrapServers="kafka:9092"
     />
   </Pipeline>
 );

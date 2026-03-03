@@ -179,6 +179,21 @@ function q(identifier: string): string {
   return `\`${identifier}\``
 }
 
+/** Strip changelog-encoding formats to their base serialization format.
+ *  upsert-kafka handles changelog via key semantics — the value format
+ *  must be insert-only (e.g. json, avro). */
+function toInsertOnlyFormat(format: string): string {
+  switch (format) {
+    case "debezium-json":
+    case "canal-json":
+      return "json"
+    case "debezium-avro":
+      return "avro"
+    default:
+      return format
+  }
+}
+
 // ── Duration parsing ────────────────────────────────────────────────
 
 function toInterval(duration: string): string {
@@ -555,7 +570,10 @@ function generateSinkWithClause(
         withProps.connector = "upsert-kafka"
         withProps.topic = props.topic as string
         withProps["key.format"] = "json"
-        withProps["value.format"] = (props.format as string) ?? "json"
+        // upsert-kafka requires an insert-only value format — strip changelog
+        // formats (debezium-json, canal-json) to their base serialization
+        const rawFormat = (props.format as string) ?? "json"
+        withProps["value.format"] = toInsertOnlyFormat(rawFormat)
       } else {
         withProps.connector = "kafka"
         withProps.topic = props.topic as string

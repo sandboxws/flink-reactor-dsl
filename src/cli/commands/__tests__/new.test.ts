@@ -38,7 +38,7 @@ describe("scaffoldProject", () => {
       expect(existsSync(join(projectDir, "tsconfig.json"))).toBe(true)
       expect(existsSync(join(projectDir, "flink-reactor.config.ts"))).toBe(true)
       expect(existsSync(join(projectDir, ".gitignore"))).toBe(true)
-      expect(existsSync(join(projectDir, "schemas", "events.ts"))).toBe(true)
+      expect(existsSync(join(projectDir, "schemas", "products.ts"))).toBe(true)
       expect(
         existsSync(join(projectDir, "pipelines", "hello-world", "index.tsx")),
       ).toBe(true)

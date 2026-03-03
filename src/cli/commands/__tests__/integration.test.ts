@@ -37,7 +37,7 @@ describe("integration: new --template starter --yes", () => {
     expect(existsSync(join(projectDir, ".gitignore"))).toBe(true)
 
     // Schema
-    expect(existsSync(join(projectDir, "schemas", "events.ts"))).toBe(true)
+    expect(existsSync(join(projectDir, "schemas", "products.ts"))).toBe(true)
 
     // Pipeline
     expect(
@@ -81,6 +81,6 @@ describe("integration: new --template starter --yes", () => {
     expect(pipeline).toContain("Pipeline")
     expect(pipeline).toContain("KafkaSource")
     expect(pipeline).toContain("KafkaSink")
-    expect(pipeline).toContain("EventSchema")
+    expect(pipeline).toContain("ProductSchema")
   })
 })

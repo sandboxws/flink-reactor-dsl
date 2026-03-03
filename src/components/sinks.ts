@@ -8,7 +8,12 @@ import type { CatalogHandle } from "./catalogs.js"
 
 // ── Shared sink types ───────────────────────────────────────────────
 
-export type SinkFormat = "json" | "avro" | "csv"
+export type SinkFormat =
+  | "json"
+  | "avro"
+  | "csv"
+  | "debezium-json"
+  | "canal-json"
 
 export type FileFormat = "parquet" | "orc" | "csv" | "json"
 

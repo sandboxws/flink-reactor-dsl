@@ -2,48 +2,48 @@
 
 /** SQL Gateway session handle returned by POST /v1/sessions */
 export interface SessionHandle {
-  sessionHandle: string;
+  sessionHandle: string
 }
 
 /** SQL Gateway operation handle returned by POST /v1/sessions/{sessionHandle}/statements */
 export interface OperationHandle {
-  operationHandle: string;
+  operationHandle: string
 }
 
 /** Normalized column metadata extracted from result set */
 export interface ColumnInfo {
-  columnName: string;
-  dataType: string;
-  nullable: boolean;
+  columnName: string
+  dataType: string
+  nullable: boolean
 }
 
 /** Normalized result page from fetchResults */
 export interface ResultPage {
-  columns: ColumnInfo[];
-  rows: Record<string, unknown>[];
-  nextResultUri: string | null;
-  isEndOfStream: boolean;
-  resultKind: 'SUCCESS' | 'SUCCESS_WITH_CONTENT' | 'ERROR';
+  columns: ColumnInfo[]
+  rows: Record<string, unknown>[]
+  nextResultUri: string | null
+  isEndOfStream: boolean
+  resultKind: "SUCCESS" | "SUCCESS_WITH_CONTENT" | "ERROR"
 }
 
 /** Statement lifecycle status */
 export type StatementStatus =
-  | 'RUNNING'
-  | 'FINISHED'
-  | 'ERROR'
-  | 'CANCELED'
-  | 'PENDING'
-  | 'INITIALIZED';
+  | "RUNNING"
+  | "FINISHED"
+  | "ERROR"
+  | "CANCELED"
+  | "PENDING"
+  | "INITIALIZED"
 
 /** Session configuration for openSession */
 export interface SessionConfig {
   /** Flink configuration properties for this session */
-  properties?: Record<string, string>;
+  properties?: Record<string, string>
 }
 
 /** SQL Gateway REST API error response body */
 export interface SqlGatewayError {
-  errors: string[];
+  errors: string[]
 }
 
 // ─── Raw REST API Response Types ────────────────────────────────────────────
@@ -51,40 +51,40 @@ export interface SqlGatewayError {
 
 /** Raw response from POST /v1/sessions */
 export interface RawOpenSessionResponse {
-  sessionHandle: string;
+  sessionHandle: string
 }
 
 /** Raw response from POST /v1/sessions/{sessionHandle}/statements */
 export interface RawSubmitStatementResponse {
-  operationHandle: string;
+  operationHandle: string
 }
 
 /** Raw column info from result set */
 export interface RawColumnInfo {
-  name: string;
+  name: string
   logicalType: {
-    type: string;
-    nullable: boolean;
-  };
+    type: string
+    nullable: boolean
+  }
 }
 
 /** Raw row data from result set */
 export interface RawRowData {
-  kind: 'INSERT' | 'UPDATE_BEFORE' | 'UPDATE_AFTER' | 'DELETE';
-  fields: unknown[];
+  kind: "INSERT" | "UPDATE_BEFORE" | "UPDATE_AFTER" | "DELETE"
+  fields: unknown[]
 }
 
 /** Raw response from GET /v1/sessions/{sessionHandle}/operations/{operationHandle}/result/{token} */
 export interface RawFetchResultsResponse {
   results: {
-    columns: RawColumnInfo[];
-    data: RawRowData[];
-  };
-  resultType: 'PAYLOAD' | 'EOS' | 'NOT_READY';
-  nextResultUri: string | null;
+    columns: RawColumnInfo[]
+    data: RawRowData[]
+  }
+  resultType: "PAYLOAD" | "EOS" | "NOT_READY"
+  nextResultUri: string | null
 }
 
 /** Raw response from GET /v1/sessions/{sessionHandle}/operations/{operationHandle}/status */
 export interface RawGetOperationStatusResponse {
-  status: StatementStatus;
+  status: StatementStatus
 }

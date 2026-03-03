@@ -3,7 +3,11 @@ import {
   type FlinkDeploymentCrd,
   generateCrd,
 } from "@/codegen/crd-generator.js"
-import { type GenerateSqlResult, generateSql } from "@/codegen/sql-generator.js"
+import {
+  type GenerateSqlResult,
+  generateSql,
+  generateTapManifest,
+} from "@/codegen/sql-generator.js"
 import type { FlinkReactorConfig, InfraConfig } from "./config.js"
 import type { ResolvedConfig } from "./config-resolver.js"
 import { toInfraConfigFromResolved } from "./config-resolver.js"
@@ -13,7 +17,7 @@ import { registerComponentKinds, resetComponentKinds } from "./jsx-runtime.js"
 import type { FlinkReactorPlugin } from "./plugin.js"
 import { EMPTY_PLUGIN_CHAIN, resolvePlugins } from "./plugin-registry.js"
 import { rekindTree } from "./tree-utils.js"
-import type { ConstructNode, FlinkMajorVersion } from "./types.js"
+import type { ConstructNode, FlinkMajorVersion, TapManifest } from "./types.js"
 
 // ── FlinkReactorApp types ────────────────────────────────────────────
 
@@ -27,6 +31,7 @@ export interface PipelineArtifact {
   readonly name: string
   readonly sql: GenerateSqlResult
   readonly crd: FlinkDeploymentCrd
+  readonly tapManifest: TapManifest | null
 }
 
 export interface AppSynthResult {
@@ -250,7 +255,13 @@ export function synthesizeApp(
       // Apply plugin CRD transformers
       crd = chain.transformCrd(crd, node)
 
-      return { name, sql, crd }
+      // Generate tap manifest (observation metadata for dashboard tapping)
+      const { manifest: tapManifest } = generateTapManifest(node, {
+        flinkVersion,
+        devMode: true,
+      })
+
+      return { name, sql, crd, tapManifest }
     })
 
     // ── afterSynth hooks ───────────────────────────────────────────────

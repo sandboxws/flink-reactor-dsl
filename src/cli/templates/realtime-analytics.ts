@@ -39,7 +39,7 @@ export default (
     <KafkaSource
       topic="page-views"
       schema={PageViewSchema}
-      bootstrapServers="localhost:9092"
+      bootstrapServers="kafka:9092"
       consumerGroup="analytics"
     />
     <TumbleWindow size="1 MINUTE" on="viewTimestamp" />

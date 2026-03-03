@@ -38,7 +38,7 @@ export default (
       topic="dbserver1.inventory.orders"
       schema={OrderSchema}
       format="debezium-json"
-      bootstrapServers="localhost:9092"
+      bootstrapServers="kafka:9092"
       consumerGroup="cdc-lakehouse"
     />
     <PaimonSink

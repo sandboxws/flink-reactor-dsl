@@ -27,7 +27,10 @@ exports[`Full pipeline TapManifest > generates correct manifest JSON for mixed t
       "name": "output-tap",
       "nodeId": "large_orders",
       "observationSql": "CREATE TEMPORARY TABLE \`_tap_large_orders\` (
-
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`event_time\` TIMESTAMP(3)
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'large-orders',
@@ -38,7 +41,12 @@ exports[`Full pipeline TapManifest > generates correct manifest JSON for mixed t
 );
 
 SELECT * FROM \`_tap_large_orders\`;",
-      "schema": {},
+      "schema": {
+        "amount": "DECIMAL(10, 2)",
+        "event_time": "TIMESTAMP(3)",
+        "order_id": "BIGINT",
+        "user_id": "STRING",
+      },
     },
     {
       "componentName": "KafkaSource",

@@ -74,7 +74,18 @@ export async function runNewCommand(
   projectName: string,
   opts: Record<string, unknown>,
 ): Promise<void> {
-  const projectDir = resolve(projectName)
+  let projectDir: string
+  try {
+    projectDir = resolve(projectName)
+  } catch {
+    console.error(
+      pc.red(
+        "Error: Current directory no longer exists. Please cd to a valid directory and try again.",
+      ),
+    )
+    process.exitCode = 1
+    return
+  }
 
   if (existsSync(projectDir)) {
     console.error(pc.red(`Error: Directory "${projectName}" already exists.`))

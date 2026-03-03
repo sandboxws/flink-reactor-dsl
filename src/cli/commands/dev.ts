@@ -204,6 +204,9 @@ function startDashboard(state: DevState): ChildProcess | null {
     dashEnv.FLINK_REACTOR_CONFIG = resolve(state.resolvedDashboardConfigPath)
   }
 
+  // Point dashboard at project's dist directory for tap manifest discovery
+  dashEnv.TAP_MANIFEST_DIR = resolve(join(state.projectDir, "dist"))
+
   // If no Flink cluster is running, use mock mode
   if (!state.clusterProcess) {
     args.push("--mock")

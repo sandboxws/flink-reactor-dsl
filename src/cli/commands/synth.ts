@@ -64,17 +64,24 @@ export async function runSynth(opts: {
     // If no pipelines were extracted (the node itself is the pipeline),
     // treat the whole tree as a single pipeline.
     if (result.pipelines.length === 0) {
-      const { generateSql } = await import("@/codegen/sql-generator.js")
+      const { generateSql, generateTapManifest } = await import(
+        "@/codegen/sql-generator.js"
+      )
       const { generateCrd } = await import("@/codegen/crd-generator.js")
 
       const flinkVersion = ctx.config?.flink?.version ?? "2.0"
       const sql = generateSql(pipelineNode, { flinkVersion })
       const crd = generateCrd(pipelineNode, { flinkVersion })
+      const { manifest: tapManifest } = generateTapManifest(pipelineNode, {
+        flinkVersion,
+        devMode: true,
+      })
 
       const artifact: PipelineArtifact = {
         name: discovered.name,
         sql,
         crd,
+        tapManifest,
       }
 
       allArtifacts.push(artifact)
@@ -117,6 +124,17 @@ function writePipelineOutput(
   // Write ConfigMap (SQL mounted as K8s ConfigMap)
   const configMap = buildConfigMapYaml(artifact)
   writeFileSync(join(pipelineDir, "configmap.yaml"), configMap, "utf-8")
+
+  // Write tap manifest (flat in outdir for dashboard discovery)
+  if (artifact.tapManifest) {
+    const outdirPath = join(projectDir, outdir)
+    mkdirSync(outdirPath, { recursive: true })
+    writeFileSync(
+      join(outdirPath, `${artifact.name}.tap-manifest.json`),
+      JSON.stringify(artifact.tapManifest, null, 2),
+      "utf-8",
+    )
+  }
 }
 
 function buildConfigMapYaml(artifact: PipelineArtifact): string {
