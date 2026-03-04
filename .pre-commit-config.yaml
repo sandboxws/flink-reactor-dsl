@@ -11,3 +11,15 @@ repos:
         entry: pnpm biome format --no-errors-on-unmatched --files-ignore-unknown=true
         language: system
         types_or: [javascript, jsx, ts, tsx, json, css]
+      - id: golangci-lint
+        name: golangci-lint
+        entry: bash -c 'cd apps/server && golangci-lint run --new-from-rev=HEAD'
+        language: system
+        files: '\.go$'
+        pass_filenames: false
+      - id: go-mod-tidy
+        name: go mod tidy
+        entry: bash -c 'cd apps/server && go mod tidy -diff'
+        language: system
+        files: '(go\.mod|go\.sum)$'
+        pass_filenames: false
