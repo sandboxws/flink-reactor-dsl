@@ -447,9 +447,8 @@ function generateSourceWithClause(node: ConstructNode): string {
         withProps["properties.bootstrap.servers"] =
           props.bootstrapServers as string
       }
-      if (props.startupMode) {
-        withProps["scan.startup.mode"] = props.startupMode as string
-      }
+      withProps["scan.startup.mode"] =
+        (props.startupMode as string) ?? "earliest-offset"
       if (props.consumerGroup) {
         withProps["properties.group.id"] = props.consumerGroup as string
       }
