@@ -373,3 +373,6 @@ $RECYCLE.BIN/
 
 # Verdaccio local registry data
 .verdaccio/
+
+# Private docs (not for public repo)
+docs/
