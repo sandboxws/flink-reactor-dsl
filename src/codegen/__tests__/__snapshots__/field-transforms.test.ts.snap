@@ -14,7 +14,8 @@ CREATE TABLE \`products\` (
   'connector' = 'kafka',
   'topic' = 'products',
   'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092'
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
 );
 
 CREATE TABLE \`output\` (
@@ -50,7 +51,8 @@ CREATE TABLE \`products\` (
   'connector' = 'kafka',
   'topic' = 'products',
   'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092'
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
 );
 
 CREATE TABLE \`output\` (
@@ -84,7 +86,8 @@ CREATE TABLE \`products\` (
   'connector' = 'kafka',
   'topic' = 'products',
   'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092'
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
 );
 
 CREATE TABLE \`output\` (
@@ -118,7 +121,8 @@ CREATE TABLE \`products\` (
   'connector' = 'kafka',
   'topic' = 'products',
   'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092'
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
 );
 
 CREATE TABLE \`output\` (
@@ -152,7 +156,8 @@ CREATE TABLE \`products\` (
   'connector' = 'kafka',
   'topic' = 'products',
   'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092'
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
 );
 
 CREATE TABLE \`output\` (
@@ -184,7 +189,8 @@ CREATE TABLE \`products\` (
   'connector' = 'kafka',
   'topic' = 'products',
   'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092'
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
 );
 
 CREATE TABLE \`output\` (
@@ -218,7 +224,8 @@ CREATE TABLE \`products\` (
   'connector' = 'kafka',
   'topic' = 'products',
   'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092'
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
 );
 
 CREATE TABLE \`output\` (
@@ -258,7 +265,8 @@ CREATE TABLE \`products\` (
   'connector' = 'kafka',
   'topic' = 'products',
   'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092'
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
 );
 
 CREATE TABLE \`output\` (
@@ -298,7 +306,8 @@ CREATE TABLE \`products\` (
   'connector' = 'kafka',
   'topic' = 'products',
   'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092'
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
 );
 
 CREATE TABLE \`output\` (
@@ -330,7 +339,8 @@ CREATE TABLE \`products\` (
   'connector' = 'kafka',
   'topic' = 'products',
   'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092'
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
 );
 
 CREATE TABLE \`output\` (

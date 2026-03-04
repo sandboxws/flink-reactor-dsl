@@ -13,7 +13,8 @@ CREATE TABLE \`orders\` (
   'connector' = 'kafka',
   'topic' = 'orders',
   'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092'
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
 );
 
 CREATE TABLE \`filtered_agg\` WITH (
@@ -43,7 +44,8 @@ CREATE TABLE \`orders\` (
   'connector' = 'kafka',
   'topic' = 'orders',
   'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092'
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
 );
 
 CREATE TABLE \`high_spenders\` WITH (
@@ -72,7 +74,8 @@ CREATE TABLE \`orders\` (
   'connector' = 'kafka',
   'topic' = 'orders',
   'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092'
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
 );
 
 CREATE TABLE \`user_totals\` WITH (
@@ -102,7 +105,8 @@ CREATE TABLE \`orders\` (
   'connector' = 'kafka',
   'topic' = 'orders',
   'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092'
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
 );
 
 CREATE TABLE \`multi_window_output\` WITH (
@@ -130,7 +134,8 @@ CREATE TABLE \`orders\` (
   'connector' = 'kafka',
   'topic' = 'orders',
   'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092'
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
 );
 
 CREATE TABLE \`ranked_orders\` WITH (
@@ -157,7 +162,8 @@ CREATE TABLE \`orders\` (
   'connector' = 'kafka',
   'topic' = 'orders',
   'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092'
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
 );
 
 CREATE TABLE \`windowed_orders\` WITH (
