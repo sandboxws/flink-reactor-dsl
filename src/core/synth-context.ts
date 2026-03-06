@@ -366,6 +366,26 @@ export class SynthContext {
   }
 
   /**
+   * Detect Qualify node structural issues: missing condition prop.
+   */
+  detectQualifyIssues(): ValidationDiagnostic[] {
+    const diagnostics: ValidationDiagnostic[] = []
+    for (const node of this.nodes.values()) {
+      if (node.kind !== "Qualify") continue
+
+      if (!node.props.condition) {
+        diagnostics.push({
+          severity: "error",
+          message: `Qualify '${node.id}' requires a 'condition' prop`,
+          nodeId: node.id,
+          component: node.component,
+        })
+      }
+    }
+    return diagnostics
+  }
+
+  /**
    * Run all validations and return combined diagnostics.
    * When plugin validators are provided, they run after built-in checks
    * and receive the built-in diagnostics for context.
@@ -380,6 +400,7 @@ export class SynthContext {
       ...this.detectCycles(),
       ...this.detectChangelogMismatch(),
       ...this.detectMaterializedTableIssues(),
+      ...this.detectQualifyIssues(),
     ]
 
     if (!pluginValidators || pluginValidators.length === 0 || !root) {

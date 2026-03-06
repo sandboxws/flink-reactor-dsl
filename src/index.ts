@@ -76,6 +76,8 @@ export type {
 } from "./components/pipeline.js"
 // Components: pipeline
 export { Pipeline } from "./components/pipeline.js"
+export type { QualifyProps } from "./components/qualify.js"
+export { Qualify } from "./components/qualify.js"
 export type {
   ColumnExpr,
   QueryGroupByProps,

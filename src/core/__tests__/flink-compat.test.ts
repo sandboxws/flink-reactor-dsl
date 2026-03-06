@@ -57,6 +57,21 @@ describe("FlinkVersionCompat.checkFeature", () => {
   it("returns null for unknown features (assumed supported)", () => {
     expect(FlinkVersionCompat.checkFeature("UNKNOWN_THING", "1.20")).toBeNull()
   })
+
+  it("returns null for QUALIFY on Flink 2.0+", () => {
+    expect(FlinkVersionCompat.checkFeature("QUALIFY", "2.0")).toBeNull()
+    expect(FlinkVersionCompat.checkFeature("QUALIFY", "2.1")).toBeNull()
+    expect(FlinkVersionCompat.checkFeature("QUALIFY", "2.2")).toBeNull()
+  })
+
+  it("returns error for QUALIFY on Flink 1.20", () => {
+    const error = FlinkVersionCompat.checkFeature("QUALIFY", "1.20")
+    expect(error).not.toBeNull()
+    expect(error?.feature).toBe("QUALIFY")
+    expect(error?.requiredVersion).toBe("2.0")
+    expect(error?.currentVersion).toBe("1.20")
+    expect(error?.message).toContain("requires Flink 2.0 or later")
+  })
 })
 
 describe("FlinkVersionCompat.resolveJdbcConnector", () => {

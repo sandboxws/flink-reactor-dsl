@@ -21,7 +21,7 @@ import {
 import { Validate } from "@/components/validate.js"
 import { View } from "@/components/view.js"
 import { TumbleWindow } from "@/components/windows.js"
-import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
+import { createElement, resetNodeIdCounter } from "@/core/jsx-runtime.js"
 import { Field, Schema } from "@/core/schema.js"
 
 beforeEach(() => {
@@ -233,6 +233,115 @@ describe("6.5: TopN produces ROW_NUMBER pattern", () => {
     })
 
     const result = generateSql(pipeline)
+    expect(result.sql).toMatchSnapshot()
+  })
+})
+
+// ── QUALIFY: Version-aware codegen ───────────────────────────────────
+
+describe("QUALIFY: Deduplicate version-aware codegen", () => {
+  function makeDedupPipeline() {
+    const source = KafkaSource({
+      topic: "events",
+      schema: EventSchema,
+      bootstrapServers: "kafka:9092",
+    })
+    const dedup = Deduplicate({
+      key: ["event_id"],
+      order: "event_time",
+      keep: "first",
+      children: [source],
+    })
+    const sink = KafkaSink({ topic: "deduped-events", children: [dedup] })
+    return Pipeline({ name: "dedup-pipeline", children: [sink] })
+  }
+
+  it("uses QUALIFY on Flink 2.0", () => {
+    const result = generateSql(makeDedupPipeline(), { flinkVersion: "2.0" })
+    expect(result.sql).toContain("QUALIFY rownum = 1")
+    expect(result.sql).not.toContain("WHERE rownum")
+    expect(result.sql).toMatchSnapshot()
+  })
+
+  it("uses subquery wrapper on Flink 1.20", () => {
+    const result = generateSql(makeDedupPipeline(), { flinkVersion: "1.20" })
+    expect(result.sql).toContain("WHERE rownum = 1")
+    expect(result.sql).not.toContain("QUALIFY")
+    expect(result.sql).toMatchSnapshot()
+  })
+})
+
+describe("QUALIFY: TopN version-aware codegen", () => {
+  function makeTopNPipeline() {
+    const source = KafkaSource({
+      topic: "orders",
+      schema: OrderSchema,
+      bootstrapServers: "kafka:9092",
+    })
+    const topN = TopN({
+      partitionBy: ["user_id"],
+      orderBy: { amount: "DESC" },
+      n: 5,
+      children: [source],
+    })
+    const sink = KafkaSink({ topic: "top-orders", children: [topN] })
+    return Pipeline({ name: "topn-pipeline", children: [sink] })
+  }
+
+  it("uses QUALIFY on Flink 2.0", () => {
+    const result = generateSql(makeTopNPipeline(), { flinkVersion: "2.0" })
+    expect(result.sql).toContain("QUALIFY rownum <= 5")
+    expect(result.sql).not.toContain("WHERE rownum")
+    expect(result.sql).toMatchSnapshot()
+  })
+
+  it("uses subquery wrapper on Flink 1.20", () => {
+    const result = generateSql(makeTopNPipeline(), { flinkVersion: "1.20" })
+    expect(result.sql).toContain("WHERE rownum <= 5")
+    expect(result.sql).not.toContain("QUALIFY")
+    expect(result.sql).toMatchSnapshot()
+  })
+})
+
+// ── QUALIFY: Escape-hatch component codegen ─────────────────────────
+
+describe("QUALIFY: Qualify escape-hatch component", () => {
+  it("generates QUALIFY with condition only", () => {
+    const source = KafkaSource({
+      topic: "events",
+      schema: EventSchema,
+      bootstrapServers: "kafka:9092",
+    })
+    const qualify = createElement("Qualify", { condition: "rn = 1" }, source)
+    const sink = KafkaSink({ topic: "output", children: [qualify] })
+    const pipeline = Pipeline({ name: "qualify-pipeline", children: [sink] })
+
+    const result = generateSql(pipeline, { flinkVersion: "2.0" })
+    expect(result.sql).toContain("QUALIFY rn = 1")
+    expect(result.sql).toMatchSnapshot()
+  })
+
+  it("generates QUALIFY with inline window expression", () => {
+    const source = KafkaSource({
+      topic: "events",
+      schema: EventSchema,
+      bootstrapServers: "kafka:9092",
+    })
+    const qualify = createElement(
+      "Qualify",
+      {
+        condition: "rn <= 3",
+        window:
+          "ROW_NUMBER() OVER (PARTITION BY `event_type` ORDER BY `event_time` DESC) AS rn",
+      },
+      source,
+    )
+    const sink = KafkaSink({ topic: "output", children: [qualify] })
+    const pipeline = Pipeline({ name: "qualify-pipeline", children: [sink] })
+
+    const result = generateSql(pipeline, { flinkVersion: "2.0" })
+    expect(result.sql).toContain("QUALIFY rn <= 3")
+    expect(result.sql).toContain("ROW_NUMBER() OVER")
     expect(result.sql).toMatchSnapshot()
   })
 })

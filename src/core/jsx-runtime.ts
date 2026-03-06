@@ -121,6 +121,7 @@ const BUILTIN_KINDS: ReadonlyMap<string, NodeKind> = new Map([
   ["View", "View"],
   ["LateralJoin", "Join"],
   ["MaterializedTable", "MaterializedTable"],
+  ["Qualify", "Qualify"],
 ])
 
 /** Mutable map combining built-in + plugin-registered component kinds */

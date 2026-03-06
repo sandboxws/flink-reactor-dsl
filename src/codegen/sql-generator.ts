@@ -19,6 +19,12 @@ import {
   resolveTransformSchema,
 } from "./schema-introspect.js"
 
+// ── Module-scoped version ───────────────────────────────────────────
+// Set at the start of generateSql() and read by builders that need
+// version-aware SQL generation (e.g. QUALIFY). Since codegen is
+// synchronous, there's no reentrancy risk.
+let _synthVersion: FlinkMajorVersion = "2.0"
+
 // ── Public API ──────────────────────────────────────────────────────
 
 export interface GenerateSqlOptions {
@@ -54,6 +60,7 @@ export function generateSql(
   options: GenerateSqlOptions = {},
 ): GenerateSqlResult {
   const version = options.flinkVersion ?? "2.0"
+  _synthVersion = version
   const pluginSql = options.pluginSqlGenerators
   const pluginDdl = options.pluginDdlGenerators
 
@@ -1279,6 +1286,8 @@ function buildQuery(
       return buildQueryComponentQuery(node, nodeIndex, pluginSql)
     case "RawSQL":
       return buildRawSqlQuery(node)
+    case "Qualify":
+      return buildQualifyQuery(node, nodeIndex, pluginSql)
 
     // CEP
     case "MatchRecognize":
@@ -1478,6 +1487,14 @@ function buildDeduplicateQuery(
     ? upstream.sourceRef
     : `(\n${upstream.sql}\n)`
 
+  if (FlinkVersionCompat.isVersionAtLeast(_synthVersion, "2.0")) {
+    return [
+      `SELECT *, ROW_NUMBER() OVER (PARTITION BY ${partitionBy} ORDER BY ${q(order)} ${orderDir}) AS rownum`,
+      `FROM ${fromClause}`,
+      "QUALIFY rownum = 1",
+    ].join("\n")
+  }
+
   return [
     "SELECT * FROM (",
     `  SELECT *, ROW_NUMBER() OVER (PARTITION BY ${partitionBy} ORDER BY ${q(order)} ${orderDir}) AS rownum`,
@@ -1508,11 +1525,43 @@ function buildTopNQuery(
     ? upstream.sourceRef
     : `(\n${upstream.sql}\n)`
 
+  if (FlinkVersionCompat.isVersionAtLeast(_synthVersion, "2.0")) {
+    return [
+      `SELECT *, ROW_NUMBER() OVER (PARTITION BY ${partitionBy} ORDER BY ${orderClause}) AS rownum`,
+      `FROM ${fromClause}`,
+      `QUALIFY rownum <= ${n}`,
+    ].join("\n")
+  }
+
   return [
     "SELECT * FROM (",
     `  SELECT *, ROW_NUMBER() OVER (PARTITION BY ${partitionBy} ORDER BY ${orderClause}) AS rownum`,
     `  FROM ${fromClause}`,
     `) WHERE rownum <= ${n}`,
+  ].join("\n")
+}
+
+// ── Qualify (escape hatch) ───────────────────────────────────────────
+
+function buildQualifyQuery(
+  node: ConstructNode,
+  nodeIndex: Map<string, ConstructNode>,
+  pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
+): string {
+  const condition = node.props.condition as string
+  const windowExpr = node.props.window as string | undefined
+
+  const upstream = getUpstream(node, nodeIndex, pluginSql)
+
+  const selectList = windowExpr ? `*, ${windowExpr}` : "*"
+  const fromClause = upstream.isSimple
+    ? upstream.sourceRef
+    : `(\n${upstream.sql}\n)`
+
+  return [
+    `SELECT ${selectList}`,
+    `FROM ${fromClause}`,
+    `QUALIFY ${condition}`,
   ].join("\n")
 }
 

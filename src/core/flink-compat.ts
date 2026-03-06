@@ -46,6 +46,11 @@ const GATED_FEATURES: readonly GatedFeature[] = [
     minVersion: "2.2",
     description: "Materialized table bucketing",
   },
+  {
+    name: "QUALIFY",
+    minVersion: "2.0",
+    description: "QUALIFY clause",
+  },
 ]
 
 const VERSION_ORDER: readonly FlinkMajorVersion[] = [
