@@ -10,7 +10,8 @@
       "!dist",
       "!build",
       "!.source",
-      "!**/.embeddings"
+      "!**/.embeddings",
+      "!**/graphql/generated"
     ]
   },
   "css": { "parser": { "tailwindDirectives": true } },
@@ -79,7 +80,8 @@
         "pipelines/*/index.tsx",
         "**/*.config.ts",
         "**/*.config.mjs",
-        "**/source.config.ts"
+        "**/source.config.ts",
+        "**/codegen.ts"
       ],
       "linter": { "rules": { "style": { "noDefaultExport": "off" } } }
     },
