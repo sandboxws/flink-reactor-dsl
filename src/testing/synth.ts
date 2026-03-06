@@ -1,7 +1,4 @@
-import {
-  type FlinkDeploymentCrd,
-  generateCrd,
-} from "@/codegen/crd-generator.js"
+import { type AnyFlinkCrd, generateCrd } from "@/codegen/crd-generator.js"
 import { generateSql } from "@/codegen/sql-generator.js"
 import {
   registerComponentKinds,
@@ -16,7 +13,7 @@ import type { ConstructNode, FlinkMajorVersion } from "@/core/types.js"
 
 export interface SynthResult {
   readonly sql: string
-  readonly crd: FlinkDeploymentCrd
+  readonly crd: AnyFlinkCrd
 }
 
 export interface SynthOptions {

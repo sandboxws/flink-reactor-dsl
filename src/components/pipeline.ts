@@ -18,6 +18,29 @@ export interface RestartStrategy {
   readonly delay?: string
 }
 
+// ── Blue-green upgrade strategy types ────────────────────────────────
+
+export type UpgradeMode = "stateless" | "savepoint" | "last-state"
+
+export interface BlueGreenConfig {
+  readonly abortGracePeriod?: string
+  readonly deploymentDeletionDelay?: string
+  readonly rescheduleInterval?: string
+}
+
+export interface IngressConfig {
+  readonly template?: string
+  readonly className?: string
+  readonly annotations?: Record<string, string>
+}
+
+export interface UpgradeStrategy {
+  readonly mode: "blue-green"
+  readonly upgradeMode?: UpgradeMode
+  readonly blueGreen?: BlueGreenConfig
+  readonly ingress?: IngressConfig
+}
+
 export interface PipelineProps {
   readonly name: string
   readonly mode?: PipelineMode
@@ -27,6 +50,7 @@ export interface PipelineProps {
   readonly stateTtl?: string
   readonly restartStrategy?: RestartStrategy
   readonly flinkConfig?: Record<string, string>
+  readonly upgradeStrategy?: UpgradeStrategy
   readonly children?: ConstructNode | ConstructNode[]
 }
 
@@ -42,7 +66,25 @@ const VALID_CHECKPOINT_MODES: ReadonlySet<string> = new Set([
   "at-least-once",
 ])
 
+/** Warnings emitted during validation (non-fatal) */
+export type ValidationWarning = {
+  readonly level: "warning"
+  readonly message: string
+}
+
+/** Collected warnings from the most recent Pipeline validation */
+let lastValidationWarnings: ValidationWarning[] = []
+
+/** Retrieve warnings from the most recent Pipeline() call, then clear. */
+export function consumeValidationWarnings(): ValidationWarning[] {
+  const warnings = lastValidationWarnings
+  lastValidationWarnings = []
+  return warnings
+}
+
 function validatePipelineProps(props: PipelineProps): void {
+  lastValidationWarnings = []
+
   if (props.mode !== undefined && !VALID_MODES.has(props.mode)) {
     throw new Error(
       `Invalid pipeline mode '${props.mode}'. Must be 'streaming' or 'batch'`,
@@ -60,6 +102,23 @@ function validatePipelineProps(props: PipelineProps): void {
       throw new Error(
         `Invalid checkpoint mode '${props.checkpoint.mode}'. Must be 'exactly-once' or 'at-least-once'`,
       )
+    }
+  }
+
+  // Blue-green validation
+  if (props.upgradeStrategy?.mode === "blue-green") {
+    if (props.mode === "batch") {
+      throw new Error(
+        "Blue-green upgrade strategy is not supported for batch pipelines. Blue-green requires a long-running streaming job.",
+      )
+    }
+
+    if (!props.checkpoint) {
+      lastValidationWarnings.push({
+        level: "warning",
+        message:
+          "Blue-green upgrade strategy without checkpoint configuration is risky. Stateful blue-green transitions rely on savepoints, which require checkpointing to be enabled.",
+      })
     }
   }
 }

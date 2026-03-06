@@ -1,6 +1,6 @@
 import {
+  type AnyFlinkCrd,
   type CrdGeneratorOptions,
-  type FlinkDeploymentCrd,
   generateCrd,
 } from "@/codegen/crd-generator.js"
 import {
@@ -30,7 +30,7 @@ export interface FlinkReactorAppProps {
 export interface PipelineArtifact {
   readonly name: string
   readonly sql: GenerateSqlResult
-  readonly crd: FlinkDeploymentCrd
+  readonly crd: AnyFlinkCrd
   readonly tapManifest: TapManifest | null
 }
 

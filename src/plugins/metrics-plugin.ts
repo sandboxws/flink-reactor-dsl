@@ -1,3 +1,7 @@
+import {
+  getFlinkConfiguration,
+  withFlinkConfiguration,
+} from "@/codegen/crd-generator.js"
 import type { FlinkReactorPlugin } from "@/core/plugin.js"
 
 // ── Reporter configuration types ────────────────────────────────────
@@ -100,7 +104,7 @@ export function metricsPlugin(
     version: "0.1.0",
 
     transformCrd(crd) {
-      const config = { ...crd.spec.flinkConfiguration }
+      const config = { ...getFlinkConfiguration(crd) }
 
       // Configure each reporter
       for (const reporter of reporters) {
@@ -145,10 +149,10 @@ export function metricsPlugin(
         "flink-reactor.io/metric-reporters": reporterNames,
       }
 
+      const updated = withFlinkConfiguration(crd, config)
       return {
-        ...crd,
-        metadata: { ...crd.metadata, annotations },
-        spec: { ...crd.spec, flinkConfiguration: config },
+        ...updated,
+        metadata: { ...updated.metadata, annotations },
       }
     },
   }

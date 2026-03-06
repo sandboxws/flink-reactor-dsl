@@ -1,4 +1,4 @@
-import type { FlinkDeploymentCrd } from "@/codegen/crd-generator.js"
+import type { AnyFlinkCrd } from "@/codegen/crd-generator.js"
 import type { ValidationDiagnostic } from "./synth-context.js"
 import type { ConstructNode, NodeKind } from "./types.js"
 
@@ -18,7 +18,7 @@ export interface SynthHookContext {
 export interface PipelineSynthHookResult {
   readonly name: string
   readonly sql: string
-  readonly crd: FlinkDeploymentCrd
+  readonly crd: AnyFlinkCrd
 }
 
 /** Extended context for afterSynth that includes synthesis results */
@@ -123,9 +123,9 @@ export interface FlinkReactorPlugin {
    * Must return the (possibly modified) CRD.
    */
   readonly transformCrd?: (
-    crd: FlinkDeploymentCrd,
+    crd: AnyFlinkCrd,
     pipelineNode: ConstructNode,
-  ) => FlinkDeploymentCrd
+  ) => AnyFlinkCrd
 
   // ── Layer 5: Validation ──────────────────────────────────────────
 

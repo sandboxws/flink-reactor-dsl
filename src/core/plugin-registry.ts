@@ -1,4 +1,4 @@
-import type { FlinkDeploymentCrd } from "@/codegen/crd-generator.js"
+import type { AnyFlinkCrd } from "@/codegen/crd-generator.js"
 import type {
   FlinkReactorPlugin,
   PluginDdlGenerator,
@@ -27,9 +27,9 @@ export interface ResolvedPluginChain {
   readonly ddlGenerators: ReadonlyMap<string, PluginDdlGenerator>
   /** Composed CRD transformer (identity if no plugins have transformCrd) */
   readonly transformCrd: (
-    crd: FlinkDeploymentCrd,
+    crd: AnyFlinkCrd,
     pipeline: ConstructNode,
-  ) => FlinkDeploymentCrd
+  ) => AnyFlinkCrd
   /** Ordered list of plugin validators */
   readonly validators: readonly PluginValidator[]
   /** Ordered beforeSynth hooks */
@@ -41,7 +41,7 @@ export interface ResolvedPluginChain {
 // ── Empty chain constant ────────────────────────────────────────────
 
 const IDENTITY_TREE = (tree: ConstructNode): ConstructNode => tree
-const IDENTITY_CRD = (crd: FlinkDeploymentCrd): FlinkDeploymentCrd => crd
+const IDENTITY_CRD = (crd: AnyFlinkCrd): AnyFlinkCrd => crd
 
 export const EMPTY_PLUGIN_CHAIN: ResolvedPluginChain = {
   order: [],
@@ -302,7 +302,7 @@ function composeTreeTransformers(
 
 function composeCrdTransformers(
   plugins: readonly FlinkReactorPlugin[],
-): (crd: FlinkDeploymentCrd, pipeline: ConstructNode) => FlinkDeploymentCrd {
+): (crd: AnyFlinkCrd, pipeline: ConstructNode) => AnyFlinkCrd {
   const transformers = plugins
     .filter((p) => p.transformCrd != null)
     .map((p) => p.transformCrd!)
@@ -310,6 +310,6 @@ function composeCrdTransformers(
   if (transformers.length === 0) return IDENTITY_CRD
   if (transformers.length === 1) return transformers[0]
 
-  return (crd: FlinkDeploymentCrd, pipeline: ConstructNode) =>
+  return (crd: AnyFlinkCrd, pipeline: ConstructNode) =>
     transformers.reduce((c, fn) => fn(c, pipeline), crd)
 }

@@ -1,3 +1,7 @@
+import {
+  getFlinkConfiguration,
+  withFlinkConfiguration,
+} from "@/codegen/crd-generator.js"
 import type { FlinkReactorPlugin } from "@/core/plugin.js"
 import type { ValidationDiagnostic } from "@/core/synth-context.js"
 import { findNodes, walkTree } from "@/core/tree-utils.js"
@@ -159,7 +163,7 @@ export function errorHandlingPlugin(
       : undefined,
 
     transformCrd(crd) {
-      const config = { ...crd.spec.flinkConfiguration }
+      const config = { ...getFlinkConfiguration(crd) }
 
       config["restart-strategy.type"] = strategy.type
 
@@ -202,10 +206,10 @@ export function errorHandlingPlugin(
         "flink-reactor.io/restart-strategy": strategy.type,
       }
 
+      const updated = withFlinkConfiguration(crd, config)
       return {
-        ...crd,
-        metadata: { ...crd.metadata, annotations },
-        spec: { ...crd.spec, flinkConfiguration: config },
+        ...updated,
+        metadata: { ...updated.metadata, annotations },
       }
     },
   }

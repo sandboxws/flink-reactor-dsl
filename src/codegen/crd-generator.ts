@@ -64,6 +64,82 @@ export interface FlinkDeploymentCrd {
   }
 }
 
+/** The generated FlinkBlueGreenDeployment CRD as a plain object */
+export interface FlinkBlueGreenDeploymentCrd {
+  readonly apiVersion: "flink.apache.org/v1beta1"
+  readonly kind: "FlinkBlueGreenDeployment"
+  readonly metadata: {
+    readonly name: string
+    readonly labels?: Record<string, string>
+    readonly annotations?: Record<string, string>
+  }
+  readonly spec: {
+    readonly configuration?: Record<string, string>
+    readonly ingress?: {
+      readonly template?: string
+      readonly className?: string
+      readonly annotations?: Record<string, string>
+    }
+    readonly template: {
+      readonly spec: {
+        readonly image: string
+        readonly flinkVersion: string
+        readonly flinkConfiguration: Record<string, string>
+        readonly jobManager: {
+          readonly resource: ResourceSpec
+          readonly replicas: number
+        }
+        readonly taskManager: {
+          readonly resource: ResourceSpec
+          readonly replicas?: number
+        }
+        readonly job: {
+          readonly jarURI: string
+          readonly parallelism: number
+          readonly upgradeMode: string
+          readonly args?: readonly string[]
+        }
+        readonly [key: string]: unknown
+      }
+    }
+  }
+}
+
+/** Union of all Flink CRD types. Discriminate on `kind`. */
+export type AnyFlinkCrd = FlinkDeploymentCrd | FlinkBlueGreenDeploymentCrd
+
+// ── CRD utilities ───────────────────────────────────────────────────
+
+/** Extract flinkConfiguration from any CRD type */
+export function getFlinkConfiguration(
+  crd: AnyFlinkCrd,
+): Record<string, string> {
+  if (crd.kind === "FlinkDeployment") {
+    return crd.spec.flinkConfiguration
+  }
+  return crd.spec.template.spec.flinkConfiguration
+}
+
+/** Return a new CRD with updated flinkConfiguration */
+export function withFlinkConfiguration(
+  crd: AnyFlinkCrd,
+  config: Record<string, string>,
+): AnyFlinkCrd {
+  if (crd.kind === "FlinkDeployment") {
+    return { ...crd, spec: { ...crd.spec, flinkConfiguration: config } }
+  }
+  return {
+    ...crd,
+    spec: {
+      ...crd.spec,
+      template: {
+        ...crd.spec.template,
+        spec: { ...crd.spec.template.spec, flinkConfiguration: config },
+      },
+    },
+  }
+}
+
 // ── Default image mapping ───────────────────────────────────────────
 
 const FLINK_IMAGE_MAP: Record<FlinkMajorVersion, string> = {
@@ -127,27 +203,48 @@ export function toMilliseconds(duration: string): number {
 
 // ── CRD generation ──────────────────────────────────────────────────
 
+// ── Shared CRD building helpers ─────────────────────────────────────
+
+interface InnerSpec {
+  readonly image: string
+  readonly flinkVersion: string
+  readonly flinkConfiguration: Record<string, string>
+  readonly jobManager: {
+    readonly resource: ResourceSpec
+    readonly replicas: number
+  }
+  readonly taskManager: {
+    readonly resource: ResourceSpec
+    readonly replicas?: number
+  }
+  readonly job: {
+    readonly jarURI: string
+    readonly parallelism: number
+    readonly upgradeMode?: string
+    readonly args?: readonly string[]
+  }
+}
+
 /**
- * Generate a FlinkDeployment CRD object from a Pipeline construct node.
+ * Build the inner Flink deployment spec (shared between FlinkDeployment
+ * and FlinkBlueGreenDeployment CRDs).
  */
-export function generateCrd(
-  pipelineNode: ConstructNode,
+function buildInnerSpec(
+  props: PipelineProps,
   options: CrdGeneratorOptions,
-): FlinkDeploymentCrd {
-  const props = pipelineNode.props as unknown as PipelineProps
+  upgradeMode?: string,
+): InnerSpec {
   const { flinkVersion } = options
 
   // Build flinkConfiguration
   const config: Record<string, string> = {}
 
-  // 1.2: execution mode
   if (props.mode === "batch") {
     config["execution.runtime-mode"] = "BATCH"
   } else {
     config["execution.runtime-mode"] = "STREAMING"
   }
 
-  // 1.4: checkpoint config
   if (props.checkpoint) {
     config["execution.checkpointing.interval"] = String(
       toMilliseconds(props.checkpoint.interval),
@@ -160,17 +257,14 @@ export function generateCrd(
     }
   }
 
-  // 1.5: state backend
   if (props.stateBackend) {
     config["state.backend.type"] = props.stateBackend
   }
 
-  // 1.6: state TTL
   if (props.stateTtl) {
     config["table.exec.state.ttl"] = String(toMilliseconds(props.stateTtl))
   }
 
-  // 1.7: restart strategy
   if (props.restartStrategy) {
     config["restart-strategy.type"] = props.restartStrategy.type
     if (props.restartStrategy.type === "fixed-delay") {
@@ -186,28 +280,19 @@ export function generateCrd(
     }
   }
 
-  // 1.8: passthrough flinkConfig
   if (props.flinkConfig) {
     for (const [key, value] of Object.entries(props.flinkConfig)) {
       config[key] = value
     }
   }
 
-  // Normalize config keys for the target Flink version
   const normalizedConfig = FlinkVersionCompat.normalizeConfig(
     config,
     flinkVersion,
   )
 
-  // Build the CRD
   const image = options.flinkImage ?? FLINK_IMAGE_MAP[flinkVersion]
   const flinkVersionStr = FLINK_VERSION_MAP[flinkVersion]
-
-  const metadata: FlinkDeploymentCrd["metadata"] = {
-    name: props.name,
-    ...(options.labels ? { labels: options.labels } : {}),
-    ...(options.annotations ? { annotations: options.annotations } : {}),
-  }
 
   const jobManagerSpec = {
     resource: options.jobManager?.resource ?? { cpu: "1", memory: "1024m" },
@@ -221,10 +306,53 @@ export function generateCrd(
       : {}),
   }
 
-  const jobSpec: FlinkDeploymentCrd["spec"]["job"] = {
+  const jobSpec = {
     jarURI: options.jarUri ?? "local:///opt/flink/usrlib/sql-runner.jar",
     parallelism: props.parallelism ?? 1,
+    ...(upgradeMode ? { upgradeMode } : {}),
     ...(options.jarArgs ? { args: options.jarArgs } : {}),
+  }
+
+  return {
+    image,
+    flinkVersion: flinkVersionStr,
+    flinkConfiguration: normalizedConfig,
+    jobManager: jobManagerSpec,
+    taskManager: taskManagerSpec,
+    job: jobSpec,
+  }
+}
+
+// ── CRD generation ──────────────────────────────────────────────────
+
+/**
+ * Generate a Flink CRD object from a Pipeline construct node.
+ * Returns FlinkDeploymentCrd by default, or FlinkBlueGreenDeploymentCrd
+ * when upgradeStrategy.mode === "blue-green".
+ */
+export function generateCrd(
+  pipelineNode: ConstructNode,
+  options: CrdGeneratorOptions,
+): AnyFlinkCrd {
+  const props = pipelineNode.props as unknown as PipelineProps
+
+  if (props.upgradeStrategy?.mode === "blue-green") {
+    return generateBlueGreenCrd(props, options)
+  }
+
+  return generateFlinkDeploymentCrd(props, options)
+}
+
+function generateFlinkDeploymentCrd(
+  props: PipelineProps,
+  options: CrdGeneratorOptions,
+): FlinkDeploymentCrd {
+  const innerSpec = buildInnerSpec(props, options)
+
+  const metadata: FlinkDeploymentCrd["metadata"] = {
+    name: props.name,
+    ...(options.labels ? { labels: options.labels } : {}),
+    ...(options.annotations ? { annotations: options.annotations } : {}),
   }
 
   return {
@@ -232,12 +360,74 @@ export function generateCrd(
     kind: "FlinkDeployment",
     metadata,
     spec: {
-      image,
-      flinkVersion: flinkVersionStr,
-      flinkConfiguration: normalizedConfig,
-      jobManager: jobManagerSpec,
-      taskManager: taskManagerSpec,
-      job: jobSpec,
+      image: innerSpec.image,
+      flinkVersion: innerSpec.flinkVersion,
+      flinkConfiguration: innerSpec.flinkConfiguration,
+      jobManager: innerSpec.jobManager,
+      taskManager: innerSpec.taskManager,
+      job: {
+        jarURI: innerSpec.job.jarURI,
+        parallelism: innerSpec.job.parallelism,
+        ...(innerSpec.job.args ? { args: innerSpec.job.args } : {}),
+      },
+    },
+  }
+}
+
+function generateBlueGreenCrd(
+  props: PipelineProps,
+  options: CrdGeneratorOptions,
+): FlinkBlueGreenDeploymentCrd {
+  const strategy = props.upgradeStrategy!
+  const upgradeMode = strategy.upgradeMode ?? "savepoint"
+  const innerSpec = buildInnerSpec(props, options, upgradeMode)
+
+  const metadata: FlinkBlueGreenDeploymentCrd["metadata"] = {
+    name: props.name,
+    ...(options.labels ? { labels: options.labels } : {}),
+    ...(options.annotations ? { annotations: options.annotations } : {}),
+  }
+
+  // Build BG operator configuration (duration strings written as-is)
+  const bgConfig: Record<string, string> = {}
+  if (strategy.blueGreen?.abortGracePeriod) {
+    bgConfig["blue-green.abort.grace-period"] =
+      strategy.blueGreen.abortGracePeriod
+  }
+  if (strategy.blueGreen?.deploymentDeletionDelay) {
+    bgConfig["blue-green.deployment.deletion.delay"] =
+      strategy.blueGreen.deploymentDeletionDelay
+  }
+  if (strategy.blueGreen?.rescheduleInterval) {
+    bgConfig["blue-green.reschedule.interval"] =
+      strategy.blueGreen.rescheduleInterval
+  }
+
+  // Build ingress config
+  const ingress = strategy.ingress
+    ? {
+        ...(strategy.ingress.template
+          ? { template: strategy.ingress.template }
+          : {}),
+        ...(strategy.ingress.className
+          ? { className: strategy.ingress.className }
+          : {}),
+        ...(strategy.ingress.annotations
+          ? { annotations: strategy.ingress.annotations }
+          : {}),
+      }
+    : undefined
+
+  return {
+    apiVersion: "flink.apache.org/v1beta1",
+    kind: "FlinkBlueGreenDeployment",
+    metadata,
+    spec: {
+      ...(Object.keys(bgConfig).length > 0 ? { configuration: bgConfig } : {}),
+      ...(ingress ? { ingress } : {}),
+      template: {
+        spec: innerSpec as FlinkBlueGreenDeploymentCrd["spec"]["template"]["spec"],
+      },
     },
   }
 }
@@ -322,7 +512,7 @@ export function toYaml(obj: unknown, indent: number = 0): string {
 }
 
 /**
- * Generate a FlinkDeployment CRD and serialize to YAML.
+ * Generate a Flink CRD and serialize to YAML.
  */
 export function generateCrdYaml(
   pipelineNode: ConstructNode,

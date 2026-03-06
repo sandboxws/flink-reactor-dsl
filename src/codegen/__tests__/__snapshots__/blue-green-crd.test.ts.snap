@@ -1,0 +1,123 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Blue-green CRD generation > produces snapshot-stable YAML 1`] = `
+"apiVersion: flink.apache.org/v1beta1
+kind: FlinkBlueGreenDeployment
+metadata:
+  name: order-processor
+spec:
+  template:
+    spec:
+      image: 'flink:2.0'
+      flinkVersion: v2_0
+      flinkConfiguration:
+        execution.runtime-mode: STREAMING
+        execution.checkpointing.interval: '30000'
+        execution.checkpointing.mode: EXACTLY_ONCE
+      jobManager:
+        resource:
+          cpu: '1'
+          memory: 1024m
+        replicas: 1
+      taskManager:
+        resource:
+          cpu: '1'
+          memory: 1024m
+      job:
+        jarURI: 'local:///opt/flink/usrlib/sql-runner.jar'
+        parallelism: 4
+        upgradeMode: savepoint
+"
+`;
+
+exports[`Blue-green CRD: ingress config > produces snapshot-stable YAML with ingress 1`] = `
+"apiVersion: flink.apache.org/v1beta1
+kind: FlinkBlueGreenDeployment
+metadata:
+  name: order-processor
+spec:
+  ingress:
+    template: '{{name}}.example.com'
+    className: nginx
+  template:
+    spec:
+      image: 'flink:2.0'
+      flinkVersion: v2_0
+      flinkConfiguration:
+        execution.runtime-mode: STREAMING
+        execution.checkpointing.interval: '30000'
+      jobManager:
+        resource:
+          cpu: '1'
+          memory: 1024m
+        replicas: 1
+      taskManager:
+        resource:
+          cpu: '1'
+          memory: 1024m
+      job:
+        jarURI: 'local:///opt/flink/usrlib/sql-runner.jar'
+        parallelism: 4
+        upgradeMode: savepoint
+"
+`;
+
+exports[`Blue-green CRD: operator configuration > produces snapshot-stable YAML with full config 1`] = `
+"apiVersion: flink.apache.org/v1beta1
+kind: FlinkBlueGreenDeployment
+metadata:
+  name: order-processor
+spec:
+  configuration:
+    blue-green.abort.grace-period: 10m
+    blue-green.deployment.deletion.delay: 2s
+  template:
+    spec:
+      image: 'flink:2.0'
+      flinkVersion: v2_0
+      flinkConfiguration:
+        execution.runtime-mode: STREAMING
+        execution.checkpointing.interval: '30000'
+        execution.checkpointing.mode: EXACTLY_ONCE
+      jobManager:
+        resource:
+          cpu: '1'
+          memory: 1024m
+        replicas: 1
+      taskManager:
+        resource:
+          cpu: '1'
+          memory: 1024m
+      job:
+        jarURI: 'local:///opt/flink/usrlib/sql-runner.jar'
+        parallelism: 4
+        upgradeMode: savepoint
+"
+`;
+
+exports[`Standard FlinkDeployment regression > produces snapshot-stable YAML (unchanged) 1`] = `
+"apiVersion: flink.apache.org/v1beta1
+kind: FlinkDeployment
+metadata:
+  name: orders
+spec:
+  image: 'flink:2.0'
+  flinkVersion: v2_0
+  flinkConfiguration:
+    execution.runtime-mode: STREAMING
+    execution.checkpointing.interval: '60000'
+    execution.checkpointing.mode: EXACTLY_ONCE
+  jobManager:
+    resource:
+      cpu: '1'
+      memory: 1024m
+    replicas: 1
+  taskManager:
+    resource:
+      cpu: '1'
+      memory: 1024m
+  job:
+    jarURI: 'local:///opt/flink/usrlib/sql-runner.jar'
+    parallelism: 4
+"
+`;

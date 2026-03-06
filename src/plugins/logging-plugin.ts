@@ -1,3 +1,7 @@
+import {
+  getFlinkConfiguration,
+  withFlinkConfiguration,
+} from "@/codegen/crd-generator.js"
 import type { FlinkReactorPlugin } from "@/core/plugin.js"
 import { findNodes, mapTree } from "@/core/tree-utils.js"
 import type { ConstructNode } from "@/core/types.js"
@@ -101,7 +105,7 @@ export function loggingPlugin(
     },
 
     transformCrd(crd, pipelineNode) {
-      const config = { ...crd.spec.flinkConfiguration }
+      const config = { ...getFlinkConfiguration(crd) }
 
       // Set root logger level
       config["rootLogger.level"] = level
@@ -130,10 +134,10 @@ export function loggingPlugin(
         "flink-reactor.io/logging-targets": String(annotatedCount),
       }
 
+      const updated = withFlinkConfiguration(crd, config)
       return {
-        ...crd,
-        metadata: { ...crd.metadata, annotations },
-        spec: { ...crd.spec, flinkConfiguration: config },
+        ...updated,
+        metadata: { ...updated.metadata, annotations },
       }
     },
   }
