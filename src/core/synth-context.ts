@@ -160,7 +160,8 @@ export class SynthContext {
 
     const sorted: ConstructNode[] = []
     while (queue.length > 0) {
-      const id = queue.shift()!
+      const id = queue.shift()
+      if (id === undefined) break
       const node = this.nodes.get(id)
       if (node) sorted.push(node)
 
@@ -335,6 +336,36 @@ export class SynthContext {
   }
 
   /**
+   * Detect materialized table structural issues: missing catalog or
+   * missing upstream query (children).
+   */
+  detectMaterializedTableIssues(): ValidationDiagnostic[] {
+    const diagnostics: ValidationDiagnostic[] = []
+    for (const node of this.nodes.values()) {
+      if (node.kind !== "MaterializedTable") continue
+
+      if (!node.props.catalogName) {
+        diagnostics.push({
+          severity: "error",
+          message: `MaterializedTable '${node.id}' requires a managed catalog`,
+          nodeId: node.id,
+          component: node.component,
+        })
+      }
+
+      if (node.children.length === 0) {
+        diagnostics.push({
+          severity: "error",
+          message: `MaterializedTable '${node.id}' requires an upstream query (children)`,
+          nodeId: node.id,
+          component: node.component,
+        })
+      }
+    }
+    return diagnostics
+  }
+
+  /**
    * Run all validations and return combined diagnostics.
    * When plugin validators are provided, they run after built-in checks
    * and receive the built-in diagnostics for context.
@@ -348,6 +379,7 @@ export class SynthContext {
       ...this.detectDanglingSinks(),
       ...this.detectCycles(),
       ...this.detectChangelogMismatch(),
+      ...this.detectMaterializedTableIssues(),
     ]
 
     if (!pluginValidators || pluginValidators.length === 0 || !root) {

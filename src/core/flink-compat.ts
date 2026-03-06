@@ -41,6 +41,11 @@ const GATED_FEATURES: readonly GatedFeature[] = [
     minVersion: "2.0",
     description: "Materialized tables",
   },
+  {
+    name: "MATERIALIZED_TABLE_BUCKETING",
+    minVersion: "2.2",
+    description: "Materialized table bucketing",
+  },
 ]
 
 const VERSION_ORDER: readonly FlinkMajorVersion[] = [

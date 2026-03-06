@@ -64,6 +64,9 @@ export {
 } from "./components/joins.js"
 export type { LateralJoinProps } from "./components/lateral-join.js"
 export { LateralJoin } from "./components/lateral-join.js"
+export type { MaterializedTableProps } from "./components/materialized-table.js"
+// Components: materialized table
+export { MaterializedTable } from "./components/materialized-table.js"
 export type {
   CheckpointConfig,
   PipelineMode,

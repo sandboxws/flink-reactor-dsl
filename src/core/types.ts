@@ -104,6 +104,7 @@ export type NodeKind =
   | "UDF"
   | "CEP"
   | "View"
+  | "MaterializedTable"
 
 export interface ConstructNode {
   readonly id: string

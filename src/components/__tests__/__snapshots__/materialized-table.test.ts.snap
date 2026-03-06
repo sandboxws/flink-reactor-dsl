@@ -1,0 +1,149 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`MaterializedTable: aggregated stream > generates correct GROUP BY in AS query 1`] = `
+"SET 'pipeline.name' = 'test-pipeline';
+
+CREATE CATALOG \`paimon_catalog\` WITH (
+  'type' = 'paimon',
+  'warehouse' = 's3://bucket/warehouse'
+);
+
+CREATE TABLE \`events\` (
+  \`user_id\` STRING,
+  \`event_type\` STRING,
+  \`ts\` TIMESTAMP(3),
+  WATERMARK FOR \`ts\` AS \`ts\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'events',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+CREATE MATERIALIZED TABLE \`paimon_catalog\`.\`mydb\`.\`user_event_counts\`
+  FRESHNESS = INTERVAL '1' MINUTE
+  REFRESH_MODE = CONTINUOUS
+AS
+SELECT \`user_id\`, COUNT(*) AS \`cnt\` FROM \`events\` GROUP BY \`user_id\`;
+"
+`;
+
+exports[`MaterializedTable: all options > produces DDL with comment, partitions, refresh mode, and with 1`] = `
+"SET 'pipeline.name' = 'test-pipeline';
+
+CREATE CATALOG \`paimon_catalog\` WITH (
+  'type' = 'paimon',
+  'warehouse' = 's3://bucket/warehouse'
+);
+
+CREATE TABLE \`events\` (
+  \`user_id\` STRING,
+  \`event_type\` STRING,
+  \`ts\` TIMESTAMP(3),
+  WATERMARK FOR \`ts\` AS \`ts\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'events',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+CREATE MATERIALIZED TABLE \`paimon_catalog\`.\`mydb\`.\`user_summary\`
+  COMMENT 'Daily user summary'
+  PARTITIONED BY (\`dt\`)
+  WITH (
+    'format' = 'debezium-json'
+  )
+  FRESHNESS = INTERVAL '1' DAY
+  REFRESH_MODE = FULL
+AS
+SELECT * FROM \`events\`;
+"
+`;
+
+exports[`MaterializedTable: basic DDL > produces CREATE MATERIALIZED TABLE with freshness 1`] = `
+"SET 'pipeline.name' = 'test-pipeline';
+
+CREATE CATALOG \`paimon_catalog\` WITH (
+  'type' = 'paimon',
+  'warehouse' = 's3://bucket/warehouse'
+);
+
+CREATE TABLE \`events\` (
+  \`user_id\` STRING,
+  \`event_type\` STRING,
+  \`ts\` TIMESTAMP(3),
+  WATERMARK FOR \`ts\` AS \`ts\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'events',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+CREATE MATERIALIZED TABLE \`paimon_catalog\`.\`mydb\`.\`user_summary\`
+  FRESHNESS = INTERVAL '30' SECOND
+AS
+SELECT * FROM \`events\`;
+"
+`;
+
+exports[`MaterializedTable: bucketing on Flink 2.2 > produces DDL with DISTRIBUTED BY HASH 1`] = `
+"SET 'pipeline.name' = 'test-pipeline';
+
+CREATE CATALOG \`paimon_catalog\` WITH (
+  'type' = 'paimon',
+  'warehouse' = 's3://bucket/warehouse'
+);
+
+CREATE TABLE \`events\` (
+  \`user_id\` STRING,
+  \`event_type\` STRING,
+  \`ts\` TIMESTAMP(3),
+  WATERMARK FOR \`ts\` AS \`ts\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'events',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+CREATE MATERIALIZED TABLE \`paimon_catalog\`.\`mydb\`.\`bucketed_summary\`
+  DISTRIBUTED BY HASH(\`user_id\`) INTO 8 BUCKETS
+  FRESHNESS = INTERVAL '1' HOUR
+  REFRESH_MODE = CONTINUOUS
+AS
+SELECT * FROM \`events\`;
+"
+`;
+
+exports[`MaterializedTable: optional freshness on Flink 2.2 > omits FRESHNESS clause when not provided on 2.2 1`] = `
+"SET 'pipeline.name' = 'test-pipeline';
+
+CREATE CATALOG \`paimon_catalog\` WITH (
+  'type' = 'paimon',
+  'warehouse' = 's3://bucket/warehouse'
+);
+
+CREATE TABLE \`events\` (
+  \`user_id\` STRING,
+  \`event_type\` STRING,
+  \`ts\` TIMESTAMP(3),
+  WATERMARK FOR \`ts\` AS \`ts\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'events',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+CREATE MATERIALIZED TABLE \`paimon_catalog\`.\`mydb\`.\`on_demand_table\`
+AS
+SELECT * FROM \`events\`;
+"
+`;
