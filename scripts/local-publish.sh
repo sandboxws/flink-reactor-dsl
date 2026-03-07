@@ -30,7 +30,7 @@ pnpm build
 
 echo ""
 echo "Building @flink-reactor/dashboard..."
-pnpm --filter @flink-reactor/dashboard build:package
+pnpm --filter @flink-reactor/dashboard build
 
 # --- Stop Verdaccio, clear storage, restart ---
 echo ""
