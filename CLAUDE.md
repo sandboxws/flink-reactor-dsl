@@ -46,4 +46,4 @@ pnpm local:publish  # Publish to local Verdaccio
 | **`flink-reactor-dsl`** | **Core DSL + CLI (this repo)** | **BSL 1.1** |
 | `flink-reactor-console` | Dashboard + Server | BSL 1.1 |
 | `flink-reactor-platform` | Docs + orchestration | BSL 1.1 |
-| `flink-reactor-specs` | Specifications | Private |
+| `flink-reactor-specs` | Specifications | BSL 1.1 |
