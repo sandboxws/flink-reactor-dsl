@@ -10,8 +10,7 @@
       "!dist",
       "!build",
       "!.source",
-      "!**/.embeddings",
-      "!**/graphql/generated"
+      "!**/.embeddings"
     ]
   },
   "css": { "parser": { "tailwindDirectives": true } },
@@ -69,7 +68,6 @@
       "includes": [
         "src/cli/**",
         "packages/create-fr-app/src/**",
-        "tools/**/src/**",
         "scripts/**"
       ],
       "linter": { "rules": { "suspicious": { "noConsole": "off" } } }

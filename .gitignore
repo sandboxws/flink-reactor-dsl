@@ -376,16 +376,3 @@ $RECYCLE.BIN/
 
 # Private docs (not for public repo)
 docs/
-
-### Go ###
-bin/
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-coverage.out
-
-# Sample PostgreSQL SQL dumps (downloaded on demand by `cluster up`)
-src/cli/cluster/init/*.sql
-!src/cli/cluster/init/00-init-databases.sh

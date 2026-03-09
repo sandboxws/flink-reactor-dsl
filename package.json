@@ -24,12 +24,12 @@
   "packageManager": "pnpm@10.30.1",
   "repository": {
     "type": "git",
-    "url": "https://github.com/sandboxws/flink-reactor.git"
+    "url": "https://github.com/sandboxws/flink-reactor-dsl.git"
   },
   "bugs": {
-    "url": "https://github.com/sandboxws/flink-reactor/issues"
+    "url": "https://github.com/sandboxws/flink-reactor-dsl/issues"
   },
-  "homepage": "https://github.com/sandboxws/flink-reactor#readme",
+  "homepage": "https://github.com/sandboxws/flink-reactor-dsl#readme",
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
@@ -43,14 +43,6 @@
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "changeset publish && node scripts/publish-root.mjs",
-    "cluster:up": "flink-reactor cluster up --seed",
-    "cluster:down": "flink-reactor cluster down --volumes",
-    "dev:dashboard:live": "flink-reactor cluster up --seed && pnpm --filter dashboard dev",
-    "dev:dashboard:local": "FLINK_REST_URL=http://localhost:8081 pnpm --filter dashboard dev",
-    "ui:embed": "pnpm --filter @flink-reactor/ui-embeddings embed",
-    "ui:search": "pnpm --filter @flink-reactor/ui-embeddings search",
-    "ui:benchmark": "pnpm --filter @flink-reactor/ui-embeddings benchmark",
-    "docs": "pnpm -C web dev",
     "local:publish": "bash scripts/local-publish.sh",
     "rewrite-imports": "node scripts/rewrite-imports.mjs"
   },
