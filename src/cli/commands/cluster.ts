@@ -179,6 +179,7 @@ export async function runClusterUp(opts: {
       flinkPort: parseInt(opts.port, 10),
       sqlGatewayPort: 8083,
       kafkaPort: 9094,
+      postgresPort: 5433,
     })
   } catch {
     console.error(pc.red("Services did not become ready in time."))

@@ -23,7 +23,7 @@ export async function waitForServices(opts: {
     { name: "Kafka", check: () => checkKafka(opts.kafkaPort) },
     {
       name: "PostgreSQL",
-      check: () => checkTcp(opts.postgresPort ?? 5433),
+      check: () => checkTcp(opts.postgresPort ?? 5432),
     },
   ]
 
