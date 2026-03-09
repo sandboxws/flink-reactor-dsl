@@ -51,6 +51,6 @@ export default (
         activity_sequence: "activity_sequence",
       }}
     />
-    <JdbcSink url="jdbc:postgresql://db:5432/analytics" table="user_sessions" />
+    <JdbcSink url="jdbc:postgresql://db:5433/analytics" table="user_sessions" />
   </Pipeline>
 )

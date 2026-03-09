@@ -279,7 +279,7 @@ CREATE TABLE \`orders_snapshot\` (
   PRIMARY KEY (\`order_id\`) NOT ENFORCED
 ) WITH (
   'connector' = 'jdbc',
-  'url' = 'jdbc:postgresql://localhost:5432/warehouse',
+  'url' = 'jdbc:postgresql://localhost:5433/warehouse',
   'table-name' = 'orders_snapshot'
 );
 

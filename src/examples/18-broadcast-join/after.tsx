@@ -33,7 +33,7 @@ const events = (
 
 const blacklist = (
   <JdbcSource
-    url="jdbc:postgresql://db:5432/moderation"
+    url="jdbc:postgresql://db:5433/moderation"
     table="blacklist"
     schema={BlacklistSchema}
   />

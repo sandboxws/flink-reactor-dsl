@@ -128,7 +128,7 @@ export default (
     />
     <JdbcSink
       table="${name.replace(/-/g, "_")}"
-      url="jdbc:postgresql://localhost:5432/mydb"
+      url="jdbc:postgresql://localhost:5433/mydb"
     />
   </Pipeline>
 );

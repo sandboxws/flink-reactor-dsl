@@ -35,19 +35,19 @@ describe("KafkaSink", () => {
 describe("JdbcSink", () => {
   it("creates a Sink node with url and table", () => {
     const node = JdbcSink({
-      url: "jdbc:postgresql://localhost:5432/db",
+      url: "jdbc:postgresql://localhost:5433/db",
       table: "results",
     })
 
     expect(node.kind).toBe("Sink")
     expect(node.component).toBe("JdbcSink")
-    expect(node.props.url).toBe("jdbc:postgresql://localhost:5432/db")
+    expect(node.props.url).toBe("jdbc:postgresql://localhost:5433/db")
     expect(node.props.table).toBe("results")
   })
 
   it("defaults upsertMode to undefined (false at codegen)", () => {
     const node = JdbcSink({
-      url: "jdbc:postgresql://localhost:5432/db",
+      url: "jdbc:postgresql://localhost:5433/db",
       table: "results",
     })
 
@@ -56,7 +56,7 @@ describe("JdbcSink", () => {
 
   it("stores upsert mode with key fields", () => {
     const node = JdbcSink({
-      url: "jdbc:postgresql://localhost:5432/db",
+      url: "jdbc:postgresql://localhost:5433/db",
       table: "user_stats",
       upsertMode: true,
       keyFields: ["user_id"],
@@ -68,7 +68,7 @@ describe("JdbcSink", () => {
 
   it("stores multiple key fields for composite primary keys", () => {
     const node = JdbcSink({
-      url: "jdbc:postgresql://localhost:5432/db",
+      url: "jdbc:postgresql://localhost:5433/db",
       table: "order_items",
       upsertMode: true,
       keyFields: ["order_id", "item_id"],

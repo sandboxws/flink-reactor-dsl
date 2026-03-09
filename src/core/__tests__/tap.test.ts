@@ -210,7 +210,7 @@ describe("JDBC sink tap observation SQL", () => {
     const schema = { id: "BIGINT", name: "STRING" }
     const connectorProps = {
       connector: "jdbc",
-      url: "jdbc:postgresql://localhost:5432/db",
+      url: "jdbc:postgresql://localhost:5433/db",
       "table-name": "users",
     }
 

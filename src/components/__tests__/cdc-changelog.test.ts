@@ -128,7 +128,7 @@ describe("Changelog validation", () => {
     })
 
     const sink = JdbcSink({
-      url: "jdbc:postgresql://localhost:5432/db",
+      url: "jdbc:postgresql://localhost:5433/db",
       table: "orders",
       upsertMode: true,
       keyFields: ["order_id"],
@@ -153,7 +153,7 @@ describe("Changelog validation", () => {
     })
 
     const sink = JdbcSink({
-      url: "jdbc:postgresql://localhost:5432/db",
+      url: "jdbc:postgresql://localhost:5433/db",
       table: "orders",
     })
 

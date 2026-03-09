@@ -33,6 +33,6 @@ export default (
         txn_count: "COUNT(*)",
       }}
     />
-    <JdbcSink url="jdbc:postgresql://db:5432/analytics" table="user_totals" />
+    <JdbcSink url="jdbc:postgresql://db:5433/analytics" table="user_totals" />
   </Pipeline>
 )

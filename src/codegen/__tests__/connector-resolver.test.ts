@@ -104,7 +104,7 @@ describe("de-duplication", () => {
 describe("JDBC PostgreSQL resolution", () => {
   it("resolves core + postgres dialect + driver for Flink 2.0+", () => {
     const source = JdbcSource({
-      url: "jdbc:postgresql://localhost:5432/mydb",
+      url: "jdbc:postgresql://localhost:5433/mydb",
       table: "orders",
       schema: OrderSchema,
     })
@@ -128,7 +128,7 @@ describe("JDBC PostgreSQL resolution", () => {
 
   it("resolves single JDBC JAR + driver for Flink 1.20", () => {
     const source = JdbcSource({
-      url: "jdbc:postgresql://localhost:5432/mydb",
+      url: "jdbc:postgresql://localhost:5433/mydb",
       table: "orders",
       schema: OrderSchema,
     })

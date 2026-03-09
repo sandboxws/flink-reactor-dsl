@@ -72,14 +72,14 @@ describe("KafkaSource", () => {
 describe("JdbcSource", () => {
   it("creates a Source node with url, table, and schema", () => {
     const node = JdbcSource({
-      url: "jdbc:postgresql://localhost:5432/mydb",
+      url: "jdbc:postgresql://localhost:5433/mydb",
       table: "users",
       schema: EventSchema,
     })
 
     expect(node.kind).toBe("Source")
     expect(node.component).toBe("JdbcSource")
-    expect(node.props.url).toBe("jdbc:postgresql://localhost:5432/mydb")
+    expect(node.props.url).toBe("jdbc:postgresql://localhost:5433/mydb")
     expect(node.props.table).toBe("users")
   })
 

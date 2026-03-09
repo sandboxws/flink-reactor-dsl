@@ -51,7 +51,7 @@ CREATE TABLE `platform_hourly_metrics` (
   PRIMARY KEY (`platform`, `event_type`, `window_start`) NOT ENFORCED
 ) WITH (
   'connector' = 'jdbc',
-  'url' = 'jdbc:postgresql://db:5432/analytics',
+  'url' = 'jdbc:postgresql://db:5433/analytics',
   'table-name' = 'platform_hourly_metrics',
   'driver' = 'org.postgresql.Driver'
 );

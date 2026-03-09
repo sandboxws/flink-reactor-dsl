@@ -56,7 +56,7 @@ CREATE TABLE `regional_metrics_per_minute` (
   PRIMARY KEY (`region`, `window_start`) NOT ENFORCED
 ) WITH (
   'connector' = 'jdbc',
-  'url' = 'jdbc:postgresql://db:5432/analytics',
+  'url' = 'jdbc:postgresql://db:5433/analytics',
   'table-name' = 'regional_metrics_per_minute',
   'driver' = 'org.postgresql.Driver'
 );

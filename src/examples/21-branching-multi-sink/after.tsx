@@ -61,7 +61,7 @@ export default (
           />
         </TumbleWindow>
         <JdbcSink
-          url="jdbc:postgresql://db:5432/analytics"
+          url="jdbc:postgresql://db:5433/analytics"
           table="regional_metrics_per_minute"
         />
       </Route.Default>

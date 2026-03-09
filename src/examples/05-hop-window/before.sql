@@ -27,7 +27,7 @@ CREATE TABLE `sensor_metrics` (
   PRIMARY KEY (`sensor_id`, `window_start`) NOT ENFORCED
 ) WITH (
   'connector' = 'jdbc',
-  'url' = 'jdbc:postgresql://db:5432/iot',
+  'url' = 'jdbc:postgresql://db:5433/iot',
   'table-name' = 'sensor_metrics',
   'driver' = 'org.postgresql.Driver'
 );

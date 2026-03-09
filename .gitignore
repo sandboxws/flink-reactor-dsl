@@ -385,3 +385,7 @@ bin/
 *.so
 *.dylib
 coverage.out
+
+# Sample PostgreSQL SQL dumps (downloaded on demand by `cluster up`)
+src/cli/cluster/init/*.sql
+!src/cli/cluster/init/00-init-databases.sh

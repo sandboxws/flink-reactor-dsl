@@ -1,5 +1,6 @@
 import { execSync, fork } from "node:child_process"
 import {
+  createWriteStream,
   existsSync,
   readdirSync,
   readFileSync,
@@ -8,6 +9,7 @@ import {
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
+import { pipeline } from "node:stream/promises"
 import { fileURLToPath } from "node:url"
 import * as clack from "@clack/prompts"
 import type { Command } from "commander"
@@ -53,7 +55,9 @@ export function registerClusterCommand(program: Command): void {
 
   cluster
     .command("up")
-    .description("Start local Flink cluster (JM + 2×TM + SQL Gateway + Kafka)")
+    .description(
+      "Start local Flink cluster (JM + 2×TM + SQL Gateway + Kafka + PostgreSQL)",
+    )
     .option("--port <port>", "Flink REST port", "8081")
     .option("--seed", "Submit example pipelines after startup")
     .option(
@@ -183,6 +187,9 @@ export async function runClusterUp(opts: {
     return
   }
 
+  // Initialize PostgreSQL databases (idempotent — skips if already exist)
+  await initPostgresDatabases(compose)
+
   console.log("")
   console.log(
     `  ${pc.green("✓")} Flink UI:     ${pc.dim(`http://localhost:${opts.port}`)}`,
@@ -191,6 +198,9 @@ export async function runClusterUp(opts: {
     `  ${pc.green("✓")} SQL Gateway:  ${pc.dim("http://localhost:8083")}`,
   )
   console.log(`  ${pc.green("✓")} Kafka:        ${pc.dim("localhost:9094")}`)
+  console.log(
+    `  ${pc.green("✓")} PostgreSQL:   ${pc.dim("localhost:5433 (pagila, chinook, employees)")}`,
+  )
   console.log("")
 
   if (opts.seed) {
@@ -577,6 +587,221 @@ function killCdcPublisher(): void {
   } catch {
     // Best-effort cleanup
   }
+}
+
+// ── PostgreSQL initialization ────────────────────────────────────────
+
+const SAMPLE_DATABASES = ["pagila", "chinook", "employees"] as const
+
+/** Schema to check for table counts — employees uses a custom schema */
+const DB_SCHEMA: Record<string, string> = {
+  pagila: "public",
+  chinook: "public",
+  employees: "employees",
+}
+
+async function initPostgresDatabases(compose: string): Promise<void> {
+  const initDir = join(clusterDir(), "init")
+
+  // Ensure SQL dumps are downloaded before loading
+  await ensureSqlDumps(initDir)
+
+  const spinner = clack.spinner()
+  spinner.start("Initializing PostgreSQL databases...")
+
+  const cwd = clusterDir()
+  const psql = (db: string, sql: string) =>
+    execSync(
+      `docker compose -f "${compose}" exec -T postgres psql -U reactor -d ${db} -c ${JSON.stringify(sql)}`,
+      { cwd, stdio: "pipe" },
+    )
+
+  try {
+    // Create databases if they don't exist
+    for (const db of SAMPLE_DATABASES) {
+      try {
+        psql("postgres", `CREATE DATABASE ${db}`)
+      } catch {
+        // Already exists — fine
+      }
+    }
+
+    // Load data only if tables don't exist yet
+    for (const db of SAMPLE_DATABASES) {
+      const schema = DB_SCHEMA[db]
+      const result = execSync(
+        `docker compose -f "${compose}" exec -T postgres psql -U reactor -d ${db} -tAc "SELECT count(*) FROM information_schema.tables WHERE table_schema = '${schema}'"`,
+        { cwd, stdio: "pipe" },
+      )
+      const tableCount = parseInt(result.toString().trim(), 10)
+
+      if (tableCount === 0) {
+        const sqlFile = join(initDir, `${db}.sql`)
+        if (!existsSync(sqlFile)) {
+          spinner.message(`Skipping ${db} (dump not found)...`)
+          continue
+        }
+        execSync(
+          `docker compose -f "${compose}" cp "${sqlFile}" postgres:/tmp/${db}.sql`,
+          { cwd, stdio: "pipe" },
+        )
+        execSync(
+          `docker compose -f "${compose}" exec -T postgres psql -v ON_ERROR_STOP=1 -U reactor -d ${db} -f /tmp/${db}.sql`,
+          { cwd, stdio: "pipe", timeout: 120_000 },
+        )
+        spinner.message(`Loaded ${db} dataset...`)
+      }
+    }
+
+    spinner.stop(pc.green("PostgreSQL databases ready."))
+  } catch (err) {
+    spinner.stop(pc.yellow("PostgreSQL initialization failed (non-critical)."))
+    if (err instanceof Error) {
+      console.log(pc.dim(`  ${err.message}`))
+    }
+  }
+}
+
+// ── SQL dump download ────────────────────────────────────────────────
+
+interface DumpSource {
+  /** Files to download and concatenate (in order) */
+  urls: string[]
+  /** If true, the last URL is bzip2-compressed and needs decompression */
+  bzip2Last?: boolean
+  /** Lines matching this pattern are removed (PG compat fixes) */
+  removeLine?: RegExp
+  /** SQL prepended before the dump (e.g. to disable FK checks) */
+  preamble?: string
+  /** SQL appended after the dump */
+  epilogue?: string
+}
+
+const DUMP_SOURCES: Record<string, DumpSource> = {
+  pagila: {
+    urls: [
+      "https://raw.githubusercontent.com/devrimgunduz/pagila/master/pagila-schema.sql",
+      "https://raw.githubusercontent.com/devrimgunduz/pagila/master/pagila-data.sql",
+    ],
+    // The upstream dump has OWNER TO postgres / GRANT / REVOKE statements
+    // that fail because our Docker PG runs as user "reactor"
+    removeLine: /\bOWNER TO\b|\bGRANT\b|\bREVOKE\b/,
+    // Data insert order doesn't respect FK dependencies — disable checks
+    preamble: "SET session_replication_role = 'replica';",
+    epilogue: "SET session_replication_role = 'origin';",
+  },
+  chinook: {
+    urls: [
+      "https://raw.githubusercontent.com/lerocha/chinook-database/master/ChinookDatabase/DataSources/Chinook_PostgreSql.sql",
+    ],
+  },
+  employees: {
+    urls: [
+      "https://raw.githubusercontent.com/h8/employees-database/master/employees_schema.sql",
+      "https://raw.githubusercontent.com/h8/employees-database/master/employees_data.sql.bz2",
+    ],
+    bzip2Last: true,
+    removeLine: /SET default_with_oids/,
+  },
+}
+
+async function ensureSqlDumps(initDir: string): Promise<void> {
+  const missing = SAMPLE_DATABASES.filter(
+    (db) => !existsSync(join(initDir, `${db}.sql`)),
+  )
+  if (missing.length === 0) return
+
+  const spinner = clack.spinner()
+  spinner.start(`Downloading sample databases: ${missing.join(", ")}...`)
+
+  for (const db of missing) {
+    const source = DUMP_SOURCES[db]
+    const outPath = join(initDir, `${db}.sql`)
+
+    try {
+      spinner.message(`Downloading ${db}...`)
+      await downloadDump(source, outPath)
+    } catch (err) {
+      spinner.stop(pc.yellow(`Failed to download ${db} (non-critical).`))
+      if (err instanceof Error) {
+        console.log(pc.dim(`  ${err.message}`))
+      }
+      console.log(
+        pc.dim(`  You can manually place the SQL dump at: ${outPath}`),
+      )
+      return
+    }
+  }
+
+  spinner.stop(pc.green("Sample database dumps ready."))
+}
+
+async function downloadDump(
+  source: DumpSource,
+  outPath: string,
+): Promise<void> {
+  const parts: string[] = []
+
+  for (let i = 0; i < source.urls.length; i++) {
+    const url = source.urls[i]
+    const isBz2 = source.bzip2Last && i === source.urls.length - 1
+
+    if (isBz2) {
+      // Download bz2 to temp file, decompress with bunzip2
+      const tmpBz2 = `${outPath}.bz2`
+      const tmpDecompressed = `${outPath}.tmp`
+      try {
+        const response = await fetch(url)
+        if (!response.ok || !response.body) {
+          throw new Error(`HTTP ${response.status} fetching ${url}`)
+        }
+        const ws = createWriteStream(tmpBz2)
+        // @ts-expect-error -- ReadableStream/NodeStream interop
+        await pipeline(response.body, ws)
+        execSync(`bunzip2 -c "${tmpBz2}" > "${tmpDecompressed}"`, {
+          stdio: "pipe",
+        })
+        parts.push(readFileSync(tmpDecompressed, "utf-8"))
+      } finally {
+        try {
+          unlinkSync(tmpBz2)
+        } catch {
+          /* ignore */
+        }
+        try {
+          unlinkSync(`${outPath}.tmp`)
+        } catch {
+          /* ignore */
+        }
+      }
+    } else {
+      const response = await fetch(url)
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status} fetching ${url}`)
+      }
+      parts.push(await response.text())
+    }
+  }
+
+  let content = parts.join("\n")
+
+  // Apply line-level fixes
+  if (source.removeLine) {
+    content = content
+      .split("\n")
+      .filter((line) => !source.removeLine!.test(line))
+      .join("\n")
+  }
+
+  // Wrap with preamble/epilogue (e.g. disable FK checks during load)
+  if (source.preamble) {
+    content = source.preamble + "\n" + content
+  }
+  if (source.epilogue) {
+    content = content + "\n" + source.epilogue + "\n"
+  }
+
+  writeFileSync(outPath, content, "utf-8")
 }
 
 // ── Utilities ────────────────────────────────────────────────────────

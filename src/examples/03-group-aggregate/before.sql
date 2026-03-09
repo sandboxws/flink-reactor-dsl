@@ -22,7 +22,7 @@ CREATE TABLE `user_totals` (
   PRIMARY KEY (`user_id`) NOT ENFORCED
 ) WITH (
   'connector' = 'jdbc',
-  'url' = 'jdbc:postgresql://db:5432/analytics',
+  'url' = 'jdbc:postgresql://db:5433/analytics',
   'table-name' = 'user_totals',
   'driver' = 'org.postgresql.Driver'
 );

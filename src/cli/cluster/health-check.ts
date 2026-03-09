@@ -5,6 +5,7 @@ export async function waitForServices(opts: {
   flinkPort: number
   sqlGatewayPort: number
   kafkaPort: number
+  postgresPort?: number
   timeoutMs?: number
   intervalMs?: number
 }): Promise<void> {
@@ -20,6 +21,10 @@ export async function waitForServices(opts: {
     { name: "Flink JobManager", check: () => checkFlink(opts.flinkPort) },
     { name: "SQL Gateway", check: () => checkSqlGateway(opts.sqlGatewayPort) },
     { name: "Kafka", check: () => checkKafka(opts.kafkaPort) },
+    {
+      name: "PostgreSQL",
+      check: () => checkTcp(opts.postgresPort ?? 5433),
+    },
   ]
 
   const ready = new Set<string>()
@@ -78,7 +83,10 @@ async function checkSqlGateway(port: number): Promise<boolean> {
 }
 
 async function checkKafka(port: number): Promise<boolean> {
-  // Kafka health check: attempt a TCP connection to the external listener
+  return checkTcp(port)
+}
+
+async function checkTcp(port: number): Promise<boolean> {
   const { createConnection } = await import("node:net")
 
   return new Promise<boolean>((resolve) => {

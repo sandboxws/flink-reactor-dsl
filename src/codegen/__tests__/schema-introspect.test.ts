@@ -322,7 +322,7 @@ describe("route branching", () => {
                   },
                 }),
                 JdbcSink({
-                  url: "jdbc:postgresql://db:5432/analytics",
+                  url: "jdbc:postgresql://db:5433/analytics",
                   table: "user_totals",
                 }),
               ],

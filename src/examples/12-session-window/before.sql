@@ -27,7 +27,7 @@ CREATE TABLE `user_sessions` (
   PRIMARY KEY (`user_id`, `session_start`) NOT ENFORCED
 ) WITH (
   'connector' = 'jdbc',
-  'url' = 'jdbc:postgresql://db:5432/analytics',
+  'url' = 'jdbc:postgresql://db:5433/analytics',
   'table-name' = 'user_sessions',
   'driver' = 'org.postgresql.Driver'
 );

@@ -31,7 +31,7 @@ export default (
       {/* Sink 1: PostgreSQL replica */}
       <Route.Branch condition="true">
         <JdbcSink
-          url="jdbc:postgresql://db:5432/replica"
+          url="jdbc:postgresql://db:5433/replica"
           table="products_replica"
           upsertMode={true}
           keyFields={["product_id"]}
@@ -60,7 +60,7 @@ export default (
           }}
         />
         <JdbcSink
-          url="jdbc:postgresql://db:5432/analytics"
+          url="jdbc:postgresql://db:5433/analytics"
           table="category_stats"
           upsertMode={true}
           keyFields={["category"]}

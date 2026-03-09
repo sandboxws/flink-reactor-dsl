@@ -54,7 +54,7 @@ export default (
     />
     <JdbcSink
       table="page_view_stats"
-      url="jdbc:postgresql://localhost:5432/analytics"
+      url="jdbc:postgresql://localhost:5433/analytics"
     />
   </Pipeline>
 );

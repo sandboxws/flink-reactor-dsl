@@ -107,7 +107,7 @@ describe("resolveConnectorArtifacts: FileSystem", () => {
 
 describe("detectJdbcDialect", () => {
   it("detects PostgreSQL from URL", () => {
-    const dialect = detectJdbcDialect("jdbc:postgresql://localhost:5432/mydb")
+    const dialect = detectJdbcDialect("jdbc:postgresql://localhost:5433/mydb")
     expect(dialect).toBeDefined()
     expect(dialect?.dialect).toBe("postgres")
   })
@@ -146,7 +146,7 @@ describe("detectJdbcDialect", () => {
 describe("resolveJdbcDialectArtifacts", () => {
   it("resolves PostgreSQL: core + dialect + driver for Flink 2.0+", () => {
     const artifacts = resolveJdbcDialectArtifacts(
-      "jdbc:postgresql://localhost:5432/mydb",
+      "jdbc:postgresql://localhost:5433/mydb",
       "2.0",
     )
     expect(artifacts).toHaveLength(2)
@@ -160,7 +160,7 @@ describe("resolveJdbcDialectArtifacts", () => {
 
   it("resolves only driver for Flink 1.20 (single JAR includes dialects)", () => {
     const artifacts = resolveJdbcDialectArtifacts(
-      "jdbc:postgresql://localhost:5432/mydb",
+      "jdbc:postgresql://localhost:5433/mydb",
       "1.20",
     )
     expect(artifacts).toHaveLength(1)

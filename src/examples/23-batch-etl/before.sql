@@ -30,7 +30,7 @@ CREATE TABLE `dim_products` (
   PRIMARY KEY (`product_id`) NOT ENFORCED
 ) WITH (
   'connector' = 'jdbc',
-  'url' = 'jdbc:postgresql://db:5432/catalog',
+  'url' = 'jdbc:postgresql://db:5433/catalog',
   'table-name' = 'products',
   'driver' = 'org.postgresql.Driver'
 );
@@ -57,7 +57,7 @@ CREATE TABLE `daily_brand_performance` (
   PRIMARY KEY (`brand`, `sale_date`) NOT ENFORCED
 ) WITH (
   'connector' = 'jdbc',
-  'url' = 'jdbc:postgresql://db:5432/analytics',
+  'url' = 'jdbc:postgresql://db:5433/analytics',
   'table-name' = 'daily_brand_performance',
   'driver' = 'org.postgresql.Driver'
 );

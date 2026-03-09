@@ -50,6 +50,6 @@ export default (
         temp_variance: "max_temp - min_temp",
       }}
     />
-    <JdbcSink url="jdbc:postgresql://db:5432/iot" table="sensor_metrics" />
+    <JdbcSink url="jdbc:postgresql://db:5433/iot" table="sensor_metrics" />
   </Pipeline>
 )

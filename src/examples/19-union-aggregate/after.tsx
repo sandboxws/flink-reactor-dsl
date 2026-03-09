@@ -118,7 +118,7 @@ export default (
       />
     </TumbleWindow>
     <JdbcSink
-      url="jdbc:postgresql://db:5432/analytics"
+      url="jdbc:postgresql://db:5433/analytics"
       table="platform_hourly_metrics"
     />
   </Pipeline>

@@ -196,7 +196,7 @@ describe("FileSystemSink with partitioning", () => {
 describe("JdbcSink upsert mode", () => {
   it("stores upsert config with key fields on construct node", () => {
     const node = JdbcSink({
-      url: "jdbc:postgresql://localhost:5432/db",
+      url: "jdbc:postgresql://localhost:5433/db",
       table: "user_stats",
       upsertMode: true,
       keyFields: ["user_id"],
@@ -204,7 +204,7 @@ describe("JdbcSink upsert mode", () => {
 
     expect(node.kind).toBe("Sink")
     expect(node.component).toBe("JdbcSink")
-    expect(node.props.url).toBe("jdbc:postgresql://localhost:5432/db")
+    expect(node.props.url).toBe("jdbc:postgresql://localhost:5433/db")
     expect(node.props.table).toBe("user_stats")
     expect(node.props.upsertMode).toBe(true)
     expect(node.props.keyFields).toEqual(["user_id"])
