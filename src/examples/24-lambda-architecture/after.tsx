@@ -69,7 +69,7 @@ export default (
           }}
         />
         <JdbcSink
-          url="jdbc:postgresql://db:5433/analytics"
+          url="jdbc:postgresql://db:5432/analytics"
           table="user_activity_summary"
           upsertMode={true}
           keyFields={["user_id"]}

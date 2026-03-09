@@ -55,7 +55,7 @@ CREATE TABLE `monthly_country_report` (
   PRIMARY KEY (`merchant_country`, `transaction_type`) NOT ENFORCED
 ) WITH (
   'connector' = 'jdbc',
-  'url' = 'jdbc:postgresql://db:5433/reporting',
+  'url' = 'jdbc:postgresql://db:5432/reporting',
   'table-name' = 'monthly_country_report',
   'driver' = 'org.postgresql.Driver'
 );

@@ -434,7 +434,7 @@ describe("6.8: CDC source with debezium-json", () => {
     })
 
     const sink = JdbcSink({
-      url: "jdbc:postgresql://localhost:5433/warehouse",
+      url: "jdbc:postgresql://localhost:5432/warehouse",
       table: "orders_snapshot",
       upsertMode: true,
       keyFields: ["order_id"],

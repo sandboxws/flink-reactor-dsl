@@ -51,7 +51,7 @@ CREATE TABLE `user_funnel_metrics` (
   PRIMARY KEY (`user_id`) NOT ENFORCED
 ) WITH (
   'connector' = 'jdbc',
-  'url' = 'jdbc:postgresql://db:5433/analytics',
+  'url' = 'jdbc:postgresql://db:5432/analytics',
   'table-name' = 'user_funnel_metrics',
   'driver' = 'org.postgresql.Driver'
 );

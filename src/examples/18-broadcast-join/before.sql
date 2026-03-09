@@ -22,7 +22,7 @@ CREATE TABLE `blacklisted_users` (
   PRIMARY KEY (`user_id`) NOT ENFORCED
 ) WITH (
   'connector' = 'jdbc',
-  'url' = 'jdbc:postgresql://db:5433/moderation',
+  'url' = 'jdbc:postgresql://db:5432/moderation',
   'table-name' = 'blacklist',
   'driver' = 'org.postgresql.Driver'
 );

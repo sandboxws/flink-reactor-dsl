@@ -41,7 +41,7 @@ const sales = (
 
 const products = (
   <JdbcSource
-    url="jdbc:postgresql://db:5433/catalog"
+    url="jdbc:postgresql://db:5432/catalog"
     table="products"
     schema={ProductSchema}
   />
@@ -92,7 +92,7 @@ export default (
           }}
         />
         <JdbcSink
-          url="jdbc:postgresql://db:5433/analytics"
+          url="jdbc:postgresql://db:5432/analytics"
           table="daily_brand_performance"
         />
       </Route.Branch>

@@ -49,7 +49,7 @@ export default (
           />
         </TumbleWindow>
         <JdbcSink
-          url="jdbc:postgresql://db:5433/iot"
+          url="jdbc:postgresql://db:5432/iot"
           table="sensor_metrics_5min"
         />
       </Route.Branch>

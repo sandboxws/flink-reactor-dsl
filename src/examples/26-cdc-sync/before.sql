@@ -32,7 +32,7 @@ CREATE TABLE `products_replica` (
   PRIMARY KEY (`product_id`) NOT ENFORCED
 ) WITH (
   'connector' = 'jdbc',
-  'url' = 'jdbc:postgresql://db:5433/replica',
+  'url' = 'jdbc:postgresql://db:5432/replica',
   'table-name' = 'products_replica',
   'driver' = 'org.postgresql.Driver'
 );
@@ -72,7 +72,7 @@ CREATE TABLE `category_stats` (
   PRIMARY KEY (`category`) NOT ENFORCED
 ) WITH (
   'connector' = 'jdbc',
-  'url' = 'jdbc:postgresql://db:5433/analytics',
+  'url' = 'jdbc:postgresql://db:5432/analytics',
   'table-name' = 'category_stats',
   'driver' = 'org.postgresql.Driver'
 );

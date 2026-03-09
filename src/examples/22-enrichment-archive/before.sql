@@ -27,7 +27,7 @@ CREATE TABLE `user_profiles` (
   PRIMARY KEY (`user_id`) NOT ENFORCED
 ) WITH (
   'connector' = 'jdbc',
-  'url' = 'jdbc:postgresql://db:5433/users',
+  'url' = 'jdbc:postgresql://db:5432/users',
   'table-name' = 'user_profiles',
   'driver' = 'org.postgresql.Driver',
   'lookup.cache' = 'LRU',

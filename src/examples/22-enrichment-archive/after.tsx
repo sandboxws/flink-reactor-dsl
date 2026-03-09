@@ -35,7 +35,7 @@ const enriched = (
   <LookupJoin
     input={events}
     table="user_profiles"
-    url="jdbc:postgresql://db:5433/users"
+    url="jdbc:postgresql://db:5432/users"
     on="user_id"
     async={{ enabled: true, capacity: 100 }}
     cache={{ type: "lru", maxRows: 50000, ttl: "5m" }}

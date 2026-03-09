@@ -169,7 +169,7 @@ describe("LookupJoin", () => {
     const join = LookupJoin({
       input,
       table: "dim_products",
-      url: "jdbc:postgresql://localhost:5433/db",
+      url: "jdbc:postgresql://localhost:5432/db",
       on: "orders.product_id = dim_products.id",
       select: {
         product_name: "dim_products.name",
@@ -182,7 +182,7 @@ describe("LookupJoin", () => {
     expect(join.kind).toBe("Join")
     expect(join.component).toBe("LookupJoin")
     expect(join.props.table).toBe("dim_products")
-    expect(join.props.url).toBe("jdbc:postgresql://localhost:5433/db")
+    expect(join.props.url).toBe("jdbc:postgresql://localhost:5432/db")
     expect(join.props.async).toEqual({
       enabled: true,
       capacity: 100,

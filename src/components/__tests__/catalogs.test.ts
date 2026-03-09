@@ -73,13 +73,13 @@ describe("JdbcCatalog", () => {
   it("creates a Catalog node with baseUrl and defaultDatabase", () => {
     const { node, handle } = JdbcCatalog({
       name: "pg_catalog",
-      baseUrl: "jdbc:postgresql://localhost:5433/",
+      baseUrl: "jdbc:postgresql://localhost:5432/",
       defaultDatabase: "analytics",
     })
 
     expect(node.kind).toBe("Catalog")
     expect(node.component).toBe("JdbcCatalog")
-    expect(node.props.baseUrl).toBe("jdbc:postgresql://localhost:5433/")
+    expect(node.props.baseUrl).toBe("jdbc:postgresql://localhost:5432/")
     expect(node.props.defaultDatabase).toBe("analytics")
     expect(handle.catalogName).toBe("pg_catalog")
   })

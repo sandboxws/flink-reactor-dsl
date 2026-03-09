@@ -62,7 +62,7 @@ CREATE TABLE `user_activity_summary` (
   PRIMARY KEY (`user_id`) NOT ENFORCED
 ) WITH (
   'connector' = 'jdbc',
-  'url' = 'jdbc:postgresql://db:5433/analytics',
+  'url' = 'jdbc:postgresql://db:5432/analytics',
   'table-name' = 'user_activity_summary',
   'driver' = 'org.postgresql.Driver'
 );

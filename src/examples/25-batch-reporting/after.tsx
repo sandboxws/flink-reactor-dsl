@@ -91,7 +91,7 @@ export default (
           }}
         />
         <JdbcSink
-          url="jdbc:postgresql://db:5433/reporting"
+          url="jdbc:postgresql://db:5432/reporting"
           table="monthly_country_report"
         />
       </Route.Branch>
