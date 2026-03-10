@@ -1,17 +1,11 @@
-<p align="center">
-  <!-- SCREENSHOT: Create a hero banner (1200x400) with:
-       - FlinkReactor logo/wordmark on dark background
-       - Tagline: "React-style TSX for Apache Flink"
-       - Subtle code snippet or pipeline diagram in the background
-       - Use Screen Studio or Figma. Save as .github/assets/hero-banner.png -->
-  <img src=".github/assets/hero-banner.png" alt="FlinkReactor — React-style TSX for Apache Flink" width="100%" />
-</p>
+<h1 align="center">FlinkReactor</h1>
 
 <p align="center">
   <strong>Write streaming pipelines as TypeScript components. Compile to Flink SQL + Kubernetes CRDs.</strong>
 </p>
 
 <p align="center">
+  <img src="https://img.shields.io/badge/status-early%20alpha-orange" alt="early alpha" />
   <a href="https://www.npmjs.com/package/flink-reactor"><img src="https://img.shields.io/npm/v/flink-reactor?color=d97085&label=npm" alt="npm version" /></a>
   <a href="https://github.com/sandboxws/flink-reactor-dsl/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-BSL%201.1-blue" alt="license" /></a>
   <a href="https://github.com/sandboxws/flink-reactor-dsl"><img src="https://img.shields.io/github/stars/sandboxws/flink-reactor-dsl?style=social" alt="GitHub stars" /></a>
@@ -67,7 +61,7 @@ export default (
     />
     <KafkaSink topic="user_events_processed" />
   </Pipeline>
-)
+);
 ```
 
 </td>
@@ -139,28 +133,28 @@ pnpm flink-reactor graph
 
 ### <img src="assets/icons/workflow.svg" width="20" height="20" style="vertical-align: middle; margin-bottom: 2px;"> Pipeline DSL
 
-| Component | What it does |
-|-----------|-------------|
-| **Sources** | `KafkaSource`, `JdbcSource`, `GenericSource`, `CatalogSource` — declarative connectors with typed schemas |
-| **Sinks** | `KafkaSink`, `JdbcSink`, `FileSystemSink`, `PaimonSink`, `IcebergSink`, `GenericSink` |
-| **Transforms** | `Filter`, `Map`, `FlatMap`, `Aggregate`, `Union`, `Deduplicate`, `TopN`, `Route` |
-| **Joins** | `Join`, `TemporalJoin`, `LookupJoin`, `IntervalJoin` — all Flink join strategies |
-| **Windows** | `TumbleWindow`, `SlideWindow`, `SessionWindow` — TVF-based windowing |
-| **Catalogs** | `PaimonCatalog`, `IcebergCatalog`, `HiveCatalog`, `JdbcCatalog` — catalog management as components |
-| **Escape Hatches** | `RawSQL`, `UDF`, `MatchRecognize` — drop to raw SQL when you need to |
+| Component          | What it does                                                                                              |
+| ------------------ | --------------------------------------------------------------------------------------------------------- |
+| **Sources**        | `KafkaSource`, `JdbcSource`, `GenericSource`, `CatalogSource` — declarative connectors with typed schemas |
+| **Sinks**          | `KafkaSink`, `JdbcSink`, `FileSystemSink`, `PaimonSink`, `IcebergSink`, `GenericSink`                     |
+| **Transforms**     | `Filter`, `Map`, `FlatMap`, `Aggregate`, `Union`, `Deduplicate`, `TopN`, `Route`                          |
+| **Joins**          | `Join`, `TemporalJoin`, `LookupJoin`, `IntervalJoin` — all Flink join strategies                          |
+| **Windows**        | `TumbleWindow`, `SlideWindow`, `SessionWindow` — TVF-based windowing                                      |
+| **Catalogs**       | `PaimonCatalog`, `IcebergCatalog`, `HiveCatalog`, `JdbcCatalog` — catalog management as components        |
+| **Escape Hatches** | `RawSQL`, `UDF`, `MatchRecognize` — drop to raw SQL when you need to                                      |
 
 ### <img src="assets/icons/terminal.svg" width="20" height="20" style="vertical-align: middle; margin-bottom: 2px;"> CLI
 
-| Command | Description |
-|---------|-------------|
-| `flink-reactor new` | Scaffold a new project with interactive prompts |
-| `flink-reactor synth` | Synthesize pipelines to Flink SQL + CRDs |
-| `flink-reactor validate` | Validate pipeline topology (no cycles, no orphans) |
-| `flink-reactor graph` | Visualize the pipeline DAG |
-| `flink-reactor dev` | Watch mode with hot-reload |
-| `flink-reactor deploy` | Apply CRDs to a Kubernetes cluster |
-| `flink-reactor doctor` | Diagnose environment (Java, Docker, kubectl, Flink) |
-| `flink-reactor cluster` | Local Flink cluster via Docker Compose |
+| Command                  | Description                                         |
+| ------------------------ | --------------------------------------------------- |
+| `flink-reactor new`      | Scaffold a new project with interactive prompts     |
+| `flink-reactor synth`    | Synthesize pipelines to Flink SQL + CRDs            |
+| `flink-reactor validate` | Validate pipeline topology (no cycles, no orphans)  |
+| `flink-reactor graph`    | Visualize the pipeline DAG                          |
+| `flink-reactor dev`      | Watch mode with hot-reload                          |
+| `flink-reactor deploy`   | Apply CRDs to a Kubernetes cluster                  |
+| `flink-reactor doctor`   | Diagnose environment (Java, Docker, kubectl, Flink) |
+| `flink-reactor cluster`  | Local Flink cluster via Docker Compose              |
 
 <br />
 
@@ -181,7 +175,7 @@ const UserEventSchema = Schema({
     payload: Field.STRING(),
     event_time: Field.TIMESTAMP(3),
   },
-})
+});
 
 export default (
   <Pipeline name="simple-source-sink" parallelism={4}>
@@ -192,7 +186,7 @@ export default (
     />
     <KafkaSink topic="user_events_processed" />
   </Pipeline>
-)
+);
 ```
 
 ### Intermediate — Windowed Aggregation with Filter
@@ -220,7 +214,7 @@ export default (
     <Filter condition="page_views > 5" />
     <KafkaSink topic="active_users_per_minute" />
   </Pipeline>
-)
+);
 ```
 
 ### Intermediate — Interval Join
@@ -229,11 +223,19 @@ export default (
 
 ```tsx
 const orders = (
-  <KafkaSource topic="orders" bootstrapServers="kafka:9092" schema={OrderSchema} />
-)
+  <KafkaSource
+    topic="orders"
+    bootstrapServers="kafka:9092"
+    schema={OrderSchema}
+  />
+);
 const shipments = (
-  <KafkaSource topic="shipments" bootstrapServers="kafka:9092" schema={ShipmentSchema} />
-)
+  <KafkaSource
+    topic="shipments"
+    bootstrapServers="kafka:9092"
+    schema={ShipmentSchema}
+  />
+);
 
 export default (
   <Pipeline name="order-fulfillment" parallelism={8}>
@@ -254,7 +256,7 @@ export default (
     />
     <KafkaSink topic="order_fulfillment" />
   </Pipeline>
-)
+);
 ```
 
 ### Advanced — CEP Fraud Detection
@@ -295,7 +297,7 @@ export default (
     />
     <KafkaSink topic="fraud_alerts" />
   </Pipeline>
-)
+);
 ```
 
 ### Advanced — Conditional Fan-Out
@@ -305,7 +307,11 @@ export default (
 ```tsx
 export default (
   <Pipeline name="order-routing" parallelism={16}>
-    <KafkaSource topic="raw_orders" bootstrapServers="kafka:9092" schema={OrderSchema} />
+    <KafkaSource
+      topic="raw_orders"
+      bootstrapServers="kafka:9092"
+      schema={OrderSchema}
+    />
     <Map
       select={{
         order_id: "order_id",
@@ -342,7 +348,7 @@ export default (
       </Route.Default>
     </Route>
   </Pipeline>
-)
+);
 ```
 
 ### Advanced — Lambda Architecture
@@ -352,7 +358,11 @@ export default (
 ```tsx
 export default (
   <Pipeline name="clickstream-lambda" parallelism={24}>
-    <KafkaSource topic="clickstream" bootstrapServers="kafka:9092" schema={ClickstreamSchema} />
+    <KafkaSource
+      topic="clickstream"
+      bootstrapServers="kafka:9092"
+      schema={ClickstreamSchema}
+    />
     <Route>
       {/* Raw archive to data lake */}
       <Route.Branch condition="true">
@@ -404,7 +414,7 @@ export default (
       </Route.Branch>
     </Route>
   </Pipeline>
-)
+);
 ```
 
 > **See all 28 examples** in the [`src/examples/`](src/examples/) directory.
@@ -415,28 +425,28 @@ export default (
 
 ```
 ┌──────────────────────────────────────────────────┐
-│                  Your Pipeline                    │
-│           (TypeScript + JSX components)           │
+│                  Your Pipeline                   │
+│           (TypeScript + JSX components)          │
 └──────────────────┬───────────────────────────────┘
                    │ flink-reactor synth
                    ▼
 ┌──────────────────────────────────────────────────┐
-│              Construct Tree (DAG)                 │
+│              Construct Tree (DAG)                │
 │    Sources → Transforms → Joins → Sinks          │
-│         Topology validation + wiring              │
+│         Topology validation + wiring             │
 └──────────┬───────────────────────┬───────────────┘
            │                       │
            ▼                       ▼
 ┌─────────────────────┐  ┌─────────────────────────┐
-│     SQL Generator    │  │     CRD Generator       │
-│  CREATE TABLE ...    │  │  FlinkDeployment YAML   │
-│  INSERT INTO ...     │  │  Connector JAR manifest  │
+│     SQL Generator   │  │     CRD Generator       │
+│  CREATE TABLE ...   │  │  FlinkDeployment YAML   │
+│  INSERT INTO ...    │  │  Connector JAR manifest │
 └─────────────────────┘  └─────────────────────────┘
            │                       │
            ▼                       ▼
 ┌──────────────────────────────────────────────────┐
-│         Flink Kubernetes Operator                 │
-│    Deploys your pipeline to a Flink cluster       │
+│         Flink Kubernetes Operator                │
+│    Deploys your pipeline to a Flink cluster      │
 └──────────────────────────────────────────────────┘
 ```
 
@@ -467,24 +477,24 @@ flink-reactor-dsl/
 └── scripts/                      # Build and publish scripts
 ```
 
-| Package | npm | Description |
-|---------|-----|-------------|
-| `flink-reactor` | [![npm](https://img.shields.io/npm/v/flink-reactor?color=d97085&label=)](https://www.npmjs.com/package/flink-reactor) | Core DSL engine, components, codegen, CLI |
-| `@flink-reactor/create-app` | [![npm](https://img.shields.io/npm/v/@flink-reactor/create-app?color=d97085&label=)](https://www.npmjs.com/package/@flink-reactor/create-app) | Project scaffolder |
-| `@flink-reactor/ts-plugin` | [![npm](https://img.shields.io/npm/v/@flink-reactor/ts-plugin?color=d97085&label=)](https://www.npmjs.com/package/@flink-reactor/ts-plugin) | TypeScript language service plugin |
+| Package                     | npm                                                                                                                                           | Description                               |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `flink-reactor`             | [![npm](https://img.shields.io/npm/v/flink-reactor?color=d97085&label=)](https://www.npmjs.com/package/flink-reactor)                         | Core DSL engine, components, codegen, CLI |
+| `@flink-reactor/create-app` | [![npm](https://img.shields.io/npm/v/@flink-reactor/create-app?color=d97085&label=)](https://www.npmjs.com/package/@flink-reactor/create-app) | Project scaffolder                        |
+| `@flink-reactor/ts-plugin`  | [![npm](https://img.shields.io/npm/v/@flink-reactor/ts-plugin?color=d97085&label=)](https://www.npmjs.com/package/@flink-reactor/ts-plugin)   | TypeScript language service plugin        |
 
 <br />
 
 ## <img src="assets/icons/circle-check.svg" width="24" height="24" style="vertical-align: middle; margin-bottom: 2px;"> Flink Version Compatibility
 
-| Feature | Flink 1.20 | Flink 2.0 | Flink 2.1 | Flink 2.2 |
-|---------|:----------:|:---------:|:---------:|:---------:|
-| All DSL components | ✅ | ✅ | ✅ | ✅ |
-| Flink SQL codegen | ✅ | ✅ | ✅ | ✅ |
-| FlinkDeployment CRDs | ✅ | ✅ | ✅ | ✅ |
-| Connector JAR resolution | ✅ | ✅ | ✅ | ✅ |
-| `CREATE MODEL` / `ML_PREDICT` | — | — | 🔜 v0.2 | 🔜 v0.2 |
-| `VECTOR_SEARCH` | — | — | — | 🔜 v0.2 |
+| Feature                       | Flink 1.20 | Flink 2.0 | Flink 2.1 | Flink 2.2 |
+| ----------------------------- | :--------: | :-------: | :-------: | :-------: |
+| All DSL components            |     ✅     |    ✅     |    ✅     |    ✅     |
+| Flink SQL codegen             |     ✅     |    ✅     |    ✅     |    ✅     |
+| FlinkDeployment CRDs          |     ✅     |    ✅     |    ✅     |    ✅     |
+| Connector JAR resolution      |     ✅     |    ✅     |    ✅     |    ✅     |
+| `CREATE MODEL` / `ML_PREDICT` |     —      |     —     |  🔜 v0.2  |  🔜 v0.2  |
+| `VECTOR_SEARCH`               |     —      |     —     |     —     |  🔜 v0.2  |
 
 Differences between versions (config key renames, JDBC connector structure) are handled automatically by `FlinkVersionCompat`.
 
