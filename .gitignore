@@ -376,3 +376,12 @@ $RECYCLE.BIN/
 
 # Private docs (not for public repo)
 docs/
+
+# AI/IDE agent config (contains local settings and internal workflows)
+.agent/
+.claude/
+.cursor/
+.crush/
+.codex/
+.opencode/
+.gemini/
