@@ -502,7 +502,7 @@ Differences between versions (config key renames, JDBC connector structure) are 
 
 ## <img src="assets/icons/heart-handshake.svg" width="24" height="24" style="vertical-align: middle; margin-bottom: 2px;"> Contributing
 
-We welcome contributions of all kinds.
+We welcome contributions of all kinds. First-time contributors will be asked to sign our [Contributor License Agreement](.github/CLA.md) via a PR comment.
 
 ```bash
 # Clone and install
@@ -528,4 +528,10 @@ pnpm format
 
 ## <img src="assets/icons/scale.svg" width="24" height="24" style="vertical-align: middle; margin-bottom: 2px;"> License
 
-Licensed under [BSL 1.1](./LICENSE) — free for production use, restricted for competing managed services, converts to Apache 2.0 after the change date.
+Licensed under [BSL 1.1](./LICENSE).
+
+- **Internal production use is always free** — use FlinkReactor to build and run your own pipelines without restriction.
+- **Commercial license required** to offer FlinkReactor (or a derivative) as a managed service, hosted platform, or API to third parties.
+- **Converts to [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) on 2030-03-10** — after the change date, this version becomes fully open source.
+
+For commercial licensing inquiries, see [flink-reactor-platform](https://github.com/sandboxws/flink-reactor-platform).
