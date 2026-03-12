@@ -271,3 +271,59 @@ export type {
   TypedConstructNode,
 } from "./core/types.js"
 export { createStream } from "./core/types.js"
+// Core: Effect foundation — errors
+export {
+  CliError,
+  ClusterError,
+  ConfigError,
+  CrdGenerationError,
+  CycleDetectedError,
+  DiscoveryError,
+  FileSystemError,
+  PluginError,
+  SchemaError,
+  SqlGatewayConnectionError,
+  SqlGatewayResponseError,
+  SqlGatewayTimeoutError,
+  SqlGenerationError,
+  ValidationError,
+} from "./core/errors.js"
+export type { SqlGatewayError, SynthError } from "./core/errors.js"
+// Core: Effect foundation — services
+export {
+  CliOutput,
+  ConfigProvider,
+  FrFileSystem,
+  FrHttpClient,
+  PipelineLoader,
+  ProcessRunner,
+} from "./core/services.js"
+export type {
+  CliOutputService,
+  ConfigProviderService,
+  FrFileSystemService,
+  FrHttpClientService,
+  HttpResponse,
+  PipelineLoaderService,
+  ProcessResult,
+  ProcessRunnerService,
+} from "./core/services.js"
+// Core: Effect foundation — layers
+export {
+  CliOutputLive,
+  ConfigProviderLive,
+  MainLive,
+  NodeFileSystemLive,
+  NodeHttpClientLive,
+  PipelineLoaderLive,
+  ProcessRunnerLive,
+} from "./core/layers.js"
+// Core: Effect foundation — bridge utilities
+export {
+  fromThrowable,
+  fromThrowableAsync,
+  runPromise,
+  runSync,
+  runWithCause,
+  toValidationEffect,
+} from "./core/effect-utils.js"

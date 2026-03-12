@@ -1,5 +1,11 @@
+import { Effect } from "effect"
 import { type AnyFlinkCrd, generateCrd } from "@/codegen/crd-generator.js"
 import { generateSql } from "@/codegen/sql-generator.js"
+import type {
+  CrdGenerationError,
+  PluginError,
+  SqlGenerationError,
+} from "@/core/errors.js"
 import {
   registerComponentKinds,
   resetComponentKinds,
@@ -87,4 +93,82 @@ export function synth(
       resetComponentKinds()
     }
   }
+}
+
+// ── Effect variant ──────────────────────────────────────────────────
+
+/**
+ * Effect-based synthesis test helper.
+ *
+ * Same as `synth()` but returns an Effect with typed errors.
+ * Useful when composing synthesis with other Effect operations
+ * in test pipelines.
+ *
+ * @example
+ * ```ts
+ * import { synthEffect } from 'flink-reactor/testing';
+ *
+ * it('produces correct SQL', async () => {
+ *   const result = await Effect.runPromise(synthEffect(<OrderProcessing />));
+ *   expect(result.sql).toMatchSnapshot();
+ * });
+ * ```
+ */
+export function synthEffect(
+  pipeline: ConstructNode,
+  options?: SynthOptions,
+): Effect.Effect<
+  SynthResult,
+  PluginError | SqlGenerationError | CrdGenerationError
+> {
+  return Effect.acquireUseRelease(
+    // Acquire: resolve plugins
+    Effect.sync(() => {
+      const chain =
+        options?.plugins && options.plugins.length > 0
+          ? resolvePlugins(options.plugins)
+          : EMPTY_PLUGIN_CHAIN
+
+      if (chain.components.size > 0) {
+        registerComponentKinds(chain.components)
+      }
+
+      return chain
+    }),
+    // Use: run synthesis
+    (chain) =>
+      Effect.try({
+        try: () => {
+          const flinkVersion = options?.flinkVersion ?? "2.0"
+
+          let node =
+            chain.components.size > 0
+              ? rekindTree(pipeline, chain.components)
+              : pipeline
+
+          node = chain.transformTree(node)
+
+          const sqlResult = generateSql(node, {
+            flinkVersion,
+            pluginSqlGenerators:
+              chain.sqlGenerators.size > 0 ? chain.sqlGenerators : undefined,
+            pluginDdlGenerators:
+              chain.ddlGenerators.size > 0 ? chain.ddlGenerators : undefined,
+          })
+
+          let crd = generateCrd(node, { flinkVersion })
+          crd = chain.transformCrd(crd, node)
+
+          return { sql: sqlResult.sql, crd } as SynthResult
+        },
+        catch: (err) => err as Error,
+      }) as Effect.Effect<SynthResult>,
+    // Release: clean up
+    (chain) =>
+      Effect.sync(() => {
+        if (chain.components.size > 0) {
+          resetComponentKinds()
+        }
+      }),
+  )
 }

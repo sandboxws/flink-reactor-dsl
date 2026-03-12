@@ -1,4 +1,9 @@
-export { type SynthOptions, type SynthResult, synth } from "./synth.js"
+export {
+  type SynthOptions,
+  type SynthResult,
+  synth,
+  synthEffect,
+} from "./synth.js"
 export {
   type Diagnostic,
   type ValidateOptions,

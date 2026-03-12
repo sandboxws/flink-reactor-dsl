@@ -1,10 +1,14 @@
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import type { Command } from "commander"
+import { Effect } from "effect"
 import pc from "picocolors"
 import { loadPipeline, resolveProjectContext } from "@/cli/discovery.js"
-import { toYaml } from "@/codegen/crd-generator.js"
+import { generateCrd, toYaml } from "@/codegen/crd-generator.js"
+import { generateSql, generateTapManifest } from "@/codegen/sql-generator.js"
 import { type PipelineArtifact, synthesizeApp } from "@/core/app.js"
+import { DiscoveryError, type FileSystemError } from "@/core/errors.js"
+import { FrFileSystem } from "@/core/services.js"
 
 export function registerSynthCommand(program: Command): void {
   program
@@ -150,4 +154,129 @@ function buildConfigMapYaml(artifact: PipelineArtifact): string {
   }
 
   return toYaml(configMapObj)
+}
+
+// ── Effect variant ──────────────────────────────────────────────────
+
+/**
+ * Effect-based synth program.
+ *
+ * Same logic as `runSynth` but returns an Effect with typed errors.
+ * Uses FrFileSystem service for file writes.
+ */
+export function runSynthEffect(opts: {
+  pipeline?: string
+  env?: string
+  outdir: string
+  projectDir?: string
+}): Effect.Effect<
+  readonly PipelineArtifact[],
+  DiscoveryError | FileSystemError,
+  FrFileSystem
+> {
+  return Effect.gen(function* () {
+    const fs = yield* FrFileSystem
+    const projectDir = opts.projectDir ?? process.cwd()
+
+    const ctx = yield* Effect.tryPromise({
+      try: () =>
+        resolveProjectContext(projectDir, {
+          pipeline: opts.pipeline,
+          env: opts.env,
+        }),
+      catch: (err) =>
+        new DiscoveryError({
+          reason: "config_not_found",
+          message: (err as Error).message,
+          path: projectDir,
+        }),
+    })
+
+    if (ctx.pipelines.length === 0) {
+      return [] as readonly PipelineArtifact[]
+    }
+
+    const allArtifacts: PipelineArtifact[] = []
+
+    for (const discovered of ctx.pipelines) {
+      const pipelineNode = yield* Effect.tryPromise({
+        try: () => loadPipeline(discovered.entryPoint, projectDir),
+        catch: (err) =>
+          new DiscoveryError({
+            reason: "import_failure",
+            message: (err as Error).message,
+            path: discovered.entryPoint,
+          }),
+      })
+
+      const result = synthesizeApp(
+        {
+          name: discovered.name,
+          children: pipelineNode,
+        },
+        {
+          env: ctx.env ?? undefined,
+          config: ctx.config ?? undefined,
+          resolvedConfig: ctx.resolvedConfig ?? undefined,
+        },
+      )
+
+      for (const artifact of result.pipelines) {
+        allArtifacts.push(artifact)
+        yield* writePipelineOutputEffect(artifact, opts.outdir, projectDir, fs)
+      }
+
+      // Fallback: treat whole tree as single pipeline
+      if (result.pipelines.length === 0) {
+        const flinkVersion = ctx.config?.flink?.version ?? "2.0"
+        const sql = generateSql(pipelineNode, { flinkVersion })
+        const crd = generateCrd(pipelineNode, { flinkVersion })
+        const { manifest: tapManifest } = generateTapManifest(pipelineNode, {
+          flinkVersion,
+          devMode: true,
+        })
+
+        const artifact: PipelineArtifact = {
+          name: discovered.name,
+          sql,
+          crd,
+          tapManifest,
+        }
+
+        allArtifacts.push(artifact)
+        yield* writePipelineOutputEffect(artifact, opts.outdir, projectDir, fs)
+      }
+    }
+
+    return allArtifacts as readonly PipelineArtifact[]
+  })
+}
+
+function writePipelineOutputEffect(
+  artifact: PipelineArtifact,
+  outdir: string,
+  projectDir: string,
+  fs: FrFileSystem["Type"],
+): Effect.Effect<void, FileSystemError> {
+  return Effect.gen(function* () {
+    const pipelineDir = join(projectDir, outdir, artifact.name)
+    yield* fs.mkdir(pipelineDir, { recursive: true })
+
+    yield* fs.writeFile(join(pipelineDir, "pipeline.sql"), artifact.sql.sql)
+
+    const crdYaml = toYaml(artifact.crd)
+    yield* fs.writeFile(join(pipelineDir, "deployment.yaml"), crdYaml)
+
+    const configMap = buildConfigMapYaml(artifact)
+    yield* fs.writeFile(join(pipelineDir, "configmap.yaml"), configMap)
+
+    if (artifact.tapManifest) {
+      const outdirPath = join(projectDir, outdir)
+      yield* fs.mkdir(outdirPath, { recursive: true })
+      yield* fs.writeFile(
+        join(outdirPath, `${artifact.name}.tap-manifest.json`),
+        JSON.stringify(artifact.tapManifest, null, 2),
+      )
+    }
+  })
 }

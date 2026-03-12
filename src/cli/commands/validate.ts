@@ -1,6 +1,8 @@
 import type { Command } from "commander"
+import { Effect } from "effect"
 import pc from "picocolors"
 import { loadPipeline, resolveProjectContext } from "@/cli/discovery.js"
+import { DiscoveryError, ValidationError } from "@/core/errors.js"
 import { FlinkVersionCompat } from "@/core/flink-compat.js"
 import {
   SynthContext,
@@ -237,4 +239,72 @@ function validateFlinkVersionFeatures(
 
   walk(node)
   return diagnostics
+}
+
+// ── Effect variant ──────────────────────────────────────────────────
+
+/**
+ * Effect-based validation program.
+ *
+ * Returns validation results with typed errors for discovery failures
+ * and validation failures.
+ */
+export function runValidateEffect(opts: {
+  pipeline?: string
+  env?: string
+  projectDir?: string
+}): Effect.Effect<
+  readonly PipelineValidationResult[],
+  DiscoveryError | ValidationError
+> {
+  return Effect.gen(function* () {
+    const projectDir = opts.projectDir ?? process.cwd()
+
+    const projectCtx = yield* Effect.tryPromise({
+      try: () =>
+        resolveProjectContext(projectDir, {
+          pipeline: opts.pipeline,
+          env: opts.env,
+        }),
+      catch: (err) =>
+        new DiscoveryError({
+          reason: "config_not_found",
+          message: (err as Error).message,
+          path: projectDir,
+        }),
+    })
+
+    if (projectCtx.pipelines.length === 0) {
+      return [] as readonly PipelineValidationResult[]
+    }
+
+    const flinkVersion: FlinkMajorVersion =
+      projectCtx.config?.flink?.version ?? "2.0"
+
+    const results: PipelineValidationResult[] = []
+
+    for (const discovered of projectCtx.pipelines) {
+      const pipelineNode = yield* Effect.tryPromise({
+        try: () => loadPipeline(discovered.entryPoint, projectDir),
+        catch: (err) =>
+          new DiscoveryError({
+            reason: "import_failure",
+            message: (err as Error).message,
+            path: discovered.entryPoint,
+          }),
+      })
+
+      results.push(
+        validatePipeline(pipelineNode, discovered.name, flinkVersion),
+      )
+    }
+
+    // Check for validation errors across all pipelines
+    const allErrors = results.flatMap((r) => [...r.errors])
+    if (allErrors.length > 0) {
+      return yield* Effect.fail(new ValidationError({ diagnostics: allErrors }))
+    }
+
+    return results as readonly PipelineValidationResult[]
+  })
 }

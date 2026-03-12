@@ -1,3 +1,5 @@
+import { Either } from "effect"
+import { CycleDetectedError, ValidationError } from "./errors.js"
 import type { PluginValidator } from "./plugin.js"
 import type { ChangelogMode, ConstructNode, NodeKind } from "./types.js"
 
@@ -415,5 +417,48 @@ export class SynthContext {
     }
 
     return [...builtIn, ...pluginDiagnostics]
+  }
+
+  // ── Effect-typed variants ─────────────────────────────────────────
+
+  /**
+   * Topological sort returning Either with typed error.
+   * Synchronous, no I/O — uses Either for pure error signaling.
+   */
+  topologicalSortEither(): Either.Either<ConstructNode[], CycleDetectedError> {
+    try {
+      return Either.right(this.topologicalSort())
+    } catch {
+      // Find cycle participants for error context
+      const cycleNodes = this.detectCycles()
+      const nodeIds = cycleNodes
+        .map((d) => d.nodeId)
+        .filter(Boolean) as string[]
+      return Either.left(
+        new CycleDetectedError({
+          nodeIds,
+          message: "Cycle detected in pipeline graph",
+        }),
+      )
+    }
+  }
+
+  /**
+   * Validate returning Either with typed error.
+   * Returns Right(warnings) or Left(ValidationError with errors).
+   */
+  validateEither(
+    root?: ConstructNode,
+    pluginValidators?: readonly PluginValidator[],
+  ): Either.Either<ValidationDiagnostic[], ValidationError> {
+    const all = this.validate(root, pluginValidators)
+    const errors = all.filter((d) => d.severity === "error")
+    const warnings = all.filter((d) => d.severity === "warning")
+
+    if (errors.length > 0) {
+      return Either.left(new ValidationError({ diagnostics: errors }))
+    }
+
+    return Either.right(warnings)
   }
 }

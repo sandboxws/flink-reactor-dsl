@@ -757,8 +757,7 @@ async function downloadDump(
           throw new Error(`HTTP ${response.status} fetching ${url}`)
         }
         const ws = createWriteStream(tmpBz2)
-        // @ts-expect-error -- ReadableStream/NodeStream interop
-        await pipeline(response.body, ws)
+        await pipeline(response.body as never, ws)
         execSync(`bunzip2 -c "${tmpBz2}" > "${tmpDecompressed}"`, {
           stdio: "pipe",
         })

@@ -65,11 +65,7 @@
   "assist": { "actions": { "source": { "organizeImports": "on" } } },
   "overrides": [
     {
-      "includes": [
-        "src/cli/**",
-        "packages/create-fr-app/src/**",
-        "scripts/**"
-      ],
+      "includes": ["src/cli/**", "packages/create-fr-app/src/**", "scripts/**"],
       "linter": { "rules": { "suspicious": { "noConsole": "off" } } }
     },
     {
