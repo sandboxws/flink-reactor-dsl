@@ -2,8 +2,11 @@ import { execSync } from "node:child_process"
 import { writeFileSync } from "node:fs"
 import { join } from "node:path"
 import type { Command } from "commander"
+import { Effect } from "effect"
 import pc from "picocolors"
+import { runCommand } from "@/cli/effect-runner.js"
 import { loadPipeline, resolveProjectContext } from "@/cli/discovery.js"
+import { CliError } from "@/core/errors.js"
 import { type GraphEdge, SynthContext } from "@/core/synth-context.js"
 import type { ConstructNode } from "@/core/types.js"
 
@@ -20,7 +23,16 @@ export function registerGraphCommand(program: Command): void {
     .option("--open", "Open SVG in browser (with --format svg)")
     .action(
       async (opts: { pipeline?: string; format: string; open?: boolean }) => {
-        await runGraph(opts)
+        await runCommand(
+          Effect.tryPromise({
+            try: () => runGraph(opts),
+            catch: (err) =>
+              new CliError({
+                reason: "invalid_args",
+                message: (err as Error).message,
+              }),
+          }),
+        )
       },
     )
 }

@@ -1,5 +1,8 @@
 import type { Command } from "commander"
+import { Effect } from "effect"
 import pc from "picocolors"
+import { runCommand } from "../effect-runner.js"
+import { CliError } from "../../core/errors.js"
 import {
   buildResolvedDashboardJson,
   resolveConfig,
@@ -20,7 +23,16 @@ export function registerDashboardCommand(program: Command): void {
     .requiredOption("-e, --env <name>", "Environment name")
     .option("-o, --output <path>", "Output file path")
     .action(async (opts: { env: string; output?: string }) => {
-      await runDashboardExport(opts)
+      await runCommand(
+        Effect.tryPromise({
+          try: () => runDashboardExport(opts),
+          catch: (err) =>
+            new CliError({
+              reason: "invalid_args",
+              message: (err as Error).message,
+            }),
+        }),
+      )
     })
 }
 

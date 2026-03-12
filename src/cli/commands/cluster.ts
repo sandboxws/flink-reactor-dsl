@@ -13,7 +13,10 @@ import { pipeline } from "node:stream/promises"
 import { fileURLToPath } from "node:url"
 import * as clack from "@clack/prompts"
 import type { Command } from "commander"
+import { Effect } from "effect"
 import pc from "picocolors"
+import { runCommand } from "@/cli/effect-runner.js"
+import { CliError } from "@/core/errors.js"
 import type { CdcDomain } from "@/cli/cluster/cdc-publisher.js"
 
 // ── Resource path resolution ─────────────────────────────────────────
@@ -66,11 +69,18 @@ export function registerClusterCommand(program: Command): void {
       "all",
     )
     .action(async (opts: { port: string; seed?: boolean; domain: string }) => {
-      await runClusterUp({
-        port: opts.port,
-        seed: opts.seed ?? false,
-        domain: opts.domain as CdcDomain,
-      })
+      await runCommand(
+        Effect.tryPromise({
+          try: () =>
+            runClusterUp({
+              port: opts.port,
+              seed: opts.seed ?? false,
+              domain: opts.domain as CdcDomain,
+            }),
+          catch: (err) =>
+            new CliError({ reason: "invalid_args", message: (err as Error).message }),
+        }),
+      )
     })
 
   cluster
@@ -78,7 +88,13 @@ export function registerClusterCommand(program: Command): void {
     .description("Stop local Flink cluster")
     .option("--volumes", "Remove Docker volumes (checkpoint and state data)")
     .action(async (opts: { volumes?: boolean }) => {
-      await runClusterDown({ volumes: opts.volumes ?? false })
+      await runCommand(
+        Effect.tryPromise({
+          try: () => runClusterDown({ volumes: opts.volumes ?? false }),
+          catch: (err) =>
+            new CliError({ reason: "invalid_args", message: (err as Error).message }),
+        }),
+      )
     })
 
   cluster
@@ -94,10 +110,17 @@ export function registerClusterCommand(program: Command): void {
       "all",
     )
     .action(async (opts: { only?: string; domain: string }) => {
-      await runClusterSeed({
-        only: opts.only as SeedCategory | undefined,
-        domain: opts.domain as CdcDomain,
-      })
+      await runCommand(
+        Effect.tryPromise({
+          try: () =>
+            runClusterSeed({
+              only: opts.only as SeedCategory | undefined,
+              domain: opts.domain as CdcDomain,
+            }),
+          catch: (err) =>
+            new CliError({ reason: "invalid_args", message: (err as Error).message }),
+        }),
+      )
     })
 
   cluster
@@ -105,7 +128,13 @@ export function registerClusterCommand(program: Command): void {
     .description("Show cluster health, running jobs, and resource utilization")
     .option("--port <port>", "Flink REST port", "8081")
     .action(async (opts: { port: string }) => {
-      await runClusterStatus(parseInt(opts.port, 10))
+      await runCommand(
+        Effect.tryPromise({
+          try: () => runClusterStatus(parseInt(opts.port, 10)),
+          catch: (err) =>
+            new CliError({ reason: "invalid_args", message: (err as Error).message }),
+        }),
+      )
     })
 
   cluster
@@ -113,7 +142,13 @@ export function registerClusterCommand(program: Command): void {
     .description("Submit a single SQL file via SQL Gateway")
     .option("--port <port>", "SQL Gateway port", "8083")
     .action(async (sqlFile: string, opts: { port: string }) => {
-      await runClusterSubmit(sqlFile, parseInt(opts.port, 10))
+      await runCommand(
+        Effect.tryPromise({
+          try: () => runClusterSubmit(sqlFile, parseInt(opts.port, 10)),
+          catch: (err) =>
+            new CliError({ reason: "invalid_args", message: (err as Error).message }),
+        }),
+      )
     })
 }
 

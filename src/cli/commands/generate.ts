@@ -1,7 +1,10 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import type { Command } from "commander"
+import { Effect } from "effect"
 import pc from "picocolors"
+import { runCommand } from "@/cli/effect-runner.js"
+import { CliError } from "@/core/errors.js"
 
 export function registerGenerateCommand(program: Command): void {
   const generate = program
@@ -18,48 +21,87 @@ export function registerGenerateCommand(program: Command): void {
       "blank",
     )
     .description("Generate a new pipeline")
-    .action((name: string, opts: Record<string, string>) => {
-      generatePipeline(name, opts.template ?? "blank")
+    .action(async (name: string, opts: Record<string, string>) => {
+      await runCommand(
+        Effect.try({
+          try: () => generatePipeline(name, opts.template ?? "blank"),
+          catch: (err) =>
+            new CliError({
+              reason: "invalid_args",
+              message: (err as Error).message,
+            }),
+        }),
+      )
     })
 
   generate
     .command("schema")
     .argument("<name>", "Schema name")
     .description("Generate a new schema file")
-    .action((name: string) => {
-      generateSchema(name)
+    .action(async (name: string) => {
+      await runCommand(
+        Effect.try({
+          try: () => generateSchema(name),
+          catch: (err) =>
+            new CliError({ reason: "invalid_args", message: (err as Error).message }),
+        }),
+      )
     })
 
   generate
     .command("env")
     .argument("<name>", "Environment name")
     .description("Generate a new environment config")
-    .action((name: string) => {
-      generateEnv(name)
+    .action(async (name: string) => {
+      await runCommand(
+        Effect.try({
+          try: () => generateEnv(name),
+          catch: (err) =>
+            new CliError({ reason: "invalid_args", message: (err as Error).message }),
+        }),
+      )
     })
 
   generate
     .command("pattern")
     .argument("<name>", "Pattern name")
     .description("Generate a new reusable pattern")
-    .action((name: string) => {
-      generatePattern(name)
+    .action(async (name: string) => {
+      await runCommand(
+        Effect.try({
+          try: () => generatePattern(name),
+          catch: (err) =>
+            new CliError({ reason: "invalid_args", message: (err as Error).message }),
+        }),
+      )
     })
 
   generate
     .command("app")
     .argument("<name>", "App name")
     .description("Generate a new app (monorepo only)")
-    .action((name: string) => {
-      generateApp(name)
+    .action(async (name: string) => {
+      await runCommand(
+        Effect.try({
+          try: () => generateApp(name),
+          catch: (err) =>
+            new CliError({ reason: "invalid_args", message: (err as Error).message }),
+        }),
+      )
     })
 
   generate
     .command("package")
     .argument("<name>", "Package name")
     .description("Generate a new package (monorepo only)")
-    .action((name: string) => {
-      generatePackage(name)
+    .action(async (name: string) => {
+      await runCommand(
+        Effect.try({
+          try: () => generatePackage(name),
+          catch: (err) =>
+            new CliError({ reason: "invalid_args", message: (err as Error).message }),
+        }),
+      )
     })
 }
 

@@ -1,6 +1,7 @@
 import type { Command } from "commander"
 import { Effect } from "effect"
 import pc from "picocolors"
+import { runCommand } from "@/cli/effect-runner.js"
 import { loadPipeline, resolveProjectContext } from "@/cli/discovery.js"
 import { DiscoveryError, ValidationError } from "@/core/errors.js"
 import { FlinkVersionCompat } from "@/core/flink-compat.js"
@@ -27,10 +28,7 @@ export function registerValidateCommand(program: Command): void {
     .option("-p, --pipeline <name>", "Validate a specific pipeline")
     .option("-e, --env <name>", "Environment name")
     .action(async (opts: { pipeline?: string; env?: string }) => {
-      const success = await runValidate(opts)
-      if (!success) {
-        process.exitCode = 1
-      }
+      await runCommand(runValidateEffect(opts))
     })
 }
 
@@ -275,11 +273,22 @@ export function runValidateEffect(opts: {
     })
 
     if (projectCtx.pipelines.length === 0) {
+      yield* Effect.sync(() =>
+        console.log(pc.yellow("No pipelines found in pipelines/ directory.")),
+      )
       return [] as readonly PipelineValidationResult[]
     }
 
     const flinkVersion: FlinkMajorVersion =
       projectCtx.config?.flink?.version ?? "2.0"
+
+    yield* Effect.sync(() =>
+      console.log(
+        pc.dim(
+          `Validating ${projectCtx.pipelines.length} pipeline(s)...\n`,
+        ),
+      ),
+    )
 
     const results: PipelineValidationResult[] = []
 
@@ -299,7 +308,49 @@ export function runValidateEffect(opts: {
       )
     }
 
-    // Check for validation errors across all pipelines
+    // Print results
+    yield* Effect.sync(() => {
+      let hasErrors = false
+
+      for (const result of results) {
+        if (result.errors.length === 0 && result.warnings.length === 0) {
+          console.log(
+            `  ${pc.green("✓")} ${pc.bold(result.name)} ${pc.dim("— valid")}`,
+          )
+        } else {
+          if (result.errors.length > 0) {
+            hasErrors = true
+            console.log(
+              `  ${pc.red("✗")} ${pc.bold(result.name)} ${pc.dim(`— ${result.errors.length} error(s)`)}`,
+            )
+            for (const err of result.errors) {
+              console.log(`    ${pc.red("error:")} ${err.message}`)
+              if (err.component) {
+                console.log(`    ${pc.dim(`component: ${err.component}`)}`)
+              }
+            }
+          }
+
+          if (result.warnings.length > 0) {
+            console.log(
+              `  ${pc.yellow("!")} ${pc.bold(result.name)} ${pc.dim(`— ${result.warnings.length} warning(s)`)}`,
+            )
+            for (const warn of result.warnings) {
+              console.log(`    ${pc.yellow("warning:")} ${warn.message}`)
+            }
+          }
+        }
+      }
+
+      console.log("")
+      if (hasErrors) {
+        console.log(pc.red("Validation failed."))
+      } else {
+        console.log(pc.green("All pipelines valid."))
+      }
+    })
+
+    // Fail with typed error if there are validation errors
     const allErrors = results.flatMap((r) => [...r.errors])
     if (allErrors.length > 0) {
       return yield* Effect.fail(new ValidationError({ diagnostics: allErrors }))

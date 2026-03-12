@@ -1,21 +1,38 @@
 // ── CLI Effect runner ───────────────────────────────────────────────
 // Shared entry point for running Effect programs in CLI commands.
-// Provides the MainLive layer and handles error display from Cause.
+// Provides the AppLayer and handles error display from Cause.
 
-import { Cause, Effect } from "effect"
-import pc from "picocolors"
+import { Cause, Effect, type Layer } from "effect"
+import { renderCause } from "./error-display.js"
 import type { SynthError } from "../core/errors.js"
-import { MainLive } from "../core/layers.js"
+import { AppLayer } from "../core/layers.js"
+
+/** All services provided by AppLayer */
+type AppServices = Layer.Layer.Success<typeof AppLayer>
 
 /**
  * Run an Effect program as a CLI command action.
  *
- * Provides MainLive, runs the effect, and handles failures
- * by displaying user-friendly error messages derived from
- * Effect's Cause.
+ * Provides AppLayer (all services including ProcessEnv),
+ * runs the effect, and handles failures by displaying
+ * user-friendly error messages derived from Effect's Cause.
  */
+/**
+ * Bridge an Effect program into a Commander action.
+ *
+ * Convenience wrapper that reads --verbose from process.argv.
+ * Use this from command action handlers.
+ */
+export function runCommand<A>(
+  program: Effect.Effect<A, SynthError, AppServices>,
+): Promise<A | undefined> {
+  const verbose = process.argv.includes("--verbose")
+  return runEffectCommand(program, { verbose })
+}
+
 export async function runEffectCommand<A>(
-  program: Effect.Effect<A, SynthError>,
+  program: Effect.Effect<A, SynthError, AppServices>,
+  options?: { verbose?: boolean },
 ): Promise<A | undefined> {
   const result = await Effect.runPromise(
     program.pipe(
@@ -26,7 +43,7 @@ export async function runEffectCommand<A>(
           cause,
         }),
       ),
-      Effect.provide(MainLive),
+      Effect.provide(AppLayer),
     ),
   )
 
@@ -34,89 +51,8 @@ export async function runEffectCommand<A>(
     return result.value
   }
 
-  displayCauseError(result.cause)
-  process.exitCode = 1
+  process.exitCode = renderCause(result.cause, {
+    verbose: options?.verbose,
+  })
   return undefined
-}
-
-/**
- * Display a user-friendly error message from an Effect Cause.
- */
-function displayCauseError(cause: Cause.Cause<unknown>): void {
-  const failures = Cause.failures(cause)
-
-  for (const failure of failures) {
-    const error = failure as Record<string, unknown>
-
-    switch (error._tag) {
-      case "ConfigError":
-        console.error(pc.red(`Configuration error: ${error.message}`))
-        if (error.varName) {
-          console.error(pc.dim(`  Missing env var: ${error.varName}`))
-        }
-        break
-
-      case "ValidationError": {
-        const diagnostics = error.diagnostics as Array<{
-          severity: string
-          message: string
-          component?: string
-        }>
-        for (const d of diagnostics) {
-          const prefix =
-            d.severity === "error" ? pc.red("error:") : pc.yellow("warning:")
-          console.error(`  ${prefix} ${d.message}`)
-          if (d.component) {
-            console.error(pc.dim(`    component: ${d.component}`))
-          }
-        }
-        break
-      }
-
-      case "DiscoveryError":
-        console.error(pc.red(`Discovery error: ${error.message}`))
-        if (error.path) {
-          console.error(pc.dim(`  path: ${error.path}`))
-        }
-        break
-
-      case "FileSystemError":
-        console.error(
-          pc.red(`File system error (${error.operation}): ${error.message}`),
-        )
-        console.error(pc.dim(`  path: ${error.path}`))
-        break
-
-      case "SqlGatewayConnectionError":
-      case "SqlGatewayResponseError":
-      case "SqlGatewayTimeoutError":
-        console.error(pc.red(`SQL Gateway error: ${error.message}`))
-        break
-
-      case "ClusterError":
-        console.error(pc.red(`Cluster error: ${error.message}`))
-        if (error.command) {
-          console.error(pc.dim(`  command: ${error.command}`))
-        }
-        break
-
-      case "CliError":
-        console.error(pc.red(`${error.message}`))
-        break
-
-      default:
-        if (error.message) {
-          console.error(pc.red(`Error: ${error.message}`))
-        } else {
-          console.error(pc.red("An unexpected error occurred."))
-        }
-    }
-  }
-
-  // Handle defects (unexpected exceptions)
-  const defects = Cause.defects(cause)
-  for (const defect of defects) {
-    const err = defect instanceof Error ? defect.message : String(defect)
-    console.error(pc.red(`Unexpected error: ${err}`))
-  }
 }

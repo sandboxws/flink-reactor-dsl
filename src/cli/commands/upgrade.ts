@@ -2,7 +2,10 @@ import { execSync } from "node:child_process"
 import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import type { Command } from "commander"
+import { Effect } from "effect"
 import pc from "picocolors"
+import { runCommand } from "@/cli/effect-runner.js"
+import { CliError } from "@/core/errors.js"
 import type { PackageManager } from "./new.js"
 
 // ── Shorthand mapping ────────────────────────────────────────────────
@@ -23,7 +26,16 @@ export function registerUpgradeCommand(program: Command): void {
     .option("--dry-run", "Show what would be upgraded without installing")
     .description("Upgrade FlinkReactor packages to their latest versions")
     .action(async (pkg: string | undefined, opts: { dryRun?: boolean }) => {
-      await runUpgrade(pkg, opts)
+      await runCommand(
+        Effect.tryPromise({
+          try: () => runUpgrade(pkg, opts),
+          catch: (err) =>
+            new CliError({
+              reason: "invalid_args",
+              message: (err as Error).message,
+            }),
+        }),
+      )
     })
 }
 

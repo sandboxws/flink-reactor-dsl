@@ -27,6 +27,7 @@ export function createProgram(): Command {
       "React-style TSX DSL that synthesizes to Flink SQL + Kubernetes CRDs",
     )
     .version(VERSION)
+    .option("--verbose", "Show full error traces for unexpected errors")
 
   // Styled help output — Commander v13 style* hooks
   program.configureHelp({

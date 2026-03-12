@@ -3,8 +3,11 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import * as clack from "@clack/prompts"
 import type { Command } from "commander"
+import { Effect } from "effect"
 import Handlebars from "handlebars"
 import pc from "picocolors"
+import { runCommand } from "@/cli/effect-runner.js"
+import { CliError } from "@/core/errors.js"
 import { getCdcLakehouseTemplates } from "@/cli/templates/cdc-lakehouse.js"
 import { getMinimalTemplates } from "@/cli/templates/minimal.js"
 import { getMonorepoTemplates } from "@/cli/templates/monorepo.js"
@@ -66,7 +69,16 @@ export function registerNewCommand(program: Command): void {
     .option("--registry <url>", "npm registry URL (writes .npmrc in project)")
     .description("Create a new FlinkReactor project")
     .action(async (projectName: string, opts: Record<string, unknown>) => {
-      await runNewCommand(projectName, opts)
+      await runCommand(
+        Effect.tryPromise({
+          try: () => runNewCommand(projectName, opts),
+          catch: (err) =>
+            new CliError({
+              reason: "invalid_args",
+              message: (err as Error).message,
+            }),
+        }),
+      )
     })
 }
 

@@ -2,9 +2,12 @@ import { type ChildProcess, execSync, spawn } from "node:child_process"
 import { existsSync, type FSWatcher, watch } from "node:fs"
 import { join, resolve } from "node:path"
 import type { Command } from "commander"
+import { Effect } from "effect"
 import pc from "picocolors"
 import { writeResolvedDashboardConfig } from "@/cli/config-writer.js"
 import { discoverPipelines, resolveProjectContext } from "@/cli/discovery.js"
+import { runCommand } from "@/cli/effect-runner.js"
+import { CliError } from "@/core/errors.js"
 import { buildResolvedDashboardJson } from "@/core/config-resolver.js"
 import { runGraph } from "./graph.js"
 import { runSynth } from "./synth.js"
@@ -29,7 +32,16 @@ export function registerDevCommand(program: Command): void {
         dashboard: boolean
         port: string
       }) => {
-        await runDev(opts)
+        await runCommand(
+          Effect.tryPromise({
+            try: () => runDev(opts),
+            catch: (err) =>
+              new CliError({
+                reason: "invalid_args",
+                message: (err as Error).message,
+              }),
+          }),
+        )
       },
     )
 }

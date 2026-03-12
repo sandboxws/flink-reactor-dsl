@@ -1,9 +1,9 @@
-import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import type { Command } from "commander"
 import { Effect } from "effect"
 import pc from "picocolors"
 import { loadPipeline, resolveProjectContext } from "@/cli/discovery.js"
+import { runCommand } from "@/cli/effect-runner.js"
 import { generateCrd, toYaml } from "@/codegen/crd-generator.js"
 import { generateSql, generateTapManifest } from "@/codegen/sql-generator.js"
 import { type PipelineArtifact, synthesizeApp } from "@/core/app.js"
@@ -19,10 +19,12 @@ export function registerSynthCommand(program: Command): void {
     .option("-o, --outdir <dir>", "Output directory", "dist")
     .action(
       async (opts: { pipeline?: string; env?: string; outdir: string }) => {
-        await runSynth(opts)
+        await runCommand(runSynthEffect(opts))
       },
     )
 }
+
+// ── Imperative variant (used by dev command's internal calls) ───────
 
 export async function runSynth(opts: {
   pipeline?: string
@@ -115,21 +117,18 @@ function writePipelineOutput(
   outdir: string,
   projectDir: string,
 ): void {
+  const { mkdirSync, writeFileSync } = require("node:fs") as typeof import("node:fs")
   const pipelineDir = join(projectDir, outdir, artifact.name)
   mkdirSync(pipelineDir, { recursive: true })
 
-  // Write SQL
   writeFileSync(join(pipelineDir, "pipeline.sql"), artifact.sql.sql, "utf-8")
 
-  // Write CRD YAML
   const crdYaml = toYaml(artifact.crd)
   writeFileSync(join(pipelineDir, "deployment.yaml"), crdYaml, "utf-8")
 
-  // Write ConfigMap (SQL mounted as K8s ConfigMap)
   const configMap = buildConfigMapYaml(artifact)
   writeFileSync(join(pipelineDir, "configmap.yaml"), configMap, "utf-8")
 
-  // Write tap manifest (flat in outdir for dashboard discovery)
   if (artifact.tapManifest) {
     const outdirPath = join(projectDir, outdir)
     mkdirSync(outdirPath, { recursive: true })
@@ -161,7 +160,7 @@ function buildConfigMapYaml(artifact: PipelineArtifact): string {
 /**
  * Effect-based synth program.
  *
- * Same logic as `runSynth` but returns an Effect with typed errors.
+ * Returns an Effect with typed errors and console output.
  * Uses FrFileSystem service for file writes.
  */
 export function runSynthEffect(opts: {
@@ -193,8 +192,17 @@ export function runSynthEffect(opts: {
     })
 
     if (ctx.pipelines.length === 0) {
+      yield* Effect.sync(() =>
+        console.log(pc.yellow("No pipelines found in pipelines/ directory.")),
+      )
       return [] as readonly PipelineArtifact[]
     }
+
+    yield* Effect.sync(() =>
+      console.log(
+        pc.dim(`Synthesizing ${ctx.pipelines.length} pipeline(s)...\n`),
+      ),
+    )
 
     const allArtifacts: PipelineArtifact[] = []
 
@@ -223,7 +231,12 @@ export function runSynthEffect(opts: {
 
       for (const artifact of result.pipelines) {
         allArtifacts.push(artifact)
-        yield* writePipelineOutputEffect(artifact, opts.outdir, projectDir, fs)
+        yield* writePipelineOutputEffect(
+          artifact,
+          opts.outdir,
+          projectDir,
+          fs,
+        )
       }
 
       // Fallback: treat whole tree as single pipeline
@@ -244,9 +257,30 @@ export function runSynthEffect(opts: {
         }
 
         allArtifacts.push(artifact)
-        yield* writePipelineOutputEffect(artifact, opts.outdir, projectDir, fs)
+        yield* writePipelineOutputEffect(
+          artifact,
+          opts.outdir,
+          projectDir,
+          fs,
+        )
       }
     }
+
+    // Print summary
+    yield* Effect.sync(() => {
+      console.log(
+        pc.green(
+          `\nSynthesis complete. ${allArtifacts.length} pipeline(s) written.\n`,
+        ),
+      )
+      for (const artifact of allArtifacts) {
+        const stmtCount = artifact.sql.statements.length
+        console.log(
+          `  ${pc.cyan(artifact.name)} ${pc.dim(`(${stmtCount} statement${stmtCount !== 1 ? "s" : ""})`)} ${pc.dim(`→ ${opts.outdir}/${artifact.name}/`)}`,
+        )
+      }
+      console.log("")
+    })
 
     return allArtifacts as readonly PipelineArtifact[]
   })

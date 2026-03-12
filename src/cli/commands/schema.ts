@@ -1,8 +1,11 @@
 import { existsSync } from "node:fs"
 import { join, resolve } from "node:path"
 import type { Command } from "commander"
+import { Effect } from "effect"
 import pc from "picocolors"
+import { runCommand } from "@/cli/effect-runner.js"
 import { loadPipeline } from "@/cli/discovery.js"
+import { CliError } from "@/core/errors.js"
 import {
   type IntrospectedColumn,
   type IntrospectedSchema,
@@ -17,7 +20,16 @@ export function registerSchemaCommand(program: Command): void {
     .argument("<path>", "Path to a .tsx pipeline file, or a pipeline name")
     .option("--json", "Output as JSON")
     .action(async (pathArg: string, opts: { json?: boolean }) => {
-      await runSchema(pathArg, opts)
+      await runCommand(
+        Effect.tryPromise({
+          try: () => runSchema(pathArg, opts),
+          catch: (err) =>
+            new CliError({
+              reason: "invalid_args",
+              message: (err as Error).message,
+            }),
+        }),
+      )
     })
 }
 

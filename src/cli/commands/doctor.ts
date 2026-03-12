@@ -2,7 +2,10 @@ import { execSync } from "node:child_process"
 import { existsSync, readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
 import type { Command } from "commander"
+import { Effect } from "effect"
 import pc from "picocolors"
+import { runCommand as runEffectAction } from "@/cli/effect-runner.js"
+import { CliError } from "@/core/errors.js"
 
 export interface CheckResult {
   name: string
@@ -17,7 +20,16 @@ export function registerDoctorCommand(program: Command): void {
     .command("doctor")
     .description("Check your development environment")
     .action(async () => {
-      await runDoctorCommand()
+      await runEffectAction(
+        Effect.tryPromise({
+          try: () => runDoctorCommand(),
+          catch: (err) =>
+            new CliError({
+              reason: "invalid_args",
+              message: (err as Error).message,
+            }),
+        }),
+      )
     })
 }
 
@@ -37,7 +49,7 @@ export async function runDoctorCommand(cwd?: string): Promise<CheckResult[]> {
   return results
 }
 
-function runCommand(cmd: string): string | null {
+function runShellCommand(cmd: string): string | null {
   try {
     return execSync(cmd, {
       encoding: "utf-8",
@@ -49,7 +61,7 @@ function runCommand(cmd: string): string | null {
 }
 
 export function checkNodeVersion(): CheckResult {
-  const output = runCommand("node --version")
+  const output = runShellCommand("node --version")
   if (!output) {
     return {
       name: "Node.js",
@@ -73,7 +85,7 @@ export function checkNodeVersion(): CheckResult {
 }
 
 export function checkTypeScriptVersion(): CheckResult {
-  const output = runCommand("npx tsc --version")
+  const output = runShellCommand("npx tsc --version")
   if (!output) {
     return {
       name: "TypeScript",
@@ -87,7 +99,7 @@ export function checkTypeScriptVersion(): CheckResult {
 }
 
 export function checkDockerVersion(): CheckResult {
-  const output = runCommand("docker --version")
+  const output = runShellCommand("docker --version")
   if (!output) {
     return {
       name: "Docker",
@@ -103,7 +115,7 @@ export function checkDockerVersion(): CheckResult {
 
 export function checkFlinkInstallation(): CheckResult {
   // Check for local Flink binary
-  const flinkOutput = runCommand("flink --version")
+  const flinkOutput = runShellCommand("flink --version")
   if (flinkOutput) {
     const match = flinkOutput.match(/Version:\s*([\d.]+)/)
     const version = match?.[1] ?? flinkOutput
@@ -116,7 +128,7 @@ export function checkFlinkInstallation(): CheckResult {
   }
 
   // Check for Flink Docker image
-  const dockerOutput = runCommand(
+  const dockerOutput = runShellCommand(
     'docker images --format "{{.Repository}}:{{.Tag}}" | grep -i flink | head -1',
   )
   if (dockerOutput) {
@@ -136,7 +148,7 @@ export function checkFlinkInstallation(): CheckResult {
 }
 
 export function checkKubectl(): CheckResult {
-  const output = runCommand(
+  const output = runShellCommand(
     "kubectl version --client --short 2>/dev/null || kubectl version --client 2>/dev/null",
   )
   if (!output) {

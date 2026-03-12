@@ -4,7 +4,10 @@ import { arch, platform } from "node:os"
 import { join } from "node:path"
 import * as clack from "@clack/prompts"
 import type { Command } from "commander"
+import { Effect } from "effect"
 import pc from "picocolors"
+import { runCommand } from "@/cli/effect-runner.js"
+import { CliError } from "@/core/errors.js"
 
 export type InstallMethod = "docker" | "homebrew" | "binary"
 
@@ -30,7 +33,16 @@ export function registerInstallCommand(program: Command): void {
     )
     .option("--flink-version <version>", "Flink version (default: 1.20)")
     .action(async (opts: Record<string, unknown>) => {
-      await runInstallFlink(opts)
+      await runCommand(
+        Effect.tryPromise({
+          try: () => runInstallFlink(opts),
+          catch: (err) =>
+            new CliError({
+              reason: "invalid_args",
+              message: (err as Error).message,
+            }),
+        }),
+      )
     })
 }
 
