@@ -3,10 +3,12 @@ import {
   type AnyFlinkCrd,
   type CrdGeneratorOptions,
   generateCrd,
+  generateCrdEither,
 } from "@/codegen/crd-generator.js"
 import {
   type GenerateSqlResult,
   generateSql,
+  generateSqlEither,
   generateTapManifest,
 } from "@/codegen/sql-generator.js"
 import type { FlinkReactorConfig, InfraConfig } from "./config.js"
@@ -18,10 +20,15 @@ import type {
   CrdGenerationError,
   PluginError,
   SqlGenerationError,
+  ValidationError,
 } from "./errors.js"
 import { registerComponentKinds, resetComponentKinds } from "./jsx-runtime.js"
 import type { FlinkReactorPlugin } from "./plugin.js"
-import { EMPTY_PLUGIN_CHAIN, resolvePlugins } from "./plugin-registry.js"
+import {
+  EMPTY_PLUGIN_CHAIN,
+  invokeHookEither,
+  resolvePlugins,
+} from "./plugin-registry.js"
 import { rekindTree } from "./tree-utils.js"
 import type { ConstructNode, FlinkMajorVersion, TapManifest } from "./types.js"
 
@@ -304,9 +311,10 @@ export function synthesizeApp(
 /**
  * Effect-based synthesis with acquireRelease for plugin cleanup.
  *
- * Same logic as `synthesizeApp` but uses Effect.acquireRelease
- * for guaranteed `resetComponentKinds()` cleanup, and wraps
- * the synthesis in an Effect for composability.
+ * Composes the Either-returning functions (`generateSqlEither`,
+ * `generateCrdEither`, `invokeHookEither`) via `Effect.fromEither`
+ * so that each failure surfaces as a precisely typed error in
+ * the Effect error channel.
  */
 export function synthesizeAppEffect(
   props: FlinkReactorAppProps,
@@ -320,7 +328,7 @@ export function synthesizeAppEffect(
   },
 ): Effect.Effect<
   AppSynthResult,
-  PluginError | SqlGenerationError | CrdGenerationError
+  PluginError | SqlGenerationError | CrdGenerationError | ValidationError
 > {
   return Effect.acquireUseRelease(
     // Acquire: resolve plugins and register component kinds
@@ -338,112 +346,119 @@ export function synthesizeAppEffect(
 
       return chain
     }),
-    // Use: run synthesis
+    // Use: run synthesis with typed Either composition
     (chain) =>
-      Effect.try({
-        try: () => {
-          const childArray =
-            props.children == null
-              ? []
-              : Array.isArray(props.children)
-                ? props.children
-                : [props.children]
+      Effect.gen(function* () {
+        const childArray =
+          props.children == null
+            ? []
+            : Array.isArray(props.children)
+              ? props.children
+              : [props.children]
 
-          const pipelineNodes = childArray.filter((c) => c.kind === "Pipeline")
+        const pipelineNodes = childArray.filter((c) => c.kind === "Pipeline")
 
-          const flinkVersion: FlinkMajorVersion =
-            options?.flinkVersion ??
-            options?.resolvedConfig?.flink.version ??
-            options?.config?.flink?.version ??
-            "2.0"
+        const flinkVersion: FlinkMajorVersion =
+          options?.flinkVersion ??
+          options?.resolvedConfig?.flink.version ??
+          options?.config?.flink?.version ??
+          "2.0"
 
-          const infra =
-            props.infra ??
-            (options?.resolvedConfig
-              ? toInfraConfigFromResolved(options.resolvedConfig)
-              : undefined) ??
-            options?.config?.toInfraConfig?.()
+        const infra =
+          props.infra ??
+          (options?.resolvedConfig
+            ? toInfraConfigFromResolved(options.resolvedConfig)
+            : undefined) ??
+          options?.config?.toInfraConfig?.()
 
-          // beforeSynth hooks
-          if (chain.beforeSynth.length > 0) {
-            const hookCtx = {
-              appName: props.name,
-              flinkVersion,
-              pipelines: pipelineNodes,
-            }
-            for (const hook of chain.beforeSynth) {
-              hook?.(hookCtx)
+        // beforeSynth hooks (with typed error capture)
+        if (chain.beforeSynth.length > 0) {
+          const hookCtx = {
+            appName: props.name,
+            flinkVersion,
+            pipelines: pipelineNodes,
+          }
+          for (const hook of chain.beforeSynth) {
+            if (hook) {
+              yield* invokeHookEither("plugin", "beforeSynth", () =>
+                  hook(hookCtx),
+                )
             }
           }
+        }
 
-          const pipelines: PipelineArtifact[] = pipelineNodes.map(
-            (pipelineNode) => {
-              let node = applyConfigCascade(
-                pipelineNode,
-                infra,
-                options?.env,
-                options?.resolvedConfig,
-              )
-
-              node = propagateInfraToChildren(node, infra)
-
-              if (chain.components.size > 0) {
-                node = rekindTree(node, chain.components)
-              }
-
-              node = chain.transformTree(node)
-
-              const name = node.props.name as string
-
-              const sql = generateSql(node, {
-                flinkVersion,
-                pluginSqlGenerators:
-                  chain.sqlGenerators.size > 0
-                    ? chain.sqlGenerators
-                    : undefined,
-                pluginDdlGenerators:
-                  chain.ddlGenerators.size > 0
-                    ? chain.ddlGenerators
-                    : undefined,
-              })
-
-              const crdOpts: CrdGeneratorOptions = {
-                flinkVersion,
-                ...options?.crdOptions,
-              }
-              let crd = generateCrd(node, crdOpts)
-              crd = chain.transformCrd(crd, node)
-
-              const { manifest: tapManifest } = generateTapManifest(node, {
-                flinkVersion,
-                devMode: true,
-              })
-
-              return { name, sql, crd, tapManifest }
-            },
+        // Per-pipeline synthesis with Either-returning codegen
+        const pipelines: PipelineArtifact[] = []
+        for (const pipelineNode of pipelineNodes) {
+          let node = applyConfigCascade(
+            pipelineNode,
+            infra,
+            options?.env,
+            options?.resolvedConfig,
           )
 
-          // afterSynth hooks
-          if (chain.afterSynth.length > 0) {
-            const hookCtx = {
-              appName: props.name,
-              flinkVersion,
-              pipelines: pipelineNodes,
-              results: pipelines.map((p) => ({
-                name: p.name,
-                sql: p.sql.sql,
-                crd: p.crd,
-              })),
-            }
-            for (const hook of chain.afterSynth) {
-              hook?.(hookCtx)
-            }
+          node = propagateInfraToChildren(node, infra)
+
+          if (chain.components.size > 0) {
+            node = rekindTree(node, chain.components)
           }
 
-          return { appName: props.name, pipelines } as AppSynthResult
-        },
-        catch: (err) => err as Error,
-      }) as Effect.Effect<AppSynthResult>,
+          node = chain.transformTree(node)
+
+          const name = node.props.name as string
+
+          // SQL generation with typed error
+          const sql = yield* generateSqlEither(node, {
+              flinkVersion,
+              pluginSqlGenerators:
+                chain.sqlGenerators.size > 0
+                  ? chain.sqlGenerators
+                  : undefined,
+              pluginDdlGenerators:
+                chain.ddlGenerators.size > 0
+                  ? chain.ddlGenerators
+                  : undefined,
+            })
+
+          // CRD generation with typed error
+          const crdOpts: CrdGeneratorOptions = {
+            flinkVersion,
+            ...options?.crdOptions,
+          }
+          let crd = yield* generateCrdEither(node, crdOpts)
+          crd = chain.transformCrd(crd, node)
+
+          const { manifest: tapManifest } = generateTapManifest(node, {
+            flinkVersion,
+            devMode: true,
+          })
+
+          pipelines.push({ name, sql, crd, tapManifest })
+        }
+
+        // afterSynth hooks (with typed error capture)
+        if (chain.afterSynth.length > 0) {
+          const hookCtx = {
+            appName: props.name,
+            flinkVersion,
+            pipelines: pipelineNodes,
+            results: pipelines.map((p) => ({
+              name: p.name,
+              sql: p.sql.sql,
+              crd: p.crd,
+            })),
+          }
+          for (const hook of chain.afterSynth) {
+            if (hook) {
+              yield* invokeHookEither("plugin", "afterSynth", () =>
+                  hook(hookCtx),
+                )
+            }
+          }
+        }
+
+        return { appName: props.name, pipelines } as AppSynthResult
+      }),
     // Release: clean up plugin registrations (always runs)
     (chain) =>
       Effect.sync(() => {

@@ -1,4 +1,6 @@
+import { Either } from "effect"
 import type { AnyFlinkCrd } from "@/codegen/crd-generator.js"
+import { PluginError } from "./errors.js"
 import type {
   FlinkReactorPlugin,
   PluginDdlGenerator,
@@ -312,4 +314,30 @@ function composeCrdTransformers(
 
   return (crd: AnyFlinkCrd, pipeline: ConstructNode) =>
     transformers.reduce((c, fn) => fn(c, pipeline), crd)
+}
+
+// ── Safe hook invocation ─────────────────────────────────────────────
+
+/**
+ * Invoke a plugin hook, capturing thrown errors as PluginError.
+ * Returns Either.right(result) on success, Either.left(PluginError)
+ * with plugin name and hook name context on failure.
+ */
+export function invokeHookEither<T>(
+  pluginName: string,
+  hookName: string,
+  fn: () => T,
+): Either.Either<T, PluginError> {
+  try {
+    return Either.right(fn())
+  } catch (err) {
+    return Either.left(
+      new PluginError({
+        reason: "hook_failure",
+        message: `Plugin '${pluginName}' hook '${hookName}' failed: ${err instanceof Error ? err.message : String(err)}`,
+        pluginName,
+        hookName,
+      }),
+    )
+  }
 }

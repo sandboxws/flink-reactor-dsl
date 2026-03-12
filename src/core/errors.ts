@@ -61,9 +61,14 @@ export class CrdGenerationError extends Data.TaggedError("CrdGenerationError")<{
 // ── Plugins ─────────────────────────────────────────────────────────
 
 export class PluginError extends Data.TaggedError("PluginError")<{
-  readonly reason: "duplicate_name" | "circular_ordering" | "conflict"
+  readonly reason:
+    | "duplicate_name"
+    | "circular_ordering"
+    | "conflict"
+    | "hook_failure"
   readonly message: string
   readonly pluginName?: string
+  readonly hookName?: string
 }> {}
 
 // ── SQL Gateway ─────────────────────────────────────────────────────

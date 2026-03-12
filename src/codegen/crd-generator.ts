@@ -1,4 +1,6 @@
+import { Either } from "effect"
 import type { PipelineProps } from "@/components/pipeline.js"
+import { CrdGenerationError } from "@/core/errors.js"
 import { FlinkVersionCompat } from "@/core/flink-compat.js"
 import type { ConstructNode, FlinkMajorVersion } from "@/core/types.js"
 
@@ -509,6 +511,29 @@ export function toYaml(obj: unknown, indent: number = 0): string {
   }
 
   return String(obj)
+}
+
+// ── Effect-typed variant ─────────────────────────────────────────────
+
+/**
+ * Generate CRD returning Either with typed error.
+ * Synchronous, no I/O — uses Either for pure error signaling.
+ */
+export function generateCrdEither(
+  pipelineNode: ConstructNode,
+  options: CrdGeneratorOptions,
+): Either.Either<AnyFlinkCrd, CrdGenerationError> {
+  try {
+    return Either.right(generateCrd(pipelineNode, options))
+  } catch (err) {
+    const pipelineName = (pipelineNode.props.name as string) ?? pipelineNode.id
+    return Either.left(
+      new CrdGenerationError({
+        message: err instanceof Error ? err.message : String(err),
+        pipelineName,
+      }),
+    )
+  }
 }
 
 /**

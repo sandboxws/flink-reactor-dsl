@@ -1,4 +1,6 @@
+import { Either } from "effect"
 import { FlinkVersionCompat } from "@/core/flink-compat.js"
+import { SqlGenerationError } from "@/core/errors.js"
 import type { PluginDdlGenerator, PluginSqlGenerator } from "@/core/plugin.js"
 import type { SchemaDefinition } from "@/core/schema.js"
 import type { ValidationDiagnostic } from "@/core/synth-context.js"
@@ -2513,4 +2515,27 @@ function resolveRef(
   }
 
   return q(nodeId)
+}
+
+// ── Effect-typed variant ─────────────────────────────────────────────
+
+/**
+ * Generate SQL returning Either with typed error.
+ * Synchronous, no I/O — uses Either for pure error signaling.
+ */
+export function generateSqlEither(
+  pipelineNode: ConstructNode,
+  options: GenerateSqlOptions = {},
+): Either.Either<GenerateSqlResult, SqlGenerationError> {
+  try {
+    return Either.right(generateSql(pipelineNode, options))
+  } catch (err) {
+    return Either.left(
+      new SqlGenerationError({
+        message: err instanceof Error ? err.message : String(err),
+        component: pipelineNode.component,
+        nodeId: pipelineNode.id,
+      }),
+    )
+  }
 }
