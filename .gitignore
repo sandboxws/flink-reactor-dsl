@@ -385,3 +385,5 @@ docs/
 .codex/
 .opencode/
 .gemini/
+.idea/
+openspec/
