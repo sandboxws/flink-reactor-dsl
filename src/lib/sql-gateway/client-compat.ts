@@ -3,7 +3,7 @@
 // on the new Effect-based client internally. Allows existing CLI
 // commands to keep working during the migration.
 
-import { Effect, Stream } from "effect"
+import { Cause, Chunk, Effect, Stream } from "effect"
 import * as EffectClient from "./effect-client.js"
 import type {
   ColumnInfo,
@@ -149,24 +149,30 @@ export class SqlGatewayCompatClient {
   }
 
   private async run<A>(effect: Effect.Effect<A, unknown>): Promise<A> {
-    try {
-      return await Effect.runPromise(effect as Effect.Effect<A>)
-    } catch (err) {
-      // Convert Effect errors back to the legacy error shape
-      const error = err as Record<string, unknown>
-      if (error._tag === "SqlGatewayConnectionError") {
-        throw new SqlGatewayClientError(error.message as string, 0)
-      }
-      if (error._tag === "SqlGatewayResponseError") {
-        throw new SqlGatewayClientError(
-          error.message as string,
-          error.statusCode as number,
-        )
-      }
-      if (error._tag === "SqlGatewayTimeoutError") {
-        throw new SqlGatewayClientError(error.message as string, 0)
-      }
-      throw err
+    const exit = await Effect.runPromiseExit(effect)
+    if (exit._tag === "Success") return exit.value
+
+    // Extract the typed error from the Cause
+    const failures = Chunk.toArray(Cause.failures(exit.cause))
+    const error =
+      failures.length > 0
+        ? (failures[0] as Record<string, unknown>)
+        : undefined
+
+    if (error?._tag === "SqlGatewayConnectionError") {
+      throw new SqlGatewayClientError(error.message as string, 0)
     }
+    if (error?._tag === "SqlGatewayResponseError") {
+      throw new SqlGatewayClientError(
+        error.message as string,
+        error.statusCode as number,
+      )
+    }
+    if (error?._tag === "SqlGatewayTimeoutError") {
+      throw new SqlGatewayClientError(error.message as string, 0)
+    }
+
+    // Re-throw as FiberFailure for unexpected errors
+    throw Cause.squash(exit.cause)
   }
 }

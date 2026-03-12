@@ -3,7 +3,7 @@
 // Uses the FrHttpClient service for testable HTTP, and Effect's
 // Schedule + Stream for polling/iteration.
 
-import { Context, Duration, Effect, Option, Schedule, Stream } from "effect"
+import { Context, Duration, Effect, Option, type Predicate, Schedule, Stream } from "effect"
 import {
   SqlGatewayConnectionError,
   type SqlGatewayError,
@@ -32,12 +32,55 @@ export class SqlGatewayClientConfig extends Context.Tag(
   "SqlGatewayClientConfig",
 )<SqlGatewayClientConfig, SqlGatewayClientConfig>() {}
 
+// ── Retry policies ─────────────────────────────────────────────────
+
+export interface RetryConfig {
+  readonly maxRetries?: number
+  readonly baseDelayMs?: number
+  readonly maxDelayMs?: number
+}
+
+const defaultRetryConfig: Required<RetryConfig> = {
+  maxRetries: 3,
+  baseDelayMs: 200,
+  maxDelayMs: 5_000,
+}
+
+/** Whether an error is transient and worth retrying */
+function isTransient(err: SqlGatewayError): boolean {
+  if (err._tag === "SqlGatewayConnectionError") return true
+  if (err._tag === "SqlGatewayResponseError" && err.statusCode >= 500)
+    return true
+  return false
+}
+
+/**
+ * Exponential backoff schedule with jitter, capped by max retries and max delay.
+ * Schedule: base * 2^attempt, with ±25% jitter, up to maxDelay.
+ */
+export function transientRetrySchedule(
+  config?: RetryConfig,
+): Schedule.Schedule<unknown, SqlGatewayError> {
+  const { maxRetries, baseDelayMs, maxDelayMs } = {
+    ...defaultRetryConfig,
+    ...config,
+  }
+
+  return Schedule.exponential(Duration.millis(baseDelayMs)).pipe(
+    Schedule.jittered,
+    Schedule.either(Schedule.spaced(Duration.millis(maxDelayMs))),
+    Schedule.intersect(Schedule.recurs(maxRetries)),
+    Schedule.whileInput(isTransient as Predicate.Predicate<SqlGatewayError>),
+  )
+}
+
 // ── Request helper ──────────────────────────────────────────────────
 
 function request<T>(
   baseUrl: string,
   path: string,
   init?: RequestInit,
+  retryConfig?: RetryConfig,
 ): Effect.Effect<T, SqlGatewayError> {
   const url = `${baseUrl}${path}`
   const headers: Record<string, string> = {
@@ -45,7 +88,7 @@ function request<T>(
     Accept: "application/json",
   }
 
-  return Effect.tryPromise({
+  const singleRequest = Effect.tryPromise({
     try: () =>
       fetch(url, {
         ...init,
@@ -95,6 +138,8 @@ function request<T>(
       })
     }),
   )
+
+  return singleRequest.pipe(Effect.retry(transientRetrySchedule(retryConfig)))
 }
 
 // ── Public API ──────────────────────────────────────────────────────
@@ -120,6 +165,21 @@ export function closeSession(
   return request<void>(baseUrl, `/v1/sessions/${sessionHandle}`, {
     method: "DELETE",
   })
+}
+
+/**
+ * Heartbeat a session to keep it alive on the server.
+ * Uses GET /v1/sessions/{handle} which the SQL Gateway treats
+ * as a keep-alive touch without side effects.
+ */
+export function heartbeatSession(
+  baseUrl: string,
+  sessionHandle: string,
+): Effect.Effect<void, SqlGatewayError> {
+  return request<unknown>(
+    baseUrl,
+    `/v1/sessions/${sessionHandle}`,
+  ).pipe(Effect.asVoid)
 }
 
 /** Submit a SQL statement, returns operation handle */
@@ -194,7 +254,9 @@ export function waitForCompletion(
   const pollInterval = options?.pollIntervalMs ?? 500
   const timeoutMs = options?.timeoutMs ?? 300_000 // 5 min default
 
-  const schedule = Schedule.spaced(Duration.millis(pollInterval)).pipe(
+  const schedule = Schedule.exponential(Duration.millis(pollInterval)).pipe(
+    Schedule.jittered,
+    Schedule.either(Schedule.spaced(Duration.millis(5_000))),
     Schedule.compose(Schedule.elapsed),
     Schedule.whileOutput(Duration.lessThan(Duration.millis(timeoutMs))),
   )

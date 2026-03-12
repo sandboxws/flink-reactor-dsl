@@ -8,6 +8,12 @@ export {
   makeSessionPool,
   type SessionPoolConfig,
 } from "./effect-session-pool.js"
+export {
+  checkHealth,
+  waitForHealthy,
+  type HealthCheckConfig,
+  type HealthStatus,
+} from "./health-check.js"
 export type { SessionPoolOptions } from "./session-pool.js"
 export { SessionPool } from "./session-pool.js"
 export { splitSqlStatements } from "./sql-utils.js"
