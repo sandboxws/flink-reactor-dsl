@@ -14,8 +14,15 @@ import {
   FrFileSystem,
   FrHttpClient,
   PipelineLoader,
+  ProcessEnv,
   ProcessRunner,
 } from "./services.js"
+
+// ── ProcessEnv — process.env backed implementation ──────────────────
+
+export const ProcessEnvLive = Layer.succeed(ProcessEnv, {
+  get: (name: string) => Effect.sync(() => process.env[name]),
+})
 
 // ── FrFileSystem — Node.js implementation ───────────────────────────
 
@@ -252,6 +259,21 @@ export const CliOutputLive = Layer.succeed(CliOutput, {
 /** Full production layer with all service implementations */
 export const MainLive = Layer.mergeAll(
   NodeFileSystemLive,
+  ProcessRunnerLive,
+  NodeHttpClientLive,
+  ConfigProviderLive,
+  PipelineLoaderLive,
+  CliOutputLive,
+)
+
+/**
+ * Full application layer including ProcessEnv.
+ * Use this for CLI entry points that need config resolution
+ * and pipeline discovery via the Effect service graph.
+ */
+export const AppLayer = Layer.mergeAll(
+  NodeFileSystemLive,
+  ProcessEnvLive,
   ProcessRunnerLive,
   NodeHttpClientLive,
   ConfigProviderLive,

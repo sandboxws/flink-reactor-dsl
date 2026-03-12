@@ -9,7 +9,13 @@ import type { ValidationDiagnostic } from "./synth-context.js"
 // ── Config & Environment ────────────────────────────────────────────
 
 export class ConfigError extends Data.TaggedError("ConfigError")<{
-  readonly reason: "missing_env_var" | "invalid_config" | "unknown_environment"
+  readonly reason:
+    | "missing_env_var"
+    | "invalid_config"
+    | "unknown_environment"
+    | "missing_directory"
+    | "missing_file"
+    | "schema_validation"
   readonly message: string
   readonly varName?: string
   readonly path?: string

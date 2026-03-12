@@ -10,6 +10,18 @@ import type { ResolvedConfig } from "./config-resolver.js"
 import type { DiscoveryError, FileSystemError } from "./errors.js"
 import type { ConstructNode } from "./types.js"
 
+// ── ProcessEnv ─────────────────────────────────────────────────────
+
+/** Abstraction over process environment variables for testability */
+export interface ProcessEnvService {
+  readonly get: (name: string) => Effect.Effect<string | undefined>
+}
+
+export class ProcessEnv extends Context.Tag("ProcessEnv")<
+  ProcessEnv,
+  ProcessEnvService
+>() {}
+
 // ── FrFileSystem ────────────────────────────────────────────────────
 
 /** Abstraction over filesystem operations for synthesis and CLI */
