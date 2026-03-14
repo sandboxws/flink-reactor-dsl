@@ -211,26 +211,6 @@ export function defineConfig(
       }
     }
 
-    // Validate dashboard auth constraints within each environment
-    for (const [envName, envEntry] of Object.entries(config.environments)) {
-      if (envEntry.dashboard?.auth?.type === "basic") {
-        if (
-          !envEntry.dashboard.auth.username ||
-          !envEntry.dashboard.auth.password
-        ) {
-          throw new Error(
-            `Environment '${envName}': dashboard auth type 'basic' requires both username and password`,
-          )
-        }
-      }
-      if (envEntry.dashboard?.auth?.type === "token") {
-        if (!envEntry.dashboard.auth.token) {
-          throw new Error(
-            `Environment '${envName}': dashboard auth type 'token' requires a token`,
-          )
-        }
-      }
-    }
   }
 
   const result: FlinkReactorConfig = {

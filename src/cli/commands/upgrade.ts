@@ -10,9 +10,7 @@ import type { PackageManager } from "./new.js"
 
 // ── Shorthand mapping ────────────────────────────────────────────────
 
-const SHORTHANDS: Record<string, string> = {
-  dashboard: "@flink-reactor/dashboard",
-}
+const SHORTHANDS: Record<string, string> = {}
 
 // ── Command registration ────────────────────────────────────────────
 
@@ -21,7 +19,7 @@ export function registerUpgradeCommand(program: Command): void {
     .command("upgrade")
     .argument(
       "[package]",
-      'Package to upgrade (e.g. "dashboard" or "@flink-reactor/dashboard")',
+      "Package to upgrade",
     )
     .option("--dry-run", "Show what would be upgraded without installing")
     .description("Upgrade FlinkReactor packages to their latest versions")

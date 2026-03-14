@@ -19,10 +19,6 @@ describe("upgrade command", () => {
   })
 
   describe("resolvePackageName", () => {
-    it('resolves "dashboard" shorthand', () => {
-      expect(resolvePackageName("dashboard")).toBe("@flink-reactor/dashboard")
-    })
-
     it("passes through full package names unchanged", () => {
       expect(resolvePackageName("@flink-reactor/dashboard")).toBe(
         "@flink-reactor/dashboard",

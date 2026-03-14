@@ -28,10 +28,6 @@ start_verdaccio() {
 echo "Building flink-reactor..."
 pnpm build
 
-echo ""
-echo "Building @flink-reactor/dashboard..."
-pnpm --filter @flink-reactor/dashboard build
-
 # --- Stop Verdaccio, clear storage, restart ---
 echo ""
 echo "Clearing previous versions from local registry..."
@@ -47,11 +43,5 @@ echo "Publishing flink-reactor..."
 npm publish --registry "$REGISTRY" --provenance=false 2>&1
 
 echo ""
-echo "Publishing @flink-reactor/dashboard..."
-cd "$PROJECT_ROOT/apps/dashboard"
-npm publish --registry "$REGISTRY" --provenance=false 2>&1
-
-echo ""
 echo "Done! Install packages with:"
 echo "  npm install flink-reactor --registry $REGISTRY"
-echo "  npm install @flink-reactor/dashboard --registry $REGISTRY"

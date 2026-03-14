@@ -59,19 +59,6 @@ describe("scaffoldProject", () => {
       expect(pkg.dependencies["flink-reactor"]).toBeDefined()
     })
 
-    it("includes dashboard dependency and scripts", () => {
-      scaffoldProject(projectDir, makeOptions({ template: "starter" }))
-
-      const pkg = JSON.parse(
-        readFileSync(join(projectDir, "package.json"), "utf-8"),
-      )
-      expect(pkg.dependencies["@flink-reactor/dashboard"]).toBe("^0.1.0")
-      expect(pkg.scripts.dashboard).toBe("flink-reactor-dashboard start")
-      expect(pkg.scripts["dashboard:mock"]).toBe(
-        "flink-reactor-dashboard start --mock",
-      )
-    })
-
     it("includes flink version in config", () => {
       scaffoldProject(
         projectDir,
@@ -109,15 +96,6 @@ describe("scaffoldProject", () => {
       expect(existsSync(join(projectDir, "pipelines", ".gitkeep"))).toBe(true)
     })
 
-    it("does not include dashboard dependency", () => {
-      scaffoldProject(projectDir, makeOptions({ template: "minimal" }))
-
-      const pkg = JSON.parse(
-        readFileSync(join(projectDir, "package.json"), "utf-8"),
-      )
-      expect(pkg.dependencies["@flink-reactor/dashboard"]).toBeUndefined()
-      expect(pkg.scripts.dashboard).toBeUndefined()
-    })
   })
 
   describe("cdc-lakehouse template", () => {
@@ -185,18 +163,6 @@ describe("scaffoldProject", () => {
       )
     })
 
-    it("includes dashboard as root devDependency", () => {
-      scaffoldProject(projectDir, makeOptions({ template: "monorepo" }))
-
-      const pkg = JSON.parse(
-        readFileSync(join(projectDir, "package.json"), "utf-8"),
-      )
-      expect(pkg.devDependencies["@flink-reactor/dashboard"]).toBe("^0.1.0")
-      expect(pkg.scripts.dashboard).toBe("flink-reactor-dashboard start")
-      expect(pkg.scripts["dashboard:mock"]).toBe(
-        "flink-reactor-dashboard start --mock",
-      )
-    })
   })
 
   describe("registry option", () => {

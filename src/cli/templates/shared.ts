@@ -1,17 +1,9 @@
 import type { ScaffoldOptions, TemplateFile } from "@/cli/commands/new.js"
 
-export interface SharedFileOptions {
-  /** Include @flink-reactor/dashboard dependency and scripts. Default: true */
-  readonly dashboard?: boolean
-}
-
 export function makePackageJson(
   opts: ScaffoldOptions,
   extra?: Record<string, unknown>,
-  sharedOpts?: SharedFileOptions,
 ): string {
-  const includeDashboard = sharedOpts?.dashboard !== false
-
   const scripts: Record<string, string> = {
     dev: "flink-reactor dev",
     synth: "flink-reactor synth",
@@ -20,17 +12,8 @@ export function makePackageJson(
     "test:watch": "vitest",
   }
 
-  if (includeDashboard) {
-    scripts.dashboard = "flink-reactor-dashboard start"
-    scripts["dashboard:mock"] = "flink-reactor-dashboard start --mock"
-  }
-
   const dependencies: Record<string, string> = {
     "flink-reactor": "^0.1.0",
-  }
-
-  if (includeDashboard) {
-    dependencies["@flink-reactor/dashboard"] = "^0.1.0"
   }
 
   const pkg: Record<string, unknown> = {
@@ -119,14 +102,11 @@ export function makeNpmrc(registry: string): string {
   return `registry=${registry}\n`
 }
 
-export function sharedFiles(
-  opts: ScaffoldOptions,
-  sharedOpts?: SharedFileOptions,
-): TemplateFile[] {
+export function sharedFiles(opts: ScaffoldOptions): TemplateFile[] {
   const files: TemplateFile[] = [
     {
       path: "package.json",
-      content: makePackageJson(opts, undefined, sharedOpts),
+      content: makePackageJson(opts),
     },
     { path: "tsconfig.json", content: makeTsconfig(opts) },
     { path: "flink-reactor.config.ts", content: makeConfig(opts) },

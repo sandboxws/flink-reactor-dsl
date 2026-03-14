@@ -1,10 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { defineConfig } from "../config.js"
-import {
-  buildResolvedDashboardJson,
-  resolveConfig,
-  toInfraConfigFromResolved,
-} from "../config-resolver.js"
+import { resolveConfig, toInfraConfigFromResolved } from "../config-resolver.js"
 import { env } from "../env-var.js"
 
 describe("resolveConfig()", () => {
@@ -141,84 +137,6 @@ describe("resolveConfig()", () => {
     const resolved = resolveConfig(config)
     expect(resolved.flink.version).toBe("1.20")
     expect(resolved.kubernetes.namespace).toBe("flink-legacy")
-  })
-})
-
-describe("buildResolvedDashboardJson()", () => {
-  it("maps resolved config to flat dashboard JSON", () => {
-    const config = defineConfig({
-      flink: { version: "2.0" },
-      environments: {
-        development: {
-          cluster: { url: "http://localhost:8081", displayName: "Dev Cluster" },
-          dashboard: {
-            pollIntervalMs: 3000,
-            mockMode: false,
-            auth: { type: "none" },
-          },
-        },
-      },
-    })
-
-    const resolved = resolveConfig(config, "development")
-    const json = buildResolvedDashboardJson(resolved)
-
-    expect(json._version).toBe(1)
-    expect(json.flinkRestUrl).toBe("http://localhost:8081")
-    expect(json.clusterDisplayName).toBe("Dev Cluster")
-    expect(json.pollIntervalMs).toBe(3000)
-    expect(json.mockMode).toBe(false)
-    expect(json.authType).toBe("none")
-  })
-
-  it("includes auth credentials in JSON", () => {
-    process.env.FLINK_AUTH_PASSWORD = "pw"
-    process.env.FLINK_AUTH_USERNAME = "user"
-
-    const config = defineConfig({
-      environments: {
-        production: {
-          cluster: { url: "https://flink:8081" },
-          dashboard: {
-            auth: {
-              type: "basic",
-              username: env("FLINK_AUTH_USERNAME"),
-              password: env("FLINK_AUTH_PASSWORD"),
-            },
-          },
-        },
-      },
-    })
-
-    const resolved = resolveConfig(config, "production")
-    const json = buildResolvedDashboardJson(resolved)
-
-    expect(json.authType).toBe("basic")
-    expect(json.authUsername).toBe("user")
-    expect(json.authPassword).toBe("pw")
-
-    delete process.env.FLINK_AUTH_PASSWORD
-    delete process.env.FLINK_AUTH_USERNAME
-  })
-
-  it("sets observability flags based on presence", () => {
-    const config = defineConfig({
-      environments: {
-        development: {
-          cluster: { url: "http://localhost:8081" },
-          dashboard: {
-            observability: { prometheus: "http://prom:9090" },
-          },
-        },
-      },
-    })
-
-    const resolved = resolveConfig(config, "development")
-    const json = buildResolvedDashboardJson(resolved)
-
-    expect(json.prometheusEnabled).toBe(true)
-    expect(json.prometheusUrl).toBe("http://prom:9090")
-    expect(json.alertWebhookEnabled).toBe(false)
   })
 })
 

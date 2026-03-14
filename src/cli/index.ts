@@ -1,7 +1,6 @@
 import { Command, Help } from "commander"
 import pc from "picocolors"
 import { registerClusterCommand } from "./commands/cluster.js"
-import { registerDashboardCommand } from "./commands/dashboard.js"
 import { registerDeployCommand } from "./commands/deploy.js"
 import { registerDevCommand } from "./commands/dev.js"
 import { registerDoctorCommand } from "./commands/doctor.js"
@@ -82,7 +81,6 @@ export function createProgram(): Command {
   registerClusterCommand(program)
   registerSchemaCommand(program)
   registerUpgradeCommand(program)
-  registerDashboardCommand(program)
 
   return program
 }

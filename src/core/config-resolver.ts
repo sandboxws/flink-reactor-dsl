@@ -1,6 +1,5 @@
 // ── Config resolution ────────────────────────────────────────────────
-// Merges common config + named environment, resolves env() markers,
-// and produces flat dashboard JSON for cross-process consumption.
+// Merges common config + named environment, resolves env() markers.
 
 import type {
   ClusterConfig,
@@ -156,88 +155,6 @@ export function resolveConfig(
     },
     pipelines: (resolved.pipelines as Record<string, PipelineOverrides>) ?? {},
     environmentName: envName,
-  }
-}
-
-// ── Resolved dashboard JSON ─────────────────────────────────────────
-
-/**
- * Shape written to .flink-reactor/resolved-dashboard.json.
- * This is what the dashboard reads — flat keys matching DashboardConfig.
- */
-export interface ResolvedDashboardJson {
-  readonly _version: 1
-  readonly flinkRestUrl?: string
-  readonly dashboardPort?: number
-  readonly authType?: string
-  readonly authUsername?: string
-  readonly authPassword?: string
-  readonly authToken?: string
-  readonly sslEnabled?: boolean
-  readonly sslCaPath?: string
-  readonly pollIntervalMs?: number
-  readonly logBufferSize?: number
-  readonly clusterDisplayName?: string
-  readonly mockMode?: boolean
-  readonly rbacEnabled?: boolean
-  readonly rbacProvider?: string
-  readonly rbacRoles?: Record<string, string[]>
-  readonly prometheusUrl?: string
-  readonly prometheusEnabled?: boolean
-  readonly alertWebhookUrl?: string
-  readonly alertWebhookEnabled?: boolean
-}
-
-/**
- * Map a ResolvedConfig to the flat dashboard JSON shape.
- */
-export function buildResolvedDashboardJson(
-  resolved: ResolvedConfig,
-): ResolvedDashboardJson {
-  // At this point all env() markers have been resolved to strings.
-  // Cast to plain types to satisfy TypeScript's conditional type limitations.
-  const cluster = resolved.cluster as { url?: string; displayName?: string }
-  const dashboard = resolved.dashboard as {
-    port?: number
-    pollIntervalMs?: number
-    logBufferSize?: number
-    mockMode?: boolean
-    auth?: {
-      type?: string
-      username?: string
-      password?: string
-      token?: string
-    }
-    ssl?: { enabled?: boolean; caPath?: string }
-    rbac?: {
-      enabled?: boolean
-      provider?: string
-      roles?: Record<string, string[]>
-    }
-    observability?: { prometheus?: string; alertWebhook?: string }
-  }
-
-  return {
-    _version: 1,
-    flinkRestUrl: cluster.url,
-    dashboardPort: dashboard.port,
-    authType: dashboard.auth?.type,
-    authUsername: dashboard.auth?.username,
-    authPassword: dashboard.auth?.password,
-    authToken: dashboard.auth?.token,
-    sslEnabled: dashboard.ssl?.enabled,
-    sslCaPath: dashboard.ssl?.caPath,
-    pollIntervalMs: dashboard.pollIntervalMs,
-    logBufferSize: dashboard.logBufferSize,
-    clusterDisplayName: cluster.displayName,
-    mockMode: dashboard.mockMode,
-    rbacEnabled: dashboard.rbac?.enabled,
-    rbacProvider: dashboard.rbac?.provider,
-    rbacRoles: dashboard.rbac?.roles,
-    prometheusUrl: dashboard.observability?.prometheus,
-    prometheusEnabled: dashboard.observability?.prometheus != null,
-    alertWebhookUrl: dashboard.observability?.alertWebhook,
-    alertWebhookEnabled: dashboard.observability?.alertWebhook != null,
   }
 }
 

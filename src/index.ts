@@ -197,12 +197,8 @@ export type {
 } from "./core/config.js"
 // Core: config & environment
 export { defineConfig } from "./core/config.js"
-export type {
-  ResolvedConfig,
-  ResolvedDashboardJson,
-} from "./core/config-resolver.js"
+export type { ResolvedConfig } from "./core/config-resolver.js"
 export {
-  buildResolvedDashboardJson,
   resolveConfig,
   toInfraConfigFromResolved,
 } from "./core/config-resolver.js"
