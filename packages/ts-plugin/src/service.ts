@@ -8,12 +8,18 @@
 import type ts from "typescript"
 import type { ComponentRulesRegistry } from "./types"
 import { getNestingDiagnostics } from "./diagnostics"
+import { getParentTagAtPosition } from "./context-detector"
+import { filterCompletionsByContext, rankCompletionsByContext } from "./completions"
 
 export interface PluginConfig {
   /** Override or extend component hierarchy rules */
   rules?: Record<string, string[] | "*">
   /** Disable nesting diagnostics */
   disableDiagnostics?: boolean
+  /** Disable context-aware completions */
+  disableCompletions?: boolean
+  /** Completion strategy: "rank" (default) preserves all entries, "filter" removes invalid ones */
+  completionStrategy?: "rank" | "filter"
 }
 
 export type PluginLogger = (msg: string) => void
@@ -46,13 +52,55 @@ export function createLanguageServiceProxy(
       const original = info.languageService.getSemanticDiagnostics(fileName)
       if (!fileName.endsWith(".tsx")) return original
 
-      const program = info.languageService.getProgram()
-      const sourceFile = program?.getSourceFile(fileName)
-      if (!sourceFile) return original
+      try {
+        const program = info.languageService.getProgram()
+        const sourceFile = program?.getSourceFile(fileName)
+        if (!sourceFile) return original
 
-      const nestingDiags = getNestingDiagnostics(sourceFile, registry, tsModule)
-      log(`Found ${nestingDiags.length} nesting diagnostic(s) in ${fileName}`)
-      return [...original, ...nestingDiags]
+        const nestingDiags = getNestingDiagnostics(sourceFile, registry, tsModule)
+        log(`Found ${nestingDiags.length} nesting diagnostic(s) in ${fileName}`)
+        return [...original, ...nestingDiags]
+      } catch (e) {
+        log(`ERROR in diagnostics for ${fileName}: ${e instanceof Error ? e.message : String(e)}. Falling back to baseline.`)
+        return original
+      }
+    }
+  }
+
+  if (!config.disableCompletions) {
+    const strategy = config.completionStrategy ?? "rank"
+
+    proxy.getCompletionsAtPosition = (
+      fileName: string,
+      position: number,
+      options?: ts.GetCompletionsAtPositionOptions,
+    ): ts.WithMetadata<ts.CompletionInfo> | undefined => {
+      const original = info.languageService.getCompletionsAtPosition(
+        fileName,
+        position,
+        options,
+      )
+      if (!original || !fileName.endsWith(".tsx")) return original
+
+      try {
+        const program = info.languageService.getProgram()
+        const sourceFile = program?.getSourceFile(fileName)
+        if (!sourceFile) return original
+
+        const parentTag = getParentTagAtPosition(sourceFile, position, tsModule)
+        if (!parentTag) return original
+
+        const processed =
+          strategy === "filter"
+            ? filterCompletionsByContext(original.entries, parentTag, registry, tsModule)
+            : rankCompletionsByContext(original.entries, parentTag, registry, tsModule)
+
+        log(`Completions: ${strategy} mode, ${original.entries.length} → ${processed.length} entries`)
+        return { ...original, entries: processed }
+      } catch (e) {
+        log(`ERROR in completions for ${fileName}: ${e instanceof Error ? e.message : String(e)}. Falling back to baseline.`)
+        return original
+      }
     }
   }
 

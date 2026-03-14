@@ -23,11 +23,19 @@ describe("package metadata", () => {
     expect(pkg.description.length).toBeGreaterThan(0)
   })
 
-  it("description mentions diagnostics (the primary implemented capability)", () => {
+  it("description mentions diagnostics", () => {
     const desc = pkg.description.toLowerCase()
     expect(
       desc.includes("diagnostic") || desc.includes("validation") || desc.includes("nesting"),
-      `Description "${pkg.description}" should reference the primary capability (diagnostics/validation/nesting)`,
+      `Description "${pkg.description}" should reference diagnostics capability`,
+    ).toBe(true)
+  })
+
+  it("description mentions completions", () => {
+    const desc = pkg.description.toLowerCase()
+    expect(
+      desc.includes("completion"),
+      `Description "${pkg.description}" should reference completions capability`,
     ).toBe(true)
   })
 
@@ -68,6 +76,7 @@ describe("source file structure", () => {
     "types.ts",
     "component-inventory.ts",
     "parity-check.ts",
+    "host-compatibility.ts",
   ]
 
   for (const mod of expectedModules) {
