@@ -241,7 +241,7 @@ export async function runClusterUp(opts: {
 
   // Initialize PostgreSQL databases (idempotent — skips if already exist)
   const pgService = pgProfile === "timescaledb" ? "postgres" : "postgres-plain"
-  await initPostgresDatabases(compose, pgService)
+  await initPostgresDatabases(compose, pgService, pgProfile === "timescaledb")
 
   console.log("")
   console.log(
@@ -653,7 +653,7 @@ const DB_SCHEMA: Record<string, string> = {
   employees: "employees",
 }
 
-async function initPostgresDatabases(compose: string, pgService: string = "postgres"): Promise<void> {
+async function initPostgresDatabases(compose: string, pgService: string = "postgres", timescaledb: boolean = false): Promise<void> {
   const initDir = join(clusterDir(), "init")
 
   // Ensure SQL dumps are downloaded before loading
@@ -670,12 +670,24 @@ async function initPostgresDatabases(compose: string, pgService: string = "postg
     )
 
   try {
+    // Enable TimescaleDB extension on the default database
+    if (timescaledb) {
+      psql("postgres", "CREATE EXTENSION IF NOT EXISTS timescaledb")
+    }
+
     // Create databases if they don't exist
     for (const db of SAMPLE_DATABASES) {
       try {
         psql("postgres", `CREATE DATABASE ${db}`)
       } catch {
         // Already exists — fine
+      }
+    }
+
+    // Enable TimescaleDB on each sample database
+    if (timescaledb) {
+      for (const db of SAMPLE_DATABASES) {
+        psql(db, "CREATE EXTENSION IF NOT EXISTS timescaledb")
       }
     }
 

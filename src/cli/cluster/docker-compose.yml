@@ -112,6 +112,7 @@ services:
   postgres:
     image: timescale/timescaledb:latest-pg17
     container_name: flink-reactor-postgres
+    command: postgres -c shared_preload_libraries=timescaledb
     profiles:
       - timescaledb
     ports:
