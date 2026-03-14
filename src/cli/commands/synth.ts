@@ -17,8 +17,17 @@ export function registerSynthCommand(program: Command): void {
     .option("-p, --pipeline <name>", "Synthesize a specific pipeline")
     .option("-e, --env <name>", "Environment name (loads env/<name>.ts)")
     .option("-o, --outdir <dir>", "Output directory", "dist")
+    .option(
+      "--deep-validate",
+      "Submit EXPLAIN to a running Flink cluster for semantic validation",
+    )
     .action(
-      async (opts: { pipeline?: string; env?: string; outdir: string }) => {
+      async (opts: {
+        pipeline?: string
+        env?: string
+        outdir: string
+        deepValidate?: boolean
+      }) => {
         await runCommand(runSynthEffect(opts))
       },
     )

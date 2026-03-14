@@ -1,6 +1,10 @@
-import { Either } from "effect"
+import { Effect, Either } from "effect"
 import { CycleDetectedError, ValidationError } from "./errors.js"
 import type { PluginValidator } from "./plugin.js"
+import {
+  validateExpressionSyntax,
+  validateSchemaReferences,
+} from "./schema-validation.js"
 import type { ChangelogMode, ConstructNode, NodeKind } from "./types.js"
 
 // ── Changelog compatibility ─────────────────────────────────────────
@@ -26,11 +30,27 @@ export interface GraphEdge {
   readonly to: string
 }
 
+export type ValidationCategory =
+  | "schema"
+  | "expression"
+  | "connector"
+  | "changelog"
+  | "structure"
+
+export interface ValidationDiagnosticDetails {
+  readonly availableColumns?: readonly string[]
+  readonly referencedColumn?: string
+  readonly expressionErrors?: readonly string[]
+  readonly missingProps?: readonly string[]
+}
+
 export interface ValidationDiagnostic {
   readonly severity: "error" | "warning"
   readonly message: string
   readonly nodeId?: string
   readonly component?: string
+  readonly category?: ValidationCategory
+  readonly details?: ValidationDiagnosticDetails
 }
 
 // ── SynthContext ──────────────────────────────────────────────────────
@@ -395,15 +415,33 @@ export class SynthContext {
   validate(
     root?: ConstructNode,
     pluginValidators?: readonly PluginValidator[],
+    options?: {
+      readonly categories?: readonly ValidationCategory[]
+    },
   ): ValidationDiagnostic[] {
-    const builtIn = [
-      ...this.detectOrphanSources(),
-      ...this.detectDanglingSinks(),
-      ...this.detectCycles(),
-      ...this.detectChangelogMismatch(),
-      ...this.detectMaterializedTableIssues(),
-      ...this.detectQualifyIssues(),
-    ]
+    const cats = options?.categories
+    const builtIn: ValidationDiagnostic[] = []
+
+    // Structural validators (category: "structure") — run when no filter or "structure" included
+    if (!cats || cats.includes("structure")) {
+      builtIn.push(
+        ...this.detectOrphanSources(),
+        ...this.detectDanglingSinks(),
+        ...this.detectCycles(),
+        ...this.detectMaterializedTableIssues(),
+        ...this.detectQualifyIssues(),
+      )
+    }
+
+    // Changelog validators (category: "changelog") — run when no filter or "changelog" included
+    if (!cats || cats.includes("changelog")) {
+      builtIn.push(...this.detectChangelogMismatch())
+    }
+
+    // Schema validators (category: "schema") — run when no filter or "schema" included
+    if (root && (!cats || cats.includes("schema"))) {
+      builtIn.push(...validateSchemaReferences(root))
+    }
 
     if (!pluginValidators || pluginValidators.length === 0 || !root) {
       return builtIn
@@ -446,19 +484,49 @@ export class SynthContext {
   /**
    * Validate returning Either with typed error.
    * Returns Right(warnings) or Left(ValidationError with errors).
+   *
+   * Includes async expression syntax validation (via dt-sql-parser)
+   * when no category filter is set or when "expression" is included.
    */
   validateEither(
     root?: ConstructNode,
     pluginValidators?: readonly PluginValidator[],
-  ): Either.Either<ValidationDiagnostic[], ValidationError> {
-    const all = this.validate(root, pluginValidators)
-    const errors = all.filter((d) => d.severity === "error")
-    const warnings = all.filter((d) => d.severity === "warning")
+    options?: {
+      readonly categories?: readonly ValidationCategory[]
+    },
+  ): Effect.Effect<ValidationDiagnostic[], ValidationError> {
+    return Effect.gen(this, function* () {
+      const syncDiagnostics = this.validate(root, pluginValidators, options)
 
-    if (errors.length > 0) {
-      return Either.left(new ValidationError({ diagnostics: errors }))
-    }
+      // Run async expression validation when applicable
+      const cats = options?.categories
+      let exprDiagnostics: ValidationDiagnostic[] = []
+      if (root && (!cats || cats.includes("expression"))) {
+        exprDiagnostics = yield* Effect.tryPromise({
+          try: () => validateExpressionSyntax(root),
+          catch: () =>
+            new ValidationError({
+              diagnostics: [
+                {
+                  severity: "warning",
+                  message:
+                    "Expression syntax validation failed to load — skipping",
+                  category: "expression",
+                },
+              ],
+            }),
+        })
+      }
 
-    return Either.right(warnings)
+      const all = [...syncDiagnostics, ...exprDiagnostics]
+      const errors = all.filter((d) => d.severity === "error")
+      const warnings = all.filter((d) => d.severity === "warning")
+
+      if (errors.length > 0) {
+        return yield* new ValidationError({ diagnostics: errors })
+      }
+
+      return warnings
+    })
   }
 }

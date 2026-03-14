@@ -108,47 +108,48 @@ describe("topologicalSortEither", () => {
 // ── Task 9: validate Either path ─────────────────────────────────────
 
 describe("validateEither", () => {
-  it("returns Right(warnings) for a valid tree", () => {
+  it("returns warnings for a valid tree", async () => {
     const ctx = new SynthContext()
     ctx.addNode(makeNode("src", "Source"))
     ctx.addNode(makeNode("snk", "Sink"))
     ctx.addEdge("src", "snk")
 
-    const result = ctx.validateEither()
-    expect(Either.isRight(result)).toBe(true)
-
-    if (Either.isRight(result)) {
-      expect(result.right).toHaveLength(0)
-    }
+    const warnings = await Effect.runPromise(ctx.validateEither())
+    expect(warnings).toHaveLength(0)
   })
 
-  it("returns Left(ValidationError) for orphan source", () => {
+  it("fails with ValidationError for orphan source", async () => {
     const ctx = new SynthContext()
     ctx.addNode(makeNode("orphan", "Source"))
 
-    const result = ctx.validateEither()
-    expect(Either.isLeft(result)).toBe(true)
+    const exit = await Effect.runPromiseExit(ctx.validateEither())
+    expect(exit._tag).toBe("Failure")
 
-    if (Either.isLeft(result)) {
-      expect(result.left._tag).toBe("ValidationError")
-      expect(result.left.diagnostics.length).toBeGreaterThan(0)
+    if (exit._tag === "Failure") {
+      const cause = exit.cause
+      // Extract the error from the cause
+      const error = (cause as { _tag: string; error?: { _tag: string; diagnostics: Array<{ message: string }> } }).error
+      expect(error?._tag).toBe("ValidationError")
+      expect(error?.diagnostics.length).toBeGreaterThan(0)
       expect(
-        result.left.diagnostics.some((d) => d.message.includes("Orphan")),
+        error?.diagnostics.some((d: { message: string }) => d.message.includes("Orphan")),
       ).toBe(true)
     }
   })
 
-  it("returns Left(ValidationError) for dangling sink", () => {
+  it("fails with ValidationError for dangling sink", async () => {
     const ctx = new SynthContext()
     ctx.addNode(makeNode("dangling", "Sink"))
 
-    const result = ctx.validateEither()
-    expect(Either.isLeft(result)).toBe(true)
+    const exit = await Effect.runPromiseExit(ctx.validateEither())
+    expect(exit._tag).toBe("Failure")
 
-    if (Either.isLeft(result)) {
-      expect(result.left._tag).toBe("ValidationError")
+    if (exit._tag === "Failure") {
+      const cause = exit.cause
+      const error = (cause as { _tag: string; error?: { _tag: string; diagnostics: Array<{ message: string }> } }).error
+      expect(error?._tag).toBe("ValidationError")
       expect(
-        result.left.diagnostics.some((d) => d.message.includes("Dangling")),
+        error?.diagnostics.some((d: { message: string }) => d.message.includes("Dangling")),
       ).toBe(true)
     }
   })

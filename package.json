@@ -63,6 +63,7 @@
     "@effect/platform": "^0.94.5",
     "@effect/platform-node": "^0.104.1",
     "commander": "^13.1.0",
+    "dt-sql-parser": "^4.4.2",
     "effect": "^3.19.19",
     "handlebars": "^4.7.8",
     "jiti": "^2.6.1",

@@ -29,6 +29,10 @@ import {
   invokeHookEither,
   resolvePlugins,
 } from "./plugin-registry.js"
+import {
+  SynthContext,
+  type ValidationCategory,
+} from "./synth-context.js"
 import { rekindTree } from "./tree-utils.js"
 import type { ConstructNode, FlinkMajorVersion, TapManifest } from "./types.js"
 
@@ -325,6 +329,10 @@ export function synthesizeAppEffect(
     readonly resolvedConfig?: ResolvedConfig
     readonly crdOptions?: Partial<CrdGeneratorOptions>
     readonly plugins?: readonly FlinkReactorPlugin[]
+    readonly validation?: {
+      readonly level?: "error" | "warning" | "off"
+      readonly categories?: readonly ValidationCategory[]
+    }
   },
 ): Effect.Effect<
   AppSynthResult,
@@ -404,6 +412,19 @@ export function synthesizeAppEffect(
           }
 
           node = chain.transformTree(node)
+
+          // Validation (between tree transform and SQL generation)
+          if (options?.validation?.level !== "off") {
+            const ctx = new SynthContext()
+            ctx.buildFromTree(node)
+            yield* ctx.validateEither(
+              node,
+              chain.validators,
+              options?.validation?.categories
+                ? { categories: options.validation.categories }
+                : undefined,
+            )
+          }
 
           const name = node.props.name as string
 
