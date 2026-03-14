@@ -110,7 +110,29 @@ services:
       retries: 10
 
   postgres:
+    image: timescale/timescaledb:latest-pg17
+    container_name: flink-reactor-postgres
+    profiles:
+      - timescaledb
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    environment:
+      POSTGRES_USER: reactor
+      POSTGRES_PASSWORD: reactor
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reactor -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  postgres-plain:
     image: postgres:17-alpine
+    container_name: flink-reactor-postgres
+    profiles:
+      - postgres-plain
     ports:
       - "${POSTGRES_PORT:-5433}:5432"
     environment:

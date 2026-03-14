@@ -68,7 +68,8 @@ export function registerClusterCommand(program: Command): void {
       "Filter seed data by domain: ecommerce, iot, or all",
       "all",
     )
-    .action(async (opts: { port: string; seed?: boolean; domain: string }) => {
+    .option("--no-timescaledb", "Use plain PostgreSQL instead of TimescaleDB")
+    .action(async (opts: { port: string; seed?: boolean; domain: string; timescaledb: boolean }) => {
       await runCommand(
         Effect.tryPromise({
           try: () =>
@@ -76,6 +77,7 @@ export function registerClusterCommand(program: Command): void {
               port: opts.port,
               seed: opts.seed ?? false,
               domain: opts.domain as CdcDomain,
+              timescaledb: opts.timescaledb,
             }),
           catch: (err) =>
             new CliError({ reason: "invalid_args", message: (err as Error).message }),
@@ -152,12 +154,23 @@ export function registerClusterCommand(program: Command): void {
     })
 }
 
+// ── Postgres profile resolution ──────────────────────────────────────
+
+function resolvePostgresProfile(timescaledbFlag: boolean): string {
+  // CLI flag takes precedence; if flag is true (default), check env var
+  if (!timescaledbFlag) return "postgres-plain"
+  const envVal = process.env.TIMESCALEDB_ENABLED?.toLowerCase()
+  if (envVal === "false" || envVal === "0" || envVal === "no") return "postgres-plain"
+  return "timescaledb"
+}
+
 // ── cluster up ───────────────────────────────────────────────────────
 
 export async function runClusterUp(opts: {
   port: string
   seed: boolean
   domain?: CdcDomain
+  timescaledb?: boolean
 }): Promise<void> {
   clack.intro(pc.bgCyan(pc.black(" flink-reactor cluster up ")))
 
@@ -171,13 +184,16 @@ export async function runClusterUp(opts: {
 
   const compose = composePath()
   const dataDir = join(clusterDir(), "data")
+  const pgProfile = resolvePostgresProfile(opts.timescaledb ?? true)
 
   // Copy sample data to a Docker-accessible volume path
   const spinner = clack.spinner()
-  spinner.start("Building Flink image and starting services...")
+  spinner.start(
+    `Building Flink image and starting services (PostgreSQL: ${pgProfile === "timescaledb" ? "TimescaleDB" : "plain"})...`,
+  )
 
   try {
-    execSync(`docker compose -f "${compose}" up --build -d`, {
+    execSync(`docker compose -f "${compose}" --profile ${pgProfile} up --build -d`, {
       cwd: clusterDir(),
       stdio: "pipe",
       env: { ...process.env, FLINK_PORT: opts.port },
@@ -224,7 +240,8 @@ export async function runClusterUp(opts: {
   }
 
   // Initialize PostgreSQL databases (idempotent — skips if already exist)
-  await initPostgresDatabases(compose)
+  const pgService = pgProfile === "timescaledb" ? "postgres" : "postgres-plain"
+  await initPostgresDatabases(compose, pgService)
 
   console.log("")
   console.log(
@@ -257,7 +274,7 @@ export async function runClusterDown(opts: {
   killCdcPublisher()
 
   const compose = composePath()
-  const args = ["compose", "-f", compose, "down"]
+  const args = ["compose", "-f", compose, "--profile", "timescaledb", "--profile", "postgres-plain", "down"]
   if (opts.volumes) {
     args.push("-v")
   }
@@ -636,7 +653,7 @@ const DB_SCHEMA: Record<string, string> = {
   employees: "employees",
 }
 
-async function initPostgresDatabases(compose: string): Promise<void> {
+async function initPostgresDatabases(compose: string, pgService: string = "postgres"): Promise<void> {
   const initDir = join(clusterDir(), "init")
 
   // Ensure SQL dumps are downloaded before loading
@@ -648,7 +665,7 @@ async function initPostgresDatabases(compose: string): Promise<void> {
   const cwd = clusterDir()
   const psql = (db: string, sql: string) =>
     execSync(
-      `docker compose -f "${compose}" exec -T postgres psql -U reactor -d ${db} -c ${JSON.stringify(sql)}`,
+      `docker compose -f "${compose}" exec -T ${pgService} psql -U reactor -d ${db} -c ${JSON.stringify(sql)}`,
       { cwd, stdio: "pipe" },
     )
 
@@ -666,7 +683,7 @@ async function initPostgresDatabases(compose: string): Promise<void> {
     for (const db of SAMPLE_DATABASES) {
       const schema = DB_SCHEMA[db]
       const result = execSync(
-        `docker compose -f "${compose}" exec -T postgres psql -U reactor -d ${db} -tAc "SELECT count(*) FROM information_schema.tables WHERE table_schema = '${schema}'"`,
+        `docker compose -f "${compose}" exec -T ${pgService} psql -U reactor -d ${db} -tAc "SELECT count(*) FROM information_schema.tables WHERE table_schema = '${schema}'"`,
         { cwd, stdio: "pipe" },
       )
       const tableCount = parseInt(result.toString().trim(), 10)
@@ -678,11 +695,11 @@ async function initPostgresDatabases(compose: string): Promise<void> {
           continue
         }
         execSync(
-          `docker compose -f "${compose}" cp "${sqlFile}" postgres:/tmp/${db}.sql`,
+          `docker compose -f "${compose}" cp "${sqlFile}" ${pgService}:/tmp/${db}.sql`,
           { cwd, stdio: "pipe" },
         )
         execSync(
-          `docker compose -f "${compose}" exec -T postgres psql -v ON_ERROR_STOP=1 -U reactor -d ${db} -f /tmp/${db}.sql`,
+          `docker compose -f "${compose}" exec -T ${pgService} psql -v ON_ERROR_STOP=1 -U reactor -d ${db} -f /tmp/${db}.sql`,
           { cwd, stdio: "pipe", timeout: 120_000 },
         )
         spinner.message(`Loaded ${db} dataset...`)
