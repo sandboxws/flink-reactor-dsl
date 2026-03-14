@@ -5,6 +5,10 @@
  * completion filter and diagnostics modules to provide context-aware
  * IDE behavior.
  */
+import type { ComponentRulesRegistry } from "./types"
+
+/** Re-export the interface for backward compatibility */
+export type { ComponentRulesRegistry } from "./types"
 
 /** Built-in parent → allowed children mapping */
 const COMPONENT_CHILDREN: Record<string, string[] | "*"> = {
@@ -39,9 +43,16 @@ const COMPONENT_CHILDREN: Record<string, string[] | "*"> = {
     "RawSQL",
     "UDF",
     "MatchRecognize",
+    "Rename",
+    "Drop",
+    "Cast",
+    "Coalesce",
+    "AddField",
     "SideOutput",
     "Validate",
     "View",
+    "MaterializedTable",
+    "Qualify",
   ],
   Route: ["Route.Branch", "Route.Default"],
   "Route.Branch": "*",
@@ -81,13 +92,6 @@ const COMPONENT_CHILDREN: Record<string, string[] | "*"> = {
   "Validate.Reject": "*",
 }
 
-export interface ComponentRulesRegistry {
-  /** Get allowed children for a parent, or undefined if parent is unrecognized */
-  getAllowedChildren(parent: string): string[] | "*" | undefined
-  /** Check if a child is valid for a parent */
-  isValidChild(parent: string, child: string): boolean
-}
-
 /** Merge built-in rules with user config overrides */
 export function createRulesRegistry(
   userRules?: Record<string, string[] | "*">,
@@ -107,6 +111,23 @@ export function createRulesRegistry(
       if (allowed === undefined) return true // unknown parent → allow all
       if (allowed === "*") return true
       return allowed.includes(child)
+    },
+
+    getRegisteredParents(): string[] {
+      return Object.keys(rules)
+    },
+
+    getAllReferencedComponents(): string[] {
+      const components = new Set<string>()
+      for (const [parent, children] of Object.entries(rules)) {
+        components.add(parent)
+        if (Array.isArray(children)) {
+          for (const child of children) {
+            components.add(child)
+          }
+        }
+      }
+      return [...components].sort()
     },
   }
 }

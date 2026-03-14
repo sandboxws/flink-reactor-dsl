@@ -1,7 +1,7 @@
 {
   "name": "@flink-reactor/ts-plugin",
   "version": "0.1.0",
-  "description": "TypeScript language service plugin for context-aware JSX completions in flink-reactor",
+  "description": "TypeScript language service plugin providing JSX nesting diagnostics and context-aware validation for flink-reactor",
   "license": "MIT",
   "repository": {
     "type": "git",

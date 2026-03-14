@@ -13,14 +13,7 @@
  */
 import type ts from "typescript"
 import { createRulesRegistry } from "./component-rules"
-import { getNestingDiagnostics } from "./diagnostics"
-
-interface PluginConfig {
-  /** Override or extend component hierarchy rules */
-  rules?: Record<string, string[] | "*">
-  /** Disable nesting diagnostics */
-  disableDiagnostics?: boolean
-}
+import { type PluginConfig, createLanguageServiceProxy } from "./service"
 
 function init(modules: { typescript: typeof ts }): ts.server.PluginModule {
   const tsModule = modules.typescript
@@ -34,39 +27,7 @@ function init(modules: { typescript: typeof ts }): ts.server.PluginModule {
 
     log("Plugin initialized")
 
-    // Create a proxy that delegates everything to the original language service
-    const proxy = Object.create(null) as ts.LanguageService
-    for (const key of Object.keys(info.languageService) as Array<
-      keyof ts.LanguageService
-    >) {
-      const original = info.languageService[key]
-      // biome-ignore lint/suspicious/noExplicitAny: dynamic proxy assignment requires any cast
-      ;(proxy as any)[key] =
-        typeof original === "function"
-          ? original.bind(info.languageService)
-          : original
-    }
-
-    // Override: getSemanticDiagnostics
-    if (!config.disableDiagnostics) {
-      proxy.getSemanticDiagnostics = (fileName: string): ts.Diagnostic[] => {
-        const original = info.languageService.getSemanticDiagnostics(fileName)
-        if (!fileName.endsWith(".tsx")) return original
-
-        const program = info.languageService.getProgram()
-        const sourceFile = program?.getSourceFile(fileName)
-        if (!sourceFile) return original
-
-        const nestingDiags = getNestingDiagnostics(
-          sourceFile,
-          registry,
-          tsModule,
-        )
-        return [...original, ...nestingDiags]
-      }
-    }
-
-    return proxy
+    return createLanguageServiceProxy(info, registry, tsModule, config, log)
   }
 
   return { create }

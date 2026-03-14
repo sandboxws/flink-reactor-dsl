@@ -7,10 +7,13 @@
  * nesting.
  */
 import type ts from "typescript"
-import type { ComponentRulesRegistry } from "./component-rules"
 import { getComponentName } from "./context-detector"
-
-const DIAGNOSTIC_SOURCE = "flink-reactor"
+import {
+  DIAGNOSTIC_SOURCE,
+  DiagnosticCodes,
+  invalidNestingMessage,
+} from "./diagnostic-codes"
+import type { ComponentRulesRegistry } from "./types"
 
 /**
  * Generate nesting diagnostics for a source file.
@@ -88,11 +91,11 @@ function checkChildren(
     if (!allowed.includes(childName)) {
       diagnostics.push({
         category: tsModule.DiagnosticCategory.Warning,
-        code: 90100,
+        code: DiagnosticCodes.INVALID_NESTING,
         file: sourceFile,
         start: tagSpan.start,
         length: tagSpan.length,
-        messageText: `'${childName}' is not a valid child of '${parentName}'. Expected: ${allowed.join(", ")}`,
+        messageText: invalidNestingMessage(childName, parentName, allowed),
         source: DIAGNOSTIC_SOURCE,
       })
     }
