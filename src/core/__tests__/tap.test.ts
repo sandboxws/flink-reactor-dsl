@@ -1,14 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import {
-  generateSql,
-  generateTapManifest,
-} from "../../codegen/sql-generator.js"
-import { Pipeline } from "../../components/pipeline.js"
-import { FileSystemSink, KafkaSink } from "../../components/sinks.js"
-import { KafkaSource } from "../../components/sources.js"
-import { Filter } from "../../components/transforms.js"
-import { resetNodeIdCounter } from "../jsx-runtime.js"
-import { Field, Schema } from "../schema.js"
+import { generateSql, generateTapManifest } from "@/codegen/sql-generator.js"
+import { Pipeline } from "@/components/pipeline.js"
+import { FileSystemSink, KafkaSink } from "@/components/sinks.js"
+import { KafkaSource } from "@/components/sources.js"
+import { Filter } from "@/components/transforms.js"
+import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
+import { Field, Schema } from "@/core/schema.js"
 import {
   buildConsumerGroupId,
   buildObservationSql,
@@ -16,7 +13,7 @@ import {
   normalizeTapConfig,
   resolveObservationStrategy,
   validateTapConfig,
-} from "../tap.js"
+} from "@/core/tap.js"
 
 beforeEach(() => {
   resetNodeIdCounter()
@@ -210,7 +207,7 @@ describe("JDBC sink tap observation SQL", () => {
     const schema = { id: "BIGINT", name: "STRING" }
     const connectorProps = {
       connector: "jdbc",
-      url: "jdbc:postgresql://localhost:5432/db",
+      url: "jdbc:postgresql://localhost:5433/db",
       "table-name": "users",
     }
 
