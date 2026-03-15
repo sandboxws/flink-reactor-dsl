@@ -36,4 +36,20 @@ export default defineConfig([
       options.alias = srcAlias
     },
   },
+  // Browser entry — importable as `import { ... } from 'flink-reactor/browser'`
+  {
+    entry: { browser: "src/browser.ts" },
+    format: ["esm"],
+    target: "esnext",
+    platform: "browser",
+    outDir: "dist",
+    clean: false,
+    dts: true,
+    sourcemap: true,
+    splitting: false,
+    noExternal: ["effect", "dt-sql-parser"],
+    esbuildOptions(options) {
+      options.alias = srcAlias
+    },
+  },
 ])
