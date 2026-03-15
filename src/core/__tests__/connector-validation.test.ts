@@ -28,7 +28,8 @@ describe("validateConnectorProperties", () => {
 
     const diags = validateConnectorProperties(tree)
     const topicErrors = diags.filter(
-      (d) => d.severity === "error" && d.details?.missingProps?.includes("topic"),
+      (d) =>
+        d.severity === "error" && d.details?.missingProps?.includes("topic"),
     )
     expect(topicErrors).toHaveLength(1)
     expect(topicErrors[0].category).toBe("connector")
@@ -95,7 +96,8 @@ describe("validateConnectorProperties", () => {
 
     const diags = validateConnectorProperties(tree)
     const topicErrors = diags.filter(
-      (d) => d.severity === "error" && d.details?.missingProps?.includes("topic"),
+      (d) =>
+        d.severity === "error" && d.details?.missingProps?.includes("topic"),
     )
     expect(topicErrors).toHaveLength(1)
   })
@@ -140,7 +142,8 @@ describe("validateConnectorProperties", () => {
 
     const diags = validateConnectorProperties(tree)
     const pathErrors = diags.filter(
-      (d) => d.severity === "error" && d.details?.missingProps?.includes("path"),
+      (d) =>
+        d.severity === "error" && d.details?.missingProps?.includes("path"),
     )
     expect(pathErrors).toHaveLength(1)
     expect(pathErrors[0].component).toBe("FileSystemSink")
@@ -177,7 +180,7 @@ describe("validateConnectorProperties", () => {
     for (const d of diags) {
       expect(d.category).toBe("connector")
       expect(d.details?.missingProps).toBeDefined()
-      expect(d.details!.missingProps!.length).toBeGreaterThan(0)
+      expect(d.details?.missingProps?.length).toBeGreaterThan(0)
     }
   })
 })

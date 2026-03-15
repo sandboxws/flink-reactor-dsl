@@ -4,9 +4,9 @@ import pc from "picocolors"
 import { loadPipeline, resolveProjectContext } from "@/cli/discovery.js"
 import { runCommand } from "@/cli/effect-runner.js"
 import { synthesizeApp } from "@/core/app.js"
+import { validateConnectorProperties } from "@/core/connector-validation.js"
 import { DiscoveryError, ValidationError } from "@/core/errors.js"
 import { FlinkVersionCompat } from "@/core/flink-compat.js"
-import { validateConnectorProperties } from "@/core/connector-validation.js"
 import {
   validateExpressionSyntax,
   validateSchemaReferences,

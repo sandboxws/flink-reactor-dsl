@@ -1,7 +1,7 @@
 import { Effect, Either } from "effect"
+import { validateConnectorProperties } from "./connector-validation.js"
 import { CycleDetectedError, ValidationError } from "./errors.js"
 import type { PluginValidator } from "./plugin.js"
-import { validateConnectorProperties } from "./connector-validation.js"
 import {
   validateExpressionSyntax,
   validateSchemaReferences,

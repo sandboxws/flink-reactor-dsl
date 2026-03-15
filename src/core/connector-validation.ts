@@ -1,5 +1,5 @@
-import type { ConstructNode } from "./types.js"
 import type { ValidationDiagnostic } from "./synth-context.js"
+import type { ConstructNode } from "./types.js"
 
 // ── Property rule types ──────────────────────────────────────────────
 
@@ -24,51 +24,46 @@ type PropertyRule = RequiredRule | ConditionalRule | InfraProvidedRule
 
 // ── Connector property registry ──────────────────────────────────────
 
-const CONNECTOR_REGISTRY: ReadonlyMap<string, readonly PropertyRule[]> = new Map<
-  string,
-  PropertyRule[]
->([
-  [
-    "KafkaSource",
+const CONNECTOR_REGISTRY: ReadonlyMap<string, readonly PropertyRule[]> =
+  new Map<string, PropertyRule[]>([
     [
-      { kind: "required", prop: "topic" },
-      { kind: "required", prop: "schema" },
-      { kind: "infra-provided", prop: "bootstrapServers" },
+      "KafkaSource",
+      [
+        { kind: "required", prop: "topic" },
+        { kind: "required", prop: "schema" },
+        { kind: "infra-provided", prop: "bootstrapServers" },
+      ],
     ],
-  ],
-  [
-    "KafkaSink",
     [
-      { kind: "required", prop: "topic" },
-      { kind: "infra-provided", prop: "bootstrapServers" },
+      "KafkaSink",
+      [
+        { kind: "required", prop: "topic" },
+        { kind: "infra-provided", prop: "bootstrapServers" },
+      ],
     ],
-  ],
-  [
-    "JdbcSource",
     [
-      { kind: "required", prop: "url" },
-      { kind: "required", prop: "table" },
-      { kind: "required", prop: "schema" },
+      "JdbcSource",
+      [
+        { kind: "required", prop: "url" },
+        { kind: "required", prop: "table" },
+        { kind: "required", prop: "schema" },
+      ],
     ],
-  ],
-  [
-    "JdbcSink",
     [
-      { kind: "required", prop: "url" },
-      { kind: "required", prop: "table" },
-      {
-        kind: "conditional",
-        prop: "keyFields",
-        when: (props) => props.upsertMode === true,
-        description: "required when `upsertMode` is true",
-      },
+      "JdbcSink",
+      [
+        { kind: "required", prop: "url" },
+        { kind: "required", prop: "table" },
+        {
+          kind: "conditional",
+          prop: "keyFields",
+          when: (props) => props.upsertMode === true,
+          description: "required when `upsertMode` is true",
+        },
+      ],
     ],
-  ],
-  [
-    "FileSystemSink",
-    [{ kind: "required", prop: "path" }],
-  ],
-])
+    ["FileSystemSink", [{ kind: "required", prop: "path" }]],
+  ])
 
 // ── Validation options ───────────────────────────────────────────────
 
