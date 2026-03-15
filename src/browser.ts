@@ -3,6 +3,8 @@
 // in a browser environment. Node-specific layers and modules are
 // intentionally excluded.
 
+// Codegen: YAML serializer (pure, no I/O — safe for browser)
+export { toYaml } from "./codegen/crd-generator.js"
 // Components: catalog source
 export type { CatalogSourceProps } from "./components/catalog-source.js"
 export { CatalogSource } from "./components/catalog-source.js"
