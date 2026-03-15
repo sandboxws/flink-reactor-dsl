@@ -387,3 +387,6 @@ docs/
 .gemini/
 .idea/
 openspec/
+src/cli/cluster/init/chinook.sql
+src/cli/cluster/init/employees.sql
+src/cli/cluster/init/pagila.sql
