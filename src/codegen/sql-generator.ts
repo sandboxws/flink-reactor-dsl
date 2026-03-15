@@ -20,6 +20,7 @@ import {
   resolveNodeSchema,
   resolveTransformSchema,
 } from "./schema-introspect.js"
+import { verifySql } from "./sql-verifier.js"
 
 // ── Module-scoped version ───────────────────────────────────────────
 // Set at the start of generateSql() and read by builders that need
@@ -44,6 +45,7 @@ export interface GenerateSqlOptions {
 export interface GenerateSqlResult {
   readonly statements: readonly string[]
   readonly sql: string
+  readonly diagnostics: readonly ValidationDiagnostic[]
 }
 
 /**
@@ -142,9 +144,12 @@ export function generateSql(
     )
   }
 
+  const diagnostics = verifySql(statements)
+
   return {
     statements,
     sql: `${statements.join("\n\n")}\n`,
+    diagnostics,
   }
 }
 

@@ -22,6 +22,7 @@ export type ValidationCategory =
   | "connector"
   | "changelog"
   | "structure"
+  | "sql"
 
 export interface ValidationDiagnosticDetails {
   readonly availableColumns?: readonly string[]
