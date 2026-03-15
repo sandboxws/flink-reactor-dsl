@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest"
+import { beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { Pipeline } from "@/components/pipeline.js"
 import { KafkaSink } from "@/components/sinks.js"
 import { KafkaSource } from "@/components/sources.js"
@@ -8,6 +8,13 @@ import { Field, Schema } from "@/core/schema.js"
 import { validateExpressionSyntax } from "@/core/schema-validation.js"
 import { validateSqlExpression } from "@/core/sql-expr-validator.js"
 import type { ConstructNode } from "@/core/types.js"
+
+// Warm up the dt-sql-parser import + ANTLR parser instantiation.
+// This is expensive (~seconds) on CI runners and would otherwise
+// cause the first test to timeout at the default 5s threshold.
+beforeAll(async () => {
+  await validateSqlExpression("1 = 1")
+}, 30_000)
 
 beforeEach(() => {
   resetNodeIdCounter()
