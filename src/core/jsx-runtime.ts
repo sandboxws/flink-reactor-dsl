@@ -38,6 +38,30 @@ export function resetNodeIdCounter(): void {
 }
 
 /**
+ * Validate that required props are present in a component factory.
+ * Throws a clear error message identifying the component and missing props.
+ *
+ * Call this at the top of factory functions BEFORE accessing props
+ * that would otherwise crash with an unhelpful error (e.g. toSqlIdentifier
+ * on an undefined topic).
+ */
+export function requireProps<T extends object>(
+  component: string,
+  props: T,
+  required: readonly (keyof T & string)[],
+): void {
+  const missing = required.filter(
+    (p) => props[p] === undefined || props[p] === null,
+  )
+  if (missing.length > 0) {
+    const list = missing.map((p) => `\`${p}\``).join(", ")
+    throw new Error(
+      `<${component}> is missing required prop${missing.length > 1 ? "s" : ""}: ${list}`,
+    )
+  }
+}
+
+/**
  * Convert a string to a valid SQL identifier.
  * Replaces hyphens, dots, and slashes with underscores.
  */

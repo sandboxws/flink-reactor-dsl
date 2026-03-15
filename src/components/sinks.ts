@@ -1,4 +1,8 @@
-import { createElement, toSqlIdentifier } from "@/core/jsx-runtime.js"
+import {
+  createElement,
+  requireProps,
+  toSqlIdentifier,
+} from "@/core/jsx-runtime.js"
 import type {
   BaseComponentProps,
   ConstructNode,
@@ -42,6 +46,7 @@ export interface KafkaSinkProps extends BaseComponentProps {
  * pipeline-level config if not specified here.
  */
 export function KafkaSink(props: KafkaSinkProps): ConstructNode {
+  requireProps("KafkaSink", props, ["topic"])
   const { children, name, ...rest } = props
   const childArray =
     children == null ? [] : Array.isArray(children) ? children : [children]
@@ -72,6 +77,7 @@ export interface JdbcSinkProps extends BaseComponentProps {
  * identify the primary key columns for upsert semantics.
  */
 export function JdbcSink(props: JdbcSinkProps): ConstructNode {
+  requireProps("JdbcSink", props, ["url", "table"])
   const { children, name, ...rest } = props
   const childArray =
     children == null ? [] : Array.isArray(children) ? children : [children]
@@ -102,6 +108,7 @@ export interface FileSystemSinkProps extends BaseComponentProps {
  * for file rotation.
  */
 export function FileSystemSink(props: FileSystemSinkProps): ConstructNode {
+  requireProps("FileSystemSink", props, ["path"])
   const { children, name, ...rest } = props
   const childArray =
     children == null ? [] : Array.isArray(children) ? children : [children]
@@ -134,6 +141,7 @@ export interface GenericSinkProps extends BaseComponentProps {
  * to the WITH clause during code generation.
  */
 export function GenericSink(props: GenericSinkProps): ConstructNode {
+  requireProps("GenericSink", props, ["connector"])
   const { children, name, ...rest } = props
   const childArray =
     children == null ? [] : Array.isArray(children) ? children : [children]

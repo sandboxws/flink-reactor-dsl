@@ -15,6 +15,10 @@ export function registerSynthCommand(program: Command): void {
     .command("synth")
     .description("Synthesize pipelines to Flink SQL and CRDs")
     .option("-p, --pipeline <name>", "Synthesize a specific pipeline")
+    .option(
+      "-f, --file <path>",
+      "Synthesize a specific .tsx file or directory (bypasses pipelines/ convention)",
+    )
     .option("-e, --env <name>", "Environment name (loads env/<name>.ts)")
     .option("-o, --outdir <dir>", "Output directory", "dist")
     .option(
@@ -24,6 +28,7 @@ export function registerSynthCommand(program: Command): void {
     .action(
       async (opts: {
         pipeline?: string
+        file?: string
         env?: string
         outdir: string
         deepValidate?: boolean
@@ -37,6 +42,7 @@ export function registerSynthCommand(program: Command): void {
 
 export async function runSynth(opts: {
   pipeline?: string
+  file?: string
   env?: string
   outdir: string
   projectDir?: string
@@ -44,6 +50,7 @@ export async function runSynth(opts: {
   const projectDir = opts.projectDir ?? process.cwd()
   const ctx = await resolveProjectContext(projectDir, {
     pipeline: opts.pipeline,
+    file: opts.file,
     env: opts.env,
   })
 
@@ -175,6 +182,7 @@ function buildConfigMapYaml(artifact: PipelineArtifact): string {
  */
 export function runSynthEffect(opts: {
   pipeline?: string
+  file?: string
   env?: string
   outdir: string
   projectDir?: string
@@ -191,6 +199,7 @@ export function runSynthEffect(opts: {
       try: () =>
         resolveProjectContext(projectDir, {
           pipeline: opts.pipeline,
+          file: opts.file,
           env: opts.env,
         }),
       catch: (err) =>

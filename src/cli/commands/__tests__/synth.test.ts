@@ -143,4 +143,39 @@ export default pipeline;
       ),
     ).toBe(true)
   })
+
+  it("supports --file flag to synth a standalone .tsx file", async () => {
+    // Write a pipeline file outside the pipelines/ convention
+    const filePath = join(tempDir, "my-pipeline.tsx")
+    writeFileSync(filePath, makeSimplePipeline(), "utf-8")
+
+    const artifacts = await runSynth({
+      file: filePath,
+      outdir: "dist",
+      projectDir: tempDir,
+    })
+
+    expect(artifacts.length).toBeGreaterThanOrEqual(1)
+    expect(artifacts[0].name).toBe("test-pipeline")
+
+    expect(
+      existsSync(join(tempDir, "dist", "test-pipeline", "pipeline.sql")),
+    ).toBe(true)
+  })
+
+  it("supports --file flag with a directory containing .tsx files", async () => {
+    // Write a pipeline file in a non-standard directory
+    const dir = join(tempDir, "my-example")
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, "pipeline.tsx"), makeSimplePipeline(), "utf-8")
+
+    const artifacts = await runSynth({
+      file: dir,
+      outdir: "dist",
+      projectDir: tempDir,
+    })
+
+    expect(artifacts.length).toBeGreaterThanOrEqual(1)
+    expect(artifacts[0].name).toBe("test-pipeline")
+  })
 })
