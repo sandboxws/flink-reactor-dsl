@@ -11,6 +11,8 @@ import type {
   FlinkMajorVersion,
   TapManifest,
 } from "@/core/types.js"
+import type { OptimizeOptions } from "./pipeline-optimizer.js"
+import { optimizePipeline } from "./pipeline-optimizer.js"
 import {
   collectTransformChain,
   findDeepestSource,
@@ -40,6 +42,8 @@ export interface GenerateSqlOptions {
   readonly devMode?: boolean
   /** Disable tap metadata generation entirely */
   readonly noTap?: boolean
+  /** Enable pipeline optimization passes (default: false) */
+  readonly optimize?: boolean | OptimizeOptions
 }
 
 export interface GenerateSqlResult {
@@ -68,17 +72,33 @@ export function generateSql(
   const pluginSql = options.pluginSqlGenerators
   const pluginDdl = options.pluginDdlGenerators
 
+  // Run optimization passes if enabled
+  let currentTree = pipelineNode
+  let optimizerSets: readonly string[] = []
+  if (options.optimize) {
+    const optimizeOpts =
+      typeof options.optimize === "object" ? options.optimize : {}
+    const result = optimizePipeline(currentTree, version, optimizeOpts)
+    currentTree = result.tree
+    optimizerSets = result.additionalSets
+  }
+
   // Build a node index for lookups by ID
   const nodeIndex = new Map<string, ConstructNode>()
-  indexTree(pipelineNode, nodeIndex)
+  indexTree(currentTree, nodeIndex)
 
   const ctx = new SynthContext()
-  ctx.buildFromTree(pipelineNode)
+  ctx.buildFromTree(currentTree)
 
   const statements: string[] = []
 
   // 1. SET statements from pipeline props
-  statements.push(...generateSetStatements(pipelineNode, version))
+  statements.push(...generateSetStatements(currentTree, version))
+
+  // 1.5. Auto-injected optimizer SET statements (after user SETs for precedence)
+  if (optimizerSets.length > 0) {
+    statements.push(...optimizerSets)
+  }
 
   // 2. CREATE CATALOG
   const catalogs = ctx.getNodesByKind("Catalog")
@@ -107,7 +127,7 @@ export function generateSql(
 
   // 4. CREATE TABLE (sinks) — resolve schemas then generate DDL
   const sinks = ctx.getNodesByKind("Sink")
-  const sinkMeta = resolveSinkMetadata(pipelineNode, nodeIndex)
+  const sinkMeta = resolveSinkMetadata(currentTree, nodeIndex)
   for (const sink of sinks) {
     const pluginGen = pluginDdl?.get(sink.component)
     if (pluginGen) {
@@ -135,7 +155,7 @@ export function generateSql(
   }
 
   // 5. DML: INSERT INTO / STATEMENT SET
-  const dmlStatements = generateDml(pipelineNode, nodeIndex, pluginSql)
+  const dmlStatements = generateDml(currentTree, nodeIndex, pluginSql)
   if (dmlStatements.length === 1) {
     statements.push(dmlStatements[0])
   } else if (dmlStatements.length > 1) {
