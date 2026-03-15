@@ -1,9 +1,5 @@
 import { Effect, Exit } from "effect"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import {
-  SqlGatewayConnectionError,
-  SqlGatewayResponseError,
-} from "../../../core/errors.js"
 import * as EffectClient from "../effect-client.js"
 import type {
   RawFetchResultsResponse,
@@ -64,10 +60,7 @@ describe("Effect-based SQL Gateway Client — typed errors", () => {
   describe("401 unauthorized", () => {
     it("returns SqlGatewayResponseError with status 401", async () => {
       mockFetch.mockResolvedValue(
-        mockJsonResponse(
-          { errors: ["Authentication required"] },
-          401,
-        ),
+        mockJsonResponse({ errors: ["Authentication required"] }, 401),
       )
 
       const exit = await Effect.runPromiseExit(
@@ -111,7 +104,11 @@ describe("Effect-based SQL Gateway Client — typed errors", () => {
     it("returns SqlGatewayResponseError with Flink parser message", async () => {
       mockFetch.mockResolvedValue(
         mockJsonResponse(
-          { errors: ["Encountered 'SELCT' at line 1, column 0. Did you mean 'SELECT'?"] },
+          {
+            errors: [
+              "Encountered 'SELCT' at line 1, column 0. Did you mean 'SELECT'?",
+            ],
+          },
           400,
         ),
       )
@@ -136,18 +133,16 @@ describe("Effect-based SQL Gateway Client — typed errors", () => {
         { errors: ["Internal server error"] },
         500,
       )
-      const successResponse = mockJsonResponse<RawOpenSessionResponse>(
-        { sessionHandle: "sess-recovered" },
-      )
+      const successResponse = mockJsonResponse<RawOpenSessionResponse>({
+        sessionHandle: "sess-recovered",
+      })
 
       mockFetch
         .mockResolvedValueOnce(errorResponse)
         .mockResolvedValueOnce(errorResponse)
         .mockResolvedValueOnce(successResponse)
 
-      const result = await Effect.runPromise(
-        EffectClient.openSession(BASE_URL),
-      )
+      const result = await Effect.runPromise(EffectClient.openSession(BASE_URL))
 
       expect(result).toBe("sess-recovered")
       expect(mockFetch).toHaveBeenCalledTimes(3)
@@ -206,9 +201,7 @@ describe("Effect-based SQL Gateway Client — typed errors", () => {
         mockJsonResponse<RawOpenSessionResponse>({ sessionHandle: "sess-ok" }),
       )
 
-      const result = await Effect.runPromise(
-        EffectClient.openSession(BASE_URL),
-      )
+      const result = await Effect.runPromise(EffectClient.openSession(BASE_URL))
       expect(result).toBe("sess-ok")
     })
 

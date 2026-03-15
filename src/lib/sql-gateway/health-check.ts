@@ -36,9 +36,7 @@ export interface HealthCheckConfig {
  * Probe the SQL Gateway /info endpoint.
  * Returns the response latency in ms.
  */
-function probeGateway(
-  baseUrl: string,
-): Effect.Effect<number, SqlGatewayError> {
+function probeGateway(baseUrl: string): Effect.Effect<number, SqlGatewayError> {
   const url = `${baseUrl.replace(/\/+$/, "")}/info`
   const start = Date.now()
 

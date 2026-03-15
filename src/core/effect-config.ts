@@ -5,7 +5,6 @@
 import { Effect } from "effect"
 import type { FlinkReactorConfig } from "./config.js"
 import type { ResolvedConfig } from "./config-resolver.js"
-import { resolveConfig as resolveConfigImperative } from "./config-resolver.js"
 import type { EnvVarRef } from "./env-var.js"
 import { isEnvVarRef } from "./env-var.js"
 import { ConfigError } from "./errors.js"

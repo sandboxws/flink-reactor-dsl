@@ -10,9 +10,9 @@ export {
 } from "./effect-session-pool.js"
 export {
   checkHealth,
-  waitForHealthy,
   type HealthCheckConfig,
   type HealthStatus,
+  waitForHealthy,
 } from "./health-check.js"
 export type { SessionPoolOptions } from "./session-pool.js"
 export { SessionPool } from "./session-pool.js"

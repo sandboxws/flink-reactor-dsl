@@ -17,7 +17,7 @@ import {
   isTypeScriptVersionSupported,
   TS_VERSION_POLICY,
 } from "./host-compatibility"
-import { type PluginConfig, createLanguageServiceProxy } from "./service"
+import { createLanguageServiceProxy, type PluginConfig } from "./service"
 
 const VALID_STRATEGIES = ["rank", "filter"] as const
 

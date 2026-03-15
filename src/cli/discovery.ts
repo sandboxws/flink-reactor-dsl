@@ -1,5 +1,5 @@
-import { existsSync, readdirSync, statSync } from "node:fs"
-import { join, resolve } from "node:path"
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
+import { basename, dirname, join, resolve } from "node:path"
 import type { Jiti } from "jiti"
 import { createJiti } from "jiti"
 import type { FlinkReactorConfig } from "@/core/config.js"
@@ -12,17 +12,50 @@ import type { ConstructNode } from "@/core/types.js"
 const jitiCache = new Map<string, Jiti>()
 
 /**
+ * Resolve the `@/` path alias from tsconfig.json.
+ *
+ * Reads the `paths` field and maps `@/*` to its target directory.
+ * Falls back to the project root if no tsconfig or no `@/*` mapping exists.
+ *
+ *   Scaffolded projects:  `"@/*": ["./*"]`   → projectDir
+ *   This repo:            `"@/*": ["./src/*"]` → projectDir/src
+ */
+function resolveAtAlias(projectDir: string): string {
+  const tsconfigPath = join(projectDir, "tsconfig.json")
+  if (!existsSync(tsconfigPath)) return projectDir
+
+  try {
+    const raw = readFileSync(tsconfigPath, "utf-8")
+    // Strip single-line comments (// ...) so JSON.parse succeeds on tsc-style configs
+    const stripped = raw.replace(/\/\/.*$/gm, "")
+    const tsconfig = JSON.parse(stripped)
+    const paths: Record<string, string[]> | undefined =
+      tsconfig?.compilerOptions?.paths
+
+    if (!paths?.["@/*"]?.[0]) return projectDir
+
+    // e.g. "./*" → ".", "./src/*" → "./src"
+    const mapping = paths["@/*"][0].replace(/\/?\*$/, "")
+    return resolve(projectDir, mapping)
+  } catch {
+    return projectDir
+  }
+}
+
+/**
  * Create a jiti instance scoped to a project directory.
- * Configures `@/` path alias to resolve from the project root,
- * matching the tsconfig.json paths we generate in scaffolded projects.
+ * Reads tsconfig.json `paths` to resolve the `@/` alias correctly,
+ * so both scaffolded projects (`@/*` → `./*`) and this repo
+ * (`@/*` → `./src/*`) work out of the box.
  */
 function getJiti(projectDir: string): Jiti {
   const key = resolve(projectDir)
   let instance = jitiCache.get(key)
   if (!instance) {
+    const aliasTarget = resolveAtAlias(key)
     instance = createJiti(import.meta.url, {
       jsx: { runtime: "automatic", importSource: "flink-reactor" },
-      alias: { "@": key },
+      alias: { "@": aliasTarget },
     })
     jitiCache.set(key, instance)
   }
@@ -79,6 +112,43 @@ export function discoverPipelines(
   }
 
   return pipelines.sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/**
+ * Create a DiscoveredPipeline from a direct file path.
+ * Derives the pipeline name from the parent directory.
+ */
+export function discoverFromFile(filePath: string): DiscoveredPipeline {
+  const resolved = resolve(filePath)
+
+  if (!existsSync(resolved)) {
+    throw new Error(`Entry point not found: ${filePath}`)
+  }
+
+  const stat = statSync(resolved)
+  let entryPoint: string
+  let name: string
+
+  if (stat.isDirectory()) {
+    // Directory given — look for index.tsx
+    const indexPath = join(resolved, "index.tsx")
+    if (!existsSync(indexPath)) {
+      // Fall back to first .tsx file in directory
+      const tsxFiles = readdirSync(resolved).filter((f) => f.endsWith(".tsx"))
+      if (tsxFiles.length === 0) {
+        throw new Error(`No .tsx files found in ${filePath}`)
+      }
+      entryPoint = join(resolved, tsxFiles.sort()[0])
+    } else {
+      entryPoint = indexPath
+    }
+    name = basename(resolved)
+  } else {
+    entryPoint = resolved
+    name = basename(dirname(resolved))
+  }
+
+  return { name, entryPoint }
 }
 
 // ── Config loading ──────────────────────────────────────────────────
@@ -176,10 +246,13 @@ export async function resolveProjectContext(
   options?: {
     readonly pipeline?: string
     readonly env?: string
+    readonly file?: string
   },
 ): Promise<ProjectContext> {
   const config = await loadConfig(projectDir)
-  const pipelines = discoverPipelines(projectDir, options?.pipeline)
+  const pipelines = options?.file
+    ? [discoverFromFile(options.file)]
+    : discoverPipelines(projectDir, options?.pipeline)
 
   // Unified config path: resolve environments block
   let resolvedConfig: ResolvedConfig | null = null

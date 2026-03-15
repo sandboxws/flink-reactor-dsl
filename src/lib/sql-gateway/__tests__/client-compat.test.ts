@@ -106,11 +106,12 @@ describe("SqlGatewayCompatClient — integration with Effect backend", () => {
         results: {
           columns: [
             { name: "id", logicalType: { type: "BIGINT", nullable: false } },
-            { name: "name", logicalType: { type: "VARCHAR(255)", nullable: true } },
+            {
+              name: "name",
+              logicalType: { type: "VARCHAR(255)", nullable: true },
+            },
           ],
-          data: [
-            { kind: "INSERT", fields: [42, "Alice"] },
-          ],
+          data: [{ kind: "INSERT", fields: [42, "Alice"] }],
         },
         resultType: "PAYLOAD",
         nextResultUri: "/v1/sessions/s/operations/o/result/1",
@@ -131,9 +132,7 @@ describe("SqlGatewayCompatClient — integration with Effect backend", () => {
 
   describe("closeSession", () => {
     it("sends DELETE and resolves", async () => {
-      mockFetch.mockResolvedValue(
-        mockJsonResponse(undefined, 204) as Response,
-      )
+      mockFetch.mockResolvedValue(mockJsonResponse(undefined, 204) as Response)
 
       await expect(client.closeSession("sess-abc")).resolves.toBeUndefined()
     })
@@ -192,7 +191,9 @@ describe("SqlGatewayCompatClient — integration with Effect backend", () => {
       )
       // submitStatement
       mockFetch.mockResolvedValueOnce(
-        mockJsonResponse<RawSubmitStatementResponse>({ operationHandle: "op-1" }),
+        mockJsonResponse<RawSubmitStatementResponse>({
+          operationHandle: "op-1",
+        }),
       )
       // fetchResults (first page)
       const firstPage: RawFetchResultsResponse = {
@@ -220,9 +221,13 @@ describe("SqlGatewayCompatClient — integration with Effect backend", () => {
       }
       mockFetch.mockResolvedValueOnce(mockJsonResponse(lastPage))
 
-      const result = await client.executeAndStream("SELECT * FROM orders", undefined, {
-        pollIntervalMs: 0,
-      })
+      const result = await client.executeAndStream(
+        "SELECT * FROM orders",
+        undefined,
+        {
+          pollIntervalMs: 0,
+        },
+      )
 
       expect(result.sessionHandle).toBe("sess-1")
       expect(result.operationHandle).toBe("op-1")

@@ -29,6 +29,7 @@ import {
   invokeHookEither,
   resolvePlugins,
 } from "./plugin-registry.js"
+import { SynthContext, type ValidationCategory } from "./synth-context.js"
 import { rekindTree } from "./tree-utils.js"
 import type { ConstructNode, FlinkMajorVersion, TapManifest } from "./types.js"
 
@@ -325,6 +326,10 @@ export function synthesizeAppEffect(
     readonly resolvedConfig?: ResolvedConfig
     readonly crdOptions?: Partial<CrdGeneratorOptions>
     readonly plugins?: readonly FlinkReactorPlugin[]
+    readonly validation?: {
+      readonly level?: "error" | "warning" | "off"
+      readonly categories?: readonly ValidationCategory[]
+    }
   },
 ): Effect.Effect<
   AppSynthResult,
@@ -381,8 +386,8 @@ export function synthesizeAppEffect(
           for (const hook of chain.beforeSynth) {
             if (hook) {
               yield* invokeHookEither("plugin", "beforeSynth", () =>
-                  hook(hookCtx),
-                )
+                hook(hookCtx),
+              )
             }
           }
         }
@@ -405,20 +410,29 @@ export function synthesizeAppEffect(
 
           node = chain.transformTree(node)
 
+          // Validation (between tree transform and SQL generation)
+          if (options?.validation?.level !== "off") {
+            const ctx = new SynthContext()
+            ctx.buildFromTree(node)
+            yield* ctx.validateEither(
+              node,
+              chain.validators,
+              options?.validation?.categories
+                ? { categories: options.validation.categories }
+                : undefined,
+            )
+          }
+
           const name = node.props.name as string
 
           // SQL generation with typed error
           const sql = yield* generateSqlEither(node, {
-              flinkVersion,
-              pluginSqlGenerators:
-                chain.sqlGenerators.size > 0
-                  ? chain.sqlGenerators
-                  : undefined,
-              pluginDdlGenerators:
-                chain.ddlGenerators.size > 0
-                  ? chain.ddlGenerators
-                  : undefined,
-            })
+            flinkVersion,
+            pluginSqlGenerators:
+              chain.sqlGenerators.size > 0 ? chain.sqlGenerators : undefined,
+            pluginDdlGenerators:
+              chain.ddlGenerators.size > 0 ? chain.ddlGenerators : undefined,
+          })
 
           // CRD generation with typed error
           const crdOpts: CrdGeneratorOptions = {
@@ -451,8 +465,8 @@ export function synthesizeAppEffect(
           for (const hook of chain.afterSynth) {
             if (hook) {
               yield* invokeHookEither("plugin", "afterSynth", () =>
-                  hook(hookCtx),
-                )
+                hook(hookCtx),
+              )
             }
           }
         }

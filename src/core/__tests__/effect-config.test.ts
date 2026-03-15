@@ -43,13 +43,10 @@ describe("resolveEnvVarEffect()", () => {
     )
     expect(Exit.isFailure(exit)).toBe(true)
     if (Exit.isFailure(exit)) {
-      const error = (exit as any).cause?.error ?? exit.cause
+      const _error = (exit as any).cause?.error ?? exit.cause
       // Extract the ConfigError from the cause
       const result = await Effect.runPromise(
-        resolveEnvVarEffect("MISSING").pipe(
-          Effect.provide(layer),
-          Effect.flip,
-        ),
+        resolveEnvVarEffect("MISSING").pipe(Effect.provide(layer), Effect.flip),
       )
       expect(result).toBeInstanceOf(ConfigError)
       expect(result.reason).toBe("missing_env_var")

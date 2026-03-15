@@ -1,0 +1,367 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Dead branch elimination pass > eliminates Route branches with statically false conditions 1`] = `
+"SET 'pipeline.name' = 'dead-branch-pipeline';
+
+CREATE TABLE \`events\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`product_id\` STRING,
+  \`category\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'events',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+CREATE TABLE \`live_branch\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`product_id\` STRING,
+  \`category\` STRING,
+  \`event_time\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'live-branch',
+  'format' = 'json'
+);
+
+CREATE TABLE \`default_branch\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`product_id\` STRING,
+  \`category\` STRING,
+  \`event_time\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'default-branch',
+  'format' = 'json'
+);
+
+EXECUTE STATEMENT SET BEGIN
+INSERT INTO \`live_branch\`
+SELECT * FROM \`events\`
+WHERE \`amount\` > 100;
+INSERT INTO \`default_branch\`
+SELECT * FROM \`events\`;
+END;
+"
+`;
+
+exports[`Deterministic snapshot tests > optimizer produces deterministic output for aggregate pipeline 1`] = `
+"SET 'pipeline.name' = 'deterministic-pipeline';
+
+SET 'table.exec.mini-batch.enabled' = 'true';
+
+SET 'table.exec.mini-batch.allow-latency' = '5 s';
+
+SET 'table.exec.mini-batch.size' = '1000';
+
+CREATE TABLE \`orders\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`product_id\` STRING,
+  \`category\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+CREATE TABLE \`user_totals\` (
+  \`user_id\` STRING,
+  \`total_amount\` DECIMAL(10, 2),
+  \`order_count\` BIGINT,
+  PRIMARY KEY (\`user_id\`) NOT ENFORCED
+) WITH (
+  'connector' = 'upsert-kafka',
+  'topic' = 'user-totals',
+  'key.format' = 'json',
+  'value.format' = 'json'
+);
+
+INSERT INTO \`user_totals\`
+SELECT \`user_id\`, SUM(\`amount\`) AS \`total_amount\`, COUNT(*) AS \`order_count\` FROM \`orders\` GROUP BY \`user_id\`;
+"
+`;
+
+exports[`Deterministic snapshot tests > optimizer produces deterministic output for join pipeline 1`] = `
+"SET 'pipeline.name' = 'deterministic-join-pipeline';
+
+CREATE TABLE \`orders\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`product_id\` STRING,
+  \`category\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+CREATE TABLE \`users\` (
+  \`user_id\` STRING,
+  \`name\` STRING,
+  \`email\` STRING
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'users',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+CREATE TABLE \`enriched\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`product_id\` STRING,
+  \`category\` STRING,
+  \`event_time\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'enriched',
+  'format' = 'json'
+);
+
+INSERT INTO \`enriched\`
+SELECT /*+ BROADCAST(\`users\`) */ * FROM \`orders\` INNER JOIN \`users\` ON \`orders\`.\`user_id\` = \`users\`.\`user_id\`;
+"
+`;
+
+exports[`Deterministic snapshot tests > optimizer produces deterministic output for route pipeline 1`] = `
+"SET 'pipeline.name' = 'deterministic-route-pipeline';
+
+CREATE TABLE \`events\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`product_id\` STRING,
+  \`category\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'events',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+CREATE TABLE \`high_value\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`product_id\` STRING,
+  \`category\` STRING,
+  \`event_time\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'high-value',
+  'format' = 'json'
+);
+
+CREATE TABLE \`other\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`product_id\` STRING,
+  \`category\` STRING,
+  \`event_time\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'other',
+  'format' = 'json'
+);
+
+EXECUTE STATEMENT SET BEGIN
+INSERT INTO \`high_value\`
+SELECT * FROM \`events\`
+WHERE \`amount\` > 1000;
+INSERT INTO \`other\`
+SELECT * FROM \`events\`;
+END;
+"
+`;
+
+exports[`SET injection pass > injects mini-batch SET statements when Aggregate detected 1`] = `
+"SET 'pipeline.name' = 'agg-pipeline';
+
+SET 'table.exec.mini-batch.enabled' = 'true';
+
+SET 'table.exec.mini-batch.allow-latency' = '5 s';
+
+SET 'table.exec.mini-batch.size' = '1000';
+
+CREATE TABLE \`orders\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`product_id\` STRING,
+  \`category\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+CREATE TABLE \`user_totals\` (
+  \`user_id\` STRING,
+  \`total_amount\` DECIMAL(10, 2),
+  \`order_count\` BIGINT,
+  PRIMARY KEY (\`user_id\`) NOT ENFORCED
+) WITH (
+  'connector' = 'upsert-kafka',
+  'topic' = 'user-totals',
+  'key.format' = 'json',
+  'value.format' = 'json'
+);
+
+INSERT INTO \`user_totals\`
+SELECT \`user_id\`, SUM(\`amount\`) AS \`total_amount\`, COUNT(*) AS \`order_count\` FROM \`orders\` GROUP BY \`user_id\`;
+"
+`;
+
+exports[`SQL hint emission pass > emits BROADCAST hint for Join with hint: broadcast 1`] = `
+"SET 'pipeline.name' = 'broadcast-join-pipeline';
+
+CREATE TABLE \`orders\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`product_id\` STRING,
+  \`category\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+CREATE TABLE \`users\` (
+  \`user_id\` STRING,
+  \`name\` STRING,
+  \`email\` STRING
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'users',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+CREATE TABLE \`enriched_orders\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`product_id\` STRING,
+  \`category\` STRING,
+  \`event_time\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'enriched-orders',
+  'format' = 'json'
+);
+
+INSERT INTO \`enriched_orders\`
+SELECT /*+ BROADCAST(\`users\`) */ * FROM \`orders\` INNER JOIN \`users\` ON \`orders\`.\`user_id\` = \`users\`.\`user_id\`;
+"
+`;
+
+exports[`Source schema narrowing pass > narrows source DDL to only referenced columns 1`] = `
+"SET 'pipeline.name' = 'narrowing-pipeline';
+
+CREATE TABLE \`orders\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`product_id\` STRING,
+  \`category\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+CREATE TABLE \`slim_orders\` (
+  \`user_id\` STRING,
+  \`total\` DECIMAL(10, 2)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'slim-orders',
+  'format' = 'json'
+);
+
+INSERT INTO \`slim_orders\`
+SELECT \`user_id\` AS \`user_id\`, \`amount\` AS \`total\` FROM \`orders\`;
+"
+`;
+
+exports[`User SET precedence > does not override user-defined SET statements 1`] = `
+"SET 'pipeline.name' = 'user-set-pipeline';
+
+SET 'table.exec.mini-batch.enabled' = 'false';
+
+SET 'table.exec.mini-batch.allow-latency' = '10 s';
+
+SET 'table.exec.mini-batch.size' = '1000';
+
+CREATE TABLE \`orders\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`product_id\` STRING,
+  \`category\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS \`event_time\` - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+CREATE TABLE \`totals\` (
+  \`user_id\` STRING,
+  \`total_amount\` DECIMAL(10, 2),
+  PRIMARY KEY (\`user_id\`) NOT ENFORCED
+) WITH (
+  'connector' = 'upsert-kafka',
+  'topic' = 'totals',
+  'key.format' = 'json',
+  'value.format' = 'json'
+);
+
+INSERT INTO \`totals\`
+SELECT \`user_id\`, SUM(\`amount\`) AS \`total_amount\` FROM \`orders\` GROUP BY \`user_id\`;
+"
+`;

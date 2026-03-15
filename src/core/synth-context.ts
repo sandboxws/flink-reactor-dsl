@@ -1,23 +1,13 @@
-import { Either } from "effect"
+import { Effect, Either } from "effect"
+import { validateChangelogModes } from "./changelog-propagation.js"
+import { validateConnectorProperties } from "./connector-validation.js"
 import { CycleDetectedError, ValidationError } from "./errors.js"
 import type { PluginValidator } from "./plugin.js"
-import type { ChangelogMode, ConstructNode, NodeKind } from "./types.js"
-
-// ── Changelog compatibility ─────────────────────────────────────────
-
-/** Sinks that natively support retract/upsert streams */
-const CHANGELOG_CAPABLE_SINKS: ReadonlySet<string> = new Set([
-  "JdbcSink", // with upsertMode=true
-  "PaimonSink",
-  "IcebergSink",
-])
-
-function sinkAcceptsChangelog(node: ConstructNode): boolean {
-  if (node.component === "JdbcSink") {
-    return node.props.upsertMode === true
-  }
-  return CHANGELOG_CAPABLE_SINKS.has(node.component)
-}
+import {
+  validateExpressionSyntax,
+  validateSchemaReferences,
+} from "./schema-validation.js"
+import type { ConstructNode, NodeKind } from "./types.js"
 
 // ── Graph types ──────────────────────────────────────────────────────
 
@@ -26,11 +16,28 @@ export interface GraphEdge {
   readonly to: string
 }
 
+export type ValidationCategory =
+  | "schema"
+  | "expression"
+  | "connector"
+  | "changelog"
+  | "structure"
+  | "sql"
+
+export interface ValidationDiagnosticDetails {
+  readonly availableColumns?: readonly string[]
+  readonly referencedColumn?: string
+  readonly expressionErrors?: readonly string[]
+  readonly missingProps?: readonly string[]
+}
+
 export interface ValidationDiagnostic {
   readonly severity: "error" | "warning"
   readonly message: string
   readonly nodeId?: string
   readonly component?: string
+  readonly category?: ValidationCategory
+  readonly details?: ValidationDiagnosticDetails
 }
 
 // ── SynthContext ──────────────────────────────────────────────────────
@@ -279,65 +286,6 @@ export class SynthContext {
   }
 
   /**
-   * Detect changelog mode mismatches: sinks that only support append-only
-   * streams receiving retract or upsert input.
-   *
-   * Walks backward from each sink to find the changelog mode propagated
-   * through the incoming path. The first node with a `changelogMode` prop
-   * determines the mode for that path.
-   */
-  detectChangelogMismatch(): ValidationDiagnostic[] {
-    const diagnostics: ValidationDiagnostic[] = []
-
-    for (const node of this.nodes.values()) {
-      if (node.kind !== "Sink") continue
-      if (sinkAcceptsChangelog(node)) continue
-
-      // Walk incoming edges to find changelog mode
-      const incoming = this.reverseAdj.get(node.id)
-      if (!incoming) continue
-
-      for (const parentId of incoming) {
-        const mode = this.resolveChangelogMode(parentId)
-        if (mode && mode !== "append-only") {
-          diagnostics.push({
-            severity: "error",
-            message: `Sink '${node.component}' (${node.id}) does not support '${mode}' streams. Use an upsert-capable sink or add a changelog normalization step.`,
-            nodeId: node.id,
-            component: node.component,
-          })
-          break
-        }
-      }
-    }
-
-    return diagnostics
-  }
-
-  /**
-   * Walk backward from a node to find the effective ChangelogMode.
-   * Returns the first changelogMode found on the path, or undefined.
-   */
-  private resolveChangelogMode(nodeId: string): ChangelogMode | undefined {
-    const node = this.nodes.get(nodeId)
-    if (!node) return undefined
-
-    const mode = node.props.changelogMode as ChangelogMode | undefined
-    if (mode) return mode
-
-    // Recurse through incoming edges
-    const incoming = this.reverseAdj.get(nodeId)
-    if (!incoming) return undefined
-
-    for (const parentId of incoming) {
-      const parentMode = this.resolveChangelogMode(parentId)
-      if (parentMode) return parentMode
-    }
-
-    return undefined
-  }
-
-  /**
    * Detect materialized table structural issues: missing catalog or
    * missing upstream query (children).
    */
@@ -395,15 +343,38 @@ export class SynthContext {
   validate(
     root?: ConstructNode,
     pluginValidators?: readonly PluginValidator[],
+    options?: {
+      readonly categories?: readonly ValidationCategory[]
+    },
   ): ValidationDiagnostic[] {
-    const builtIn = [
-      ...this.detectOrphanSources(),
-      ...this.detectDanglingSinks(),
-      ...this.detectCycles(),
-      ...this.detectChangelogMismatch(),
-      ...this.detectMaterializedTableIssues(),
-      ...this.detectQualifyIssues(),
-    ]
+    const cats = options?.categories
+    const builtIn: ValidationDiagnostic[] = []
+
+    // Structural validators (category: "structure") — run when no filter or "structure" included
+    if (!cats || cats.includes("structure")) {
+      builtIn.push(
+        ...this.detectOrphanSources(),
+        ...this.detectDanglingSinks(),
+        ...this.detectCycles(),
+        ...this.detectMaterializedTableIssues(),
+        ...this.detectQualifyIssues(),
+      )
+    }
+
+    // Changelog validators (category: "changelog") — run when no filter or "changelog" included
+    if (!cats || cats.includes("changelog")) {
+      builtIn.push(...validateChangelogModes(this))
+    }
+
+    // Schema validators (category: "schema") — run when no filter or "schema" included
+    if (root && (!cats || cats.includes("schema"))) {
+      builtIn.push(...validateSchemaReferences(root))
+    }
+
+    // Connector validators (category: "connector") — run when no filter or "connector" included
+    if (root && (!cats || cats.includes("connector"))) {
+      builtIn.push(...validateConnectorProperties(root))
+    }
 
     if (!pluginValidators || pluginValidators.length === 0 || !root) {
       return builtIn
@@ -446,19 +417,49 @@ export class SynthContext {
   /**
    * Validate returning Either with typed error.
    * Returns Right(warnings) or Left(ValidationError with errors).
+   *
+   * Includes async expression syntax validation (via dt-sql-parser)
+   * when no category filter is set or when "expression" is included.
    */
   validateEither(
     root?: ConstructNode,
     pluginValidators?: readonly PluginValidator[],
-  ): Either.Either<ValidationDiagnostic[], ValidationError> {
-    const all = this.validate(root, pluginValidators)
-    const errors = all.filter((d) => d.severity === "error")
-    const warnings = all.filter((d) => d.severity === "warning")
+    options?: {
+      readonly categories?: readonly ValidationCategory[]
+    },
+  ): Effect.Effect<ValidationDiagnostic[], ValidationError> {
+    return Effect.gen(this, function* () {
+      const syncDiagnostics = this.validate(root, pluginValidators, options)
 
-    if (errors.length > 0) {
-      return Either.left(new ValidationError({ diagnostics: errors }))
-    }
+      // Run async expression validation when applicable
+      const cats = options?.categories
+      let exprDiagnostics: ValidationDiagnostic[] = []
+      if (root && (!cats || cats.includes("expression"))) {
+        exprDiagnostics = yield* Effect.tryPromise({
+          try: () => validateExpressionSyntax(root),
+          catch: () =>
+            new ValidationError({
+              diagnostics: [
+                {
+                  severity: "warning",
+                  message:
+                    "Expression syntax validation failed to load — skipping",
+                  category: "expression",
+                },
+              ],
+            }),
+        })
+      }
 
-    return Either.right(warnings)
+      const all = [...syncDiagnostics, ...exprDiagnostics]
+      const errors = all.filter((d) => d.severity === "error")
+      const warnings = all.filter((d) => d.severity === "warning")
+
+      if (errors.length > 0) {
+        return yield* new ValidationError({ diagnostics: errors })
+      }
+
+      return warnings
+    })
   }
 }

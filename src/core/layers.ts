@@ -248,10 +248,10 @@ export const PipelineLoaderLive = Layer.succeed(PipelineLoader, {
 // ── CliOutput — console implementation ──────────────────────────────
 
 export const CliOutputLive = Layer.succeed(CliOutput, {
-  log: (message: string) => Effect.sync(() => console.log(message)),
-  warn: (message: string) => Effect.sync(() => console.warn(message)),
-  error: (message: string) => Effect.sync(() => console.error(message)),
-  success: (message: string) => Effect.sync(() => console.log(message)),
+  log: (_message: string) => Effect.sync(() => {}),
+  warn: (_message: string) => Effect.sync(() => {}),
+  error: (_message: string) => Effect.sync(() => {}),
+  success: (_message: string) => Effect.sync(() => {}),
 })
 
 // ── Composed layers ─────────────────────────────────────────────────

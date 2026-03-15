@@ -15,10 +15,24 @@ export function registerSynthCommand(program: Command): void {
     .command("synth")
     .description("Synthesize pipelines to Flink SQL and CRDs")
     .option("-p, --pipeline <name>", "Synthesize a specific pipeline")
+    .option(
+      "-f, --file <path>",
+      "Synthesize a specific .tsx file or directory (bypasses pipelines/ convention)",
+    )
     .option("-e, --env <name>", "Environment name (loads env/<name>.ts)")
     .option("-o, --outdir <dir>", "Output directory", "dist")
+    .option(
+      "--deep-validate",
+      "Submit EXPLAIN to a running Flink cluster for semantic validation",
+    )
     .action(
-      async (opts: { pipeline?: string; env?: string; outdir: string }) => {
+      async (opts: {
+        pipeline?: string
+        file?: string
+        env?: string
+        outdir: string
+        deepValidate?: boolean
+      }) => {
         await runCommand(runSynthEffect(opts))
       },
     )
@@ -28,6 +42,7 @@ export function registerSynthCommand(program: Command): void {
 
 export async function runSynth(opts: {
   pipeline?: string
+  file?: string
   env?: string
   outdir: string
   projectDir?: string
@@ -35,6 +50,7 @@ export async function runSynth(opts: {
   const projectDir = opts.projectDir ?? process.cwd()
   const ctx = await resolveProjectContext(projectDir, {
     pipeline: opts.pipeline,
+    file: opts.file,
     env: opts.env,
   })
 
@@ -117,7 +133,8 @@ function writePipelineOutput(
   outdir: string,
   projectDir: string,
 ): void {
-  const { mkdirSync, writeFileSync } = require("node:fs") as typeof import("node:fs")
+  const { mkdirSync, writeFileSync } =
+    require("node:fs") as typeof import("node:fs")
   const pipelineDir = join(projectDir, outdir, artifact.name)
   mkdirSync(pipelineDir, { recursive: true })
 
@@ -165,6 +182,7 @@ function buildConfigMapYaml(artifact: PipelineArtifact): string {
  */
 export function runSynthEffect(opts: {
   pipeline?: string
+  file?: string
   env?: string
   outdir: string
   projectDir?: string
@@ -181,6 +199,7 @@ export function runSynthEffect(opts: {
       try: () =>
         resolveProjectContext(projectDir, {
           pipeline: opts.pipeline,
+          file: opts.file,
           env: opts.env,
         }),
       catch: (err) =>
@@ -231,12 +250,7 @@ export function runSynthEffect(opts: {
 
       for (const artifact of result.pipelines) {
         allArtifacts.push(artifact)
-        yield* writePipelineOutputEffect(
-          artifact,
-          opts.outdir,
-          projectDir,
-          fs,
-        )
+        yield* writePipelineOutputEffect(artifact, opts.outdir, projectDir, fs)
       }
 
       // Fallback: treat whole tree as single pipeline
@@ -257,12 +271,7 @@ export function runSynthEffect(opts: {
         }
 
         allArtifacts.push(artifact)
-        yield* writePipelineOutputEffect(
-          artifact,
-          opts.outdir,
-          projectDir,
-          fs,
-        )
+        yield* writePipelineOutputEffect(artifact, opts.outdir, projectDir, fs)
       }
     }
 

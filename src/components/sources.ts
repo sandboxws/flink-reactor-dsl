@@ -1,4 +1,8 @@
-import { createElement, toSqlIdentifier } from "@/core/jsx-runtime.js"
+import {
+  createElement,
+  requireProps,
+  toSqlIdentifier,
+} from "@/core/jsx-runtime.js"
 import type { SchemaDefinition, WatermarkDeclaration } from "@/core/schema.js"
 import type {
   BaseComponentProps,
@@ -76,6 +80,7 @@ export interface KafkaSourceProps<
 export function KafkaSource<T extends Record<string, FlinkType>>(
   props: KafkaSourceProps<T>,
 ): ConstructNode {
+  requireProps("KafkaSource", props, ["topic", "schema"])
   const { children, name, ...rest } = props
   const childArray =
     children == null ? [] : Array.isArray(children) ? children : [children]
@@ -115,6 +120,7 @@ export interface JdbcSourceProps<
 export function JdbcSource<T extends Record<string, FlinkType>>(
   props: JdbcSourceProps<T>,
 ): ConstructNode {
+  requireProps("JdbcSource", props, ["url", "table", "schema"])
   const { children, name, ...rest } = props
   const childArray =
     children == null ? [] : Array.isArray(children) ? children : [children]
@@ -150,6 +156,7 @@ export interface GenericSourceProps<
 export function GenericSource<T extends Record<string, FlinkType>>(
   props: GenericSourceProps<T>,
 ): ConstructNode {
+  requireProps("GenericSource", props, ["connector", "schema"])
   const { children, name, ...rest } = props
   const childArray =
     children == null ? [] : Array.isArray(children) ? children : [children]

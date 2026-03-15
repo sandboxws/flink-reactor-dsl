@@ -8,8 +8,8 @@
  */
 import ts from "typescript"
 import { describe, expect, it } from "vitest"
-import { createRulesRegistry } from "../src/component-rules"
 import { filterCompletionsByContext } from "../src/completions"
+import { createRulesRegistry } from "../src/component-rules"
 import { getNestingDiagnostics } from "../src/diagnostics"
 
 function parse(source: string): ts.SourceFile {

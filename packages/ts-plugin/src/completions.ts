@@ -7,9 +7,12 @@
  * - `rank`: promotes valid children to the top while preserving all entries
  */
 import type ts from "typescript"
-import type { ComponentRulesRegistry } from "./types"
+import {
+  DSL_COMPONENTS,
+  HIERARCHY_ONLY_COMPONENTS,
+} from "./component-inventory"
 import { getComponentName } from "./context-detector"
-import { DSL_COMPONENTS, HIERARCHY_ONLY_COMPONENTS } from "./component-inventory"
+import type { ComponentRulesRegistry } from "./types"
 
 /** Check if an entry name is a known DSL component (including hierarchy-only sub-components) */
 function isDSLComponent(name: string): boolean {

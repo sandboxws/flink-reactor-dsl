@@ -15,9 +15,9 @@ import * as clack from "@clack/prompts"
 import type { Command } from "commander"
 import { Effect } from "effect"
 import pc from "picocolors"
+import type { CdcDomain } from "@/cli/cluster/cdc-publisher.js"
 import { runCommand } from "@/cli/effect-runner.js"
 import { CliError } from "@/core/errors.js"
-import type { CdcDomain } from "@/cli/cluster/cdc-publisher.js"
 
 // ── Resource path resolution ─────────────────────────────────────────
 // When bundled by tsup → dist/index.js, __dirname = <root>/dist
@@ -69,21 +69,31 @@ export function registerClusterCommand(program: Command): void {
       "all",
     )
     .option("--no-timescaledb", "Use plain PostgreSQL instead of TimescaleDB")
-    .action(async (opts: { port: string; seed?: boolean; domain: string; timescaledb: boolean }) => {
-      await runCommand(
-        Effect.tryPromise({
-          try: () =>
-            runClusterUp({
-              port: opts.port,
-              seed: opts.seed ?? false,
-              domain: opts.domain as CdcDomain,
-              timescaledb: opts.timescaledb,
-            }),
-          catch: (err) =>
-            new CliError({ reason: "invalid_args", message: (err as Error).message }),
-        }),
-      )
-    })
+    .action(
+      async (opts: {
+        port: string
+        seed?: boolean
+        domain: string
+        timescaledb: boolean
+      }) => {
+        await runCommand(
+          Effect.tryPromise({
+            try: () =>
+              runClusterUp({
+                port: opts.port,
+                seed: opts.seed ?? false,
+                domain: opts.domain as CdcDomain,
+                timescaledb: opts.timescaledb,
+              }),
+            catch: (err) =>
+              new CliError({
+                reason: "invalid_args",
+                message: (err as Error).message,
+              }),
+          }),
+        )
+      },
+    )
 
   cluster
     .command("down")
@@ -94,7 +104,10 @@ export function registerClusterCommand(program: Command): void {
         Effect.tryPromise({
           try: () => runClusterDown({ volumes: opts.volumes ?? false }),
           catch: (err) =>
-            new CliError({ reason: "invalid_args", message: (err as Error).message }),
+            new CliError({
+              reason: "invalid_args",
+              message: (err as Error).message,
+            }),
         }),
       )
     })
@@ -120,7 +133,10 @@ export function registerClusterCommand(program: Command): void {
               domain: opts.domain as CdcDomain,
             }),
           catch: (err) =>
-            new CliError({ reason: "invalid_args", message: (err as Error).message }),
+            new CliError({
+              reason: "invalid_args",
+              message: (err as Error).message,
+            }),
         }),
       )
     })
@@ -134,7 +150,10 @@ export function registerClusterCommand(program: Command): void {
         Effect.tryPromise({
           try: () => runClusterStatus(parseInt(opts.port, 10)),
           catch: (err) =>
-            new CliError({ reason: "invalid_args", message: (err as Error).message }),
+            new CliError({
+              reason: "invalid_args",
+              message: (err as Error).message,
+            }),
         }),
       )
     })
@@ -148,7 +167,10 @@ export function registerClusterCommand(program: Command): void {
         Effect.tryPromise({
           try: () => runClusterSubmit(sqlFile, parseInt(opts.port, 10)),
           catch: (err) =>
-            new CliError({ reason: "invalid_args", message: (err as Error).message }),
+            new CliError({
+              reason: "invalid_args",
+              message: (err as Error).message,
+            }),
         }),
       )
     })
@@ -160,7 +182,8 @@ function resolvePostgresProfile(timescaledbFlag: boolean): string {
   // CLI flag takes precedence; if flag is true (default), check env var
   if (!timescaledbFlag) return "postgres-plain"
   const envVal = process.env.TIMESCALEDB_ENABLED?.toLowerCase()
-  if (envVal === "false" || envVal === "0" || envVal === "no") return "postgres-plain"
+  if (envVal === "false" || envVal === "0" || envVal === "no")
+    return "postgres-plain"
   return "timescaledb"
 }
 
@@ -193,11 +216,14 @@ export async function runClusterUp(opts: {
   )
 
   try {
-    execSync(`docker compose -f "${compose}" --profile ${pgProfile} up --build -d`, {
-      cwd: clusterDir(),
-      stdio: "pipe",
-      env: { ...process.env, FLINK_PORT: opts.port },
-    })
+    execSync(
+      `docker compose -f "${compose}" --profile ${pgProfile} up --build -d`,
+      {
+        cwd: clusterDir(),
+        stdio: "pipe",
+        env: { ...process.env, FLINK_PORT: opts.port },
+      },
+    )
 
     // Copy sample CSV into the flink-data volume via the jobmanager container
     try {
@@ -274,7 +300,16 @@ export async function runClusterDown(opts: {
   killCdcPublisher()
 
   const compose = composePath()
-  const args = ["compose", "-f", compose, "--profile", "timescaledb", "--profile", "postgres-plain", "down"]
+  const args = [
+    "compose",
+    "-f",
+    compose,
+    "--profile",
+    "timescaledb",
+    "--profile",
+    "postgres-plain",
+    "down",
+  ]
   if (opts.volumes) {
     args.push("-v")
   }
@@ -653,7 +688,11 @@ const DB_SCHEMA: Record<string, string> = {
   employees: "employees",
 }
 
-async function initPostgresDatabases(compose: string, pgService: string = "postgres", timescaledb: boolean = false): Promise<void> {
+async function initPostgresDatabases(
+  compose: string,
+  pgService: string = "postgres",
+  timescaledb: boolean = false,
+): Promise<void> {
   const initDir = join(clusterDir(), "init")
 
   // Ensure SQL dumps are downloaded before loading
@@ -853,16 +892,16 @@ async function downloadDump(
   if (source.removeLine) {
     content = content
       .split("\n")
-      .filter((line) => !source.removeLine!.test(line))
+      .filter((line) => !source.removeLine?.test(line))
       .join("\n")
   }
 
   // Wrap with preamble/epilogue (e.g. disable FK checks during load)
   if (source.preamble) {
-    content = source.preamble + "\n" + content
+    content = `${source.preamble}\n${content}`
   }
   if (source.epilogue) {
-    content = content + "\n" + source.epilogue + "\n"
+    content = `${content}\n${source.epilogue}\n`
   }
 
   writeFileSync(outPath, content, "utf-8")

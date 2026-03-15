@@ -95,7 +95,6 @@ describe("scaffoldProject", () => {
       expect(existsSync(join(projectDir, "schemas", ".gitkeep"))).toBe(true)
       expect(existsSync(join(projectDir, "pipelines", ".gitkeep"))).toBe(true)
     })
-
   })
 
   describe("cdc-lakehouse template", () => {
@@ -162,7 +161,6 @@ describe("scaffoldProject", () => {
         "workspace:*",
       )
     })
-
   })
 
   describe("registry option", () => {

@@ -43,7 +43,10 @@ export function registerGenerateCommand(program: Command): void {
         Effect.try({
           try: () => generateSchema(name),
           catch: (err) =>
-            new CliError({ reason: "invalid_args", message: (err as Error).message }),
+            new CliError({
+              reason: "invalid_args",
+              message: (err as Error).message,
+            }),
         }),
       )
     })
@@ -57,7 +60,10 @@ export function registerGenerateCommand(program: Command): void {
         Effect.try({
           try: () => generateEnv(name),
           catch: (err) =>
-            new CliError({ reason: "invalid_args", message: (err as Error).message }),
+            new CliError({
+              reason: "invalid_args",
+              message: (err as Error).message,
+            }),
         }),
       )
     })
@@ -71,7 +77,10 @@ export function registerGenerateCommand(program: Command): void {
         Effect.try({
           try: () => generatePattern(name),
           catch: (err) =>
-            new CliError({ reason: "invalid_args", message: (err as Error).message }),
+            new CliError({
+              reason: "invalid_args",
+              message: (err as Error).message,
+            }),
         }),
       )
     })
@@ -85,7 +94,10 @@ export function registerGenerateCommand(program: Command): void {
         Effect.try({
           try: () => generateApp(name),
           catch: (err) =>
-            new CliError({ reason: "invalid_args", message: (err as Error).message }),
+            new CliError({
+              reason: "invalid_args",
+              message: (err as Error).message,
+            }),
         }),
       )
     })
@@ -99,7 +111,10 @@ export function registerGenerateCommand(program: Command): void {
         Effect.try({
           try: () => generatePackage(name),
           catch: (err) =>
-            new CliError({ reason: "invalid_args", message: (err as Error).message }),
+            new CliError({
+              reason: "invalid_args",
+              message: (err as Error).message,
+            }),
         }),
       )
     })

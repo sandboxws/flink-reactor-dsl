@@ -3,14 +3,14 @@ import { join, resolve } from "node:path"
 import type { Command } from "commander"
 import { Effect } from "effect"
 import pc from "picocolors"
-import { runCommand } from "@/cli/effect-runner.js"
 import { loadPipeline } from "@/cli/discovery.js"
-import { CliError } from "@/core/errors.js"
+import { runCommand } from "@/cli/effect-runner.js"
 import {
   type IntrospectedColumn,
   type IntrospectedSchema,
   introspectPipelineSchemas,
 } from "@/codegen/schema-introspect.js"
+import { CliError } from "@/core/errors.js"
 import type { ConstructNode } from "@/core/types.js"
 
 export function registerSchemaCommand(program: Command): void {

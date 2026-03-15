@@ -6,8 +6,8 @@
 import { describe, expect, it } from "vitest"
 import {
   DSL_COMPONENTS,
-  HIERARCHY_ONLY_COMPONENTS,
   getComponentsByKind,
+  HIERARCHY_ONLY_COMPONENTS,
 } from "../src/component-inventory"
 import { createRulesRegistry } from "../src/component-rules"
 

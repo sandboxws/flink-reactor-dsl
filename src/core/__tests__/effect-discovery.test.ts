@@ -1,5 +1,5 @@
-import { Effect, Exit, Layer } from "effect"
 import { join } from "node:path"
+import { Effect, Layer } from "effect"
 import { describe, expect, it } from "vitest"
 import { discoverPipelinesEffect } from "../effect-discovery.js"
 import { ConfigError, FileSystemError } from "../errors.js"
@@ -20,7 +20,11 @@ function mockFileSystem(
       const entry = files[path]
       if (!entry || entry.content === undefined) {
         return Effect.fail(
-          new FileSystemError({ message: `ENOENT: ${path}`, path, operation: "read" }),
+          new FileSystemError({
+            message: `ENOENT: ${path}`,
+            path,
+            operation: "read",
+          }),
         )
       }
       return Effect.succeed(entry.content)
@@ -44,7 +48,11 @@ function mockFileSystem(
       const entry = files[path]
       if (!entry) {
         return Effect.fail(
-          new FileSystemError({ message: `ENOENT: ${path}`, path, operation: "read" }),
+          new FileSystemError({
+            message: `ENOENT: ${path}`,
+            path,
+            operation: "read",
+          }),
         )
       }
       return Effect.succeed({ isDirectory: entry.isDirectory })
@@ -87,7 +95,10 @@ describe("discoverPipelinesEffect()", () => {
   it("returns empty array when directory exists but has no valid pipelines", async () => {
     const layer = mockFileSystem({
       [pipelinesDir]: { isDirectory: true },
-      [join(pipelinesDir, "README.md")]: { isDirectory: false, content: "# Pipelines" },
+      [join(pipelinesDir, "README.md")]: {
+        isDirectory: false,
+        content: "# Pipelines",
+      },
     })
 
     const result = await Effect.runPromise(

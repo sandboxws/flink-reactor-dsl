@@ -210,7 +210,6 @@ export function defineConfig(
         )
       }
     }
-
   }
 
   const result: FlinkReactorConfig = {

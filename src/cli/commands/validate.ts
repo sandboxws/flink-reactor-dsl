@@ -1,15 +1,25 @@
 import type { Command } from "commander"
 import { Effect } from "effect"
 import pc from "picocolors"
-import { runCommand } from "@/cli/effect-runner.js"
 import { loadPipeline, resolveProjectContext } from "@/cli/discovery.js"
+import { runCommand } from "@/cli/effect-runner.js"
+import { synthesizeApp } from "@/core/app.js"
+import { validateConnectorProperties } from "@/core/connector-validation.js"
 import { DiscoveryError, ValidationError } from "@/core/errors.js"
 import { FlinkVersionCompat } from "@/core/flink-compat.js"
+import {
+  validateExpressionSyntax,
+  validateSchemaReferences,
+} from "@/core/schema-validation.js"
 import {
   SynthContext,
   type ValidationDiagnostic,
 } from "@/core/synth-context.js"
 import type { ConstructNode, FlinkMajorVersion } from "@/core/types.js"
+import {
+  SqlGatewayClient,
+  SqlGatewayClientError,
+} from "@/lib/sql-gateway/client.js"
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -27,9 +37,19 @@ export function registerValidateCommand(program: Command): void {
     .description("Validate pipeline definitions and configuration")
     .option("-p, --pipeline <name>", "Validate a specific pipeline")
     .option("-e, --env <name>", "Environment name")
-    .action(async (opts: { pipeline?: string; env?: string }) => {
-      await runCommand(runValidateEffect(opts))
-    })
+    .option(
+      "--deep-validate",
+      "Submit EXPLAIN to a running Flink cluster for semantic validation",
+    )
+    .action(
+      async (opts: {
+        pipeline?: string
+        env?: string
+        deepValidate?: boolean
+      }) => {
+        await runCommand(runValidateEffect(opts))
+      },
+    )
 }
 
 // ── Validate logic ──────────────────────────────────────────────────
@@ -38,6 +58,7 @@ export async function runValidate(opts: {
   pipeline?: string
   env?: string
   projectDir?: string
+  deepValidate?: boolean
 }): Promise<boolean> {
   const projectDir = opts.projectDir ?? process.cwd()
   const projectCtx = await resolveProjectContext(projectDir, {
@@ -62,7 +83,55 @@ export async function runValidate(opts: {
 
   for (const discovered of projectCtx.pipelines) {
     const pipelineNode = await loadPipeline(discovered.entryPoint, projectDir)
-    const result = validatePipeline(pipelineNode, discovered.name, flinkVersion)
+    let result = await validatePipeline(
+      pipelineNode,
+      discovered.name,
+      flinkVersion,
+    )
+
+    // Deep validation: dt-sql-parser parse check + EXPLAIN against a running Flink cluster
+    if (opts.deepValidate && result.errors.length === 0) {
+      // Tier 2a: dt-sql-parser full statement parsing
+      const { deepVerifySql } = await import("@/codegen/sql-verifier.js")
+      const { generateSql } = await import("@/codegen/sql-generator.js")
+      const sqlResult = generateSql(pipelineNode, { flinkVersion })
+      const parseDiags = await deepVerifySql(sqlResult.statements)
+      if (parseDiags.length > 0) {
+        result = {
+          ...result,
+          errors: [
+            ...result.errors,
+            ...parseDiags.filter((d) => d.severity === "error"),
+          ],
+          warnings: [
+            ...result.warnings,
+            ...parseDiags.filter((d) => d.severity === "warning"),
+          ],
+        }
+      }
+
+      // Tier 2b: SQL Gateway EXPLAIN semantic validation
+      const deepDiags = await runDeepValidation(
+        pipelineNode,
+        discovered.name,
+        flinkVersion,
+        projectCtx,
+      )
+      if (deepDiags.length > 0) {
+        result = {
+          ...result,
+          errors: [
+            ...result.errors,
+            ...deepDiags.filter((d) => d.severity === "error"),
+          ],
+          warnings: [
+            ...result.warnings,
+            ...deepDiags.filter((d) => d.severity === "warning"),
+          ],
+        }
+      }
+    }
+
     results.push(result)
 
     if (result.errors.length > 0) {
@@ -113,11 +182,11 @@ export async function runValidate(opts: {
 
 // ── Per-pipeline validation ─────────────────────────────────────────
 
-function validatePipeline(
+async function validatePipeline(
   pipelineNode: ConstructNode,
   name: string,
   flinkVersion: FlinkMajorVersion,
-): PipelineValidationResult {
+): Promise<PipelineValidationResult> {
   const ctx = new SynthContext()
   ctx.buildFromTree(pipelineNode)
 
@@ -141,7 +210,24 @@ function validatePipeline(
     flinkVersion,
   )
 
-  const allDiagnostics = [...dagDiagnostics, ...versionDiagnostics]
+  // Run schema validation (cross-component column reference checks)
+  const schemaDiagnostics = validateSchemaReferences(pipelineNode)
+
+  // Run expression syntax validation (SQL parse checks)
+  const expressionDiagnostics = await validateExpressionSyntax(pipelineNode)
+
+  // Run connector property validation (standalone mode: warn for infra-provided props)
+  const connectorDiagnostics = validateConnectorProperties(pipelineNode, {
+    standalone: true,
+  })
+
+  const allDiagnostics = [
+    ...dagDiagnostics,
+    ...versionDiagnostics,
+    ...schemaDiagnostics,
+    ...expressionDiagnostics,
+    ...connectorDiagnostics,
+  ]
 
   return {
     name,
@@ -194,8 +280,8 @@ function validateTreeAware(
   // Cycles (DFS-based — works regardless of edge direction)
   diagnostics.push(...ctx.detectCycles())
 
-  // Changelog mode mismatches
-  diagnostics.push(...ctx.detectChangelogMismatch())
+  // Changelog mode mismatches — now handled by SynthContext.validate()
+  // via validateChangelogModes() (full propagation, not just sink checks)
 
   return diagnostics
 }
@@ -251,6 +337,7 @@ export function runValidateEffect(opts: {
   pipeline?: string
   env?: string
   projectDir?: string
+  deepValidate?: boolean
 }): Effect.Effect<
   readonly PipelineValidationResult[],
   DiscoveryError | ValidationError
@@ -284,9 +371,7 @@ export function runValidateEffect(opts: {
 
     yield* Effect.sync(() =>
       console.log(
-        pc.dim(
-          `Validating ${projectCtx.pipelines.length} pipeline(s)...\n`,
-        ),
+        pc.dim(`Validating ${projectCtx.pipelines.length} pipeline(s)...\n`),
       ),
     )
 
@@ -303,9 +388,20 @@ export function runValidateEffect(opts: {
           }),
       })
 
-      results.push(
-        validatePipeline(pipelineNode, discovered.name, flinkVersion),
-      )
+      const result = yield* Effect.tryPromise({
+        try: () =>
+          validatePipeline(pipelineNode, discovered.name, flinkVersion),
+        catch: (err) =>
+          new ValidationError({
+            diagnostics: [
+              {
+                severity: "error",
+                message: `Validation failed: ${(err as Error).message}`,
+              },
+            ],
+          }),
+      })
+      results.push(result)
     }
 
     // Print results
@@ -358,4 +454,104 @@ export function runValidateEffect(opts: {
 
     return results as readonly PipelineValidationResult[]
   })
+}
+
+// ── Deep validation via SQL Gateway ─────────────────────────────────
+
+const DEFAULT_SQL_GATEWAY_URL = "http://localhost:8083"
+
+/**
+ * Submit EXPLAIN <sql> to a running Flink cluster via SQL Gateway.
+ * Returns diagnostics for planner errors.
+ */
+async function runDeepValidation(
+  pipelineNode: ConstructNode,
+  name: string,
+  flinkVersion: FlinkMajorVersion,
+  projectCtx: {
+    config?: { flink?: { version?: FlinkMajorVersion } } | null
+    resolvedConfig?: { cluster?: { url?: unknown } } | null
+  },
+): Promise<ValidationDiagnostic[]> {
+  const diagnostics: ValidationDiagnostic[] = []
+
+  const rawUrl = projectCtx.resolvedConfig?.cluster?.url
+  const clusterUrl =
+    typeof rawUrl === "string" ? rawUrl : DEFAULT_SQL_GATEWAY_URL
+
+  const client = new SqlGatewayClient(clusterUrl)
+
+  // Synthesize SQL
+  const appResult = synthesizeApp(
+    { name, children: pipelineNode },
+    { flinkVersion },
+  )
+
+  if (appResult.pipelines.length === 0) return diagnostics
+
+  let sessionHandle: string
+  try {
+    sessionHandle = await client.openSession()
+  } catch (err) {
+    if (err instanceof SqlGatewayClientError) {
+      diagnostics.push({
+        severity: "warning",
+        message: `Deep validation skipped: Flink SQL Gateway unavailable at ${clusterUrl} — ${err.message}`,
+        category: "expression",
+      })
+      return diagnostics
+    }
+    throw err
+  }
+
+  try {
+    for (const artifact of appResult.pipelines) {
+      // Submit each statement as DDL setup, then EXPLAIN the final query
+      for (const stmt of artifact.sql.statements) {
+        const explainSql = `EXPLAIN ${stmt}`
+        try {
+          const opHandle = await client.submitStatement(
+            sessionHandle,
+            explainSql,
+          )
+          // Poll for completion
+          let status = await client.getOperationStatus(sessionHandle, opHandle)
+          let attempts = 0
+          while (status === "RUNNING" && attempts < 30) {
+            await new Promise((r) => setTimeout(r, 500))
+            status = await client.getOperationStatus(sessionHandle, opHandle)
+            attempts++
+          }
+
+          if (status === "ERROR") {
+            diagnostics.push({
+              severity: "error",
+              message: `Deep validation: Flink planner rejected statement in '${artifact.name}': EXPLAIN failed`,
+              component: artifact.name,
+              category: "expression",
+            })
+          }
+        } catch (err) {
+          if (err instanceof SqlGatewayClientError) {
+            diagnostics.push({
+              severity: "error",
+              message: `Deep validation: Flink planner error in '${artifact.name}': ${err.message}`,
+              component: artifact.name,
+              category: "expression",
+            })
+          } else {
+            throw err
+          }
+        }
+      }
+    }
+  } finally {
+    try {
+      await client.closeSession(sessionHandle)
+    } catch {
+      // Best-effort cleanup
+    }
+  }
+
+  return diagnostics
 }

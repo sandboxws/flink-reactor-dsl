@@ -19,13 +19,15 @@ describe("checkRuleParity", () => {
         m.type === "unknown_in_rules" && m.components.includes("FakeComponent"),
     )
     expect(unknownParent).toBeDefined()
-    expect(unknownParent!.fix).toContain("component-inventory.ts")
+    expect(unknownParent?.fix).toContain("component-inventory.ts")
   })
 
   it("detects unknown child in rules", () => {
     const registry = createRulesRegistry({
       Pipeline: [
-        ...((createRulesRegistry().getAllowedChildren("Pipeline") as string[]) ?? []),
+        ...((createRulesRegistry().getAllowedChildren(
+          "Pipeline",
+        ) as string[]) ?? []),
         "NonExistentWidget",
       ],
     })

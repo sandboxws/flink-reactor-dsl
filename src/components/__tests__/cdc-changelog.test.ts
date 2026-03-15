@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest"
 import { JdbcSink, KafkaSink } from "@/components/sinks.js"
 import { inferChangelogMode, KafkaSource } from "@/components/sources.js"
+import { validateChangelogModes } from "@/core/changelog-propagation.js"
 import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
 import { Field, Schema } from "@/core/schema.js"
 import { SynthContext } from "@/core/synth-context.js"
@@ -109,7 +110,7 @@ describe("Changelog validation", () => {
     ctx.addNode(sink)
     ctx.addEdge(source.id, sink.id)
 
-    const diagnostics = ctx.detectChangelogMismatch()
+    const diagnostics = validateChangelogModes(ctx)
     expect(diagnostics).toHaveLength(1)
     expect(diagnostics[0].severity).toBe("error")
     expect(diagnostics[0].message).toContain("does not support")
@@ -138,7 +139,7 @@ describe("Changelog validation", () => {
     ctx.addNode(sink)
     ctx.addEdge(source.id, sink.id)
 
-    const diagnostics = ctx.detectChangelogMismatch()
+    const diagnostics = validateChangelogModes(ctx)
     expect(diagnostics).toHaveLength(0)
   })
 
@@ -161,7 +162,7 @@ describe("Changelog validation", () => {
     ctx.addNode(sink)
     ctx.addEdge(source.id, sink.id)
 
-    const diagnostics = ctx.detectChangelogMismatch()
+    const diagnostics = validateChangelogModes(ctx)
     expect(diagnostics).toHaveLength(1)
     expect(diagnostics[0].message).toContain("retract")
   })
@@ -181,7 +182,7 @@ describe("Changelog validation", () => {
     ctx.addNode(sink)
     ctx.addEdge(source.id, sink.id)
 
-    const diagnostics = ctx.detectChangelogMismatch()
+    const diagnostics = validateChangelogModes(ctx)
     expect(diagnostics).toHaveLength(0)
   })
 
@@ -211,7 +212,7 @@ describe("Changelog validation", () => {
     ctx.addEdge(source.id, transform.id)
     ctx.addEdge(transform.id, sink.id)
 
-    const diagnostics = ctx.detectChangelogMismatch()
+    const diagnostics = validateChangelogModes(ctx)
     expect(diagnostics).toHaveLength(1)
     expect(diagnostics[0].message).toContain("retract")
   })
