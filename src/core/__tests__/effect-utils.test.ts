@@ -64,7 +64,12 @@ describe("fromThrowableAsync", () => {
 describe("toValidationEffect", () => {
   it("succeeds with warnings when no errors are present", () => {
     const diagnostics: ValidationDiagnostic[] = [
-      { severity: "warning", message: "unused field", nodeId: "n1", ruleId: "r1" },
+      {
+        severity: "warning",
+        message: "unused field",
+        nodeId: "n1",
+        ruleId: "r1",
+      },
     ]
     const result = runSync(toValidationEffect(diagnostics))
     expect(result).toHaveLength(1)
@@ -78,15 +83,18 @@ describe("toValidationEffect", () => {
 
   it("fails with ValidationError when errors are present", async () => {
     const diagnostics: ValidationDiagnostic[] = [
-      { severity: "error", message: "type mismatch", nodeId: "n1", ruleId: "r1" },
+      {
+        severity: "error",
+        message: "type mismatch",
+        nodeId: "n1",
+        ruleId: "r1",
+      },
       { severity: "warning", message: "unused", nodeId: "n2", ruleId: "r2" },
     ]
     const effect = toValidationEffect(diagnostics)
     const result = await Effect.runPromise(
       effect.pipe(
-        Effect.catchTag("ValidationError", (err) =>
-          Effect.succeed(err),
-        ),
+        Effect.catchTag("ValidationError", (err) => Effect.succeed(err)),
       ),
     )
     expect(result).toBeInstanceOf(ValidationError)

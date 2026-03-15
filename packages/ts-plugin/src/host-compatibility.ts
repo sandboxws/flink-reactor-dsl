@@ -67,7 +67,8 @@ export const COMPATIBILITY_MATRIX: ReadonlyArray<{
   {
     host: "vscode",
     loadingPath: HOST_LOADING_PATHS.vscode,
-    notes: "Workspace TypeScript version must be selected if VS Code bundles an older TS",
+    notes:
+      "Workspace TypeScript version must be selected if VS Code bundles an older TS",
   },
   {
     host: "ts_ls",

@@ -4,14 +4,12 @@
  * Verifies that package metadata and documentation claims
  * match the actually implemented plugin capabilities.
  */
-import { readFileSync, existsSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 
 const PKG_ROOT = resolve(__dirname, "..")
-const pkg = JSON.parse(
-  readFileSync(resolve(PKG_ROOT, "package.json"), "utf-8"),
-)
+const pkg = JSON.parse(readFileSync(resolve(PKG_ROOT, "package.json"), "utf-8"))
 
 describe("package metadata", () => {
   it("has a name", () => {
@@ -26,7 +24,9 @@ describe("package metadata", () => {
   it("description mentions diagnostics", () => {
     const desc = pkg.description.toLowerCase()
     expect(
-      desc.includes("diagnostic") || desc.includes("validation") || desc.includes("nesting"),
+      desc.includes("diagnostic") ||
+        desc.includes("validation") ||
+        desc.includes("nesting"),
       `Description "${pkg.description}" should reference diagnostics capability`,
     ).toBe(true)
   })

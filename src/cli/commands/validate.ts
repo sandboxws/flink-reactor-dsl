@@ -1,9 +1,8 @@
 import type { Command } from "commander"
 import { Effect } from "effect"
 import pc from "picocolors"
-import { runCommand } from "@/cli/effect-runner.js"
 import { loadPipeline, resolveProjectContext } from "@/cli/discovery.js"
-import { generateSql } from "@/codegen/sql-generator.js"
+import { runCommand } from "@/cli/effect-runner.js"
 import { synthesizeApp } from "@/core/app.js"
 import { DiscoveryError, ValidationError } from "@/core/errors.js"
 import { FlinkVersionCompat } from "@/core/flink-compat.js"
@@ -48,7 +47,8 @@ export function registerValidateCommand(program: Command): void {
         deepValidate?: boolean
       }) => {
         await runCommand(runValidateEffect(opts))
-    })
+      },
+    )
 }
 
 // ── Validate logic ──────────────────────────────────────────────────
@@ -82,16 +82,31 @@ export async function runValidate(opts: {
 
   for (const discovered of projectCtx.pipelines) {
     const pipelineNode = await loadPipeline(discovered.entryPoint, projectDir)
-    let result = await validatePipeline(pipelineNode, discovered.name, flinkVersion)
+    let result = await validatePipeline(
+      pipelineNode,
+      discovered.name,
+      flinkVersion,
+    )
 
     // Deep validation: synthesize SQL and EXPLAIN against a running Flink cluster
     if (opts.deepValidate && result.errors.length === 0) {
-      const deepDiags = await runDeepValidation(pipelineNode, discovered.name, flinkVersion, projectCtx)
+      const deepDiags = await runDeepValidation(
+        pipelineNode,
+        discovered.name,
+        flinkVersion,
+        projectCtx,
+      )
       if (deepDiags.length > 0) {
         result = {
           ...result,
-          errors: [...result.errors, ...deepDiags.filter((d) => d.severity === "error")],
-          warnings: [...result.warnings, ...deepDiags.filter((d) => d.severity === "warning")],
+          errors: [
+            ...result.errors,
+            ...deepDiags.filter((d) => d.severity === "error"),
+          ],
+          warnings: [
+            ...result.warnings,
+            ...deepDiags.filter((d) => d.severity === "warning"),
+          ],
         }
       }
     }
@@ -329,9 +344,7 @@ export function runValidateEffect(opts: {
 
     yield* Effect.sync(() =>
       console.log(
-        pc.dim(
-          `Validating ${projectCtx.pipelines.length} pipeline(s)...\n`,
-        ),
+        pc.dim(`Validating ${projectCtx.pipelines.length} pipeline(s)...\n`),
       ),
     )
 
@@ -349,7 +362,8 @@ export function runValidateEffect(opts: {
       })
 
       const result = yield* Effect.tryPromise({
-        try: () => validatePipeline(pipelineNode, discovered.name, flinkVersion),
+        try: () =>
+          validatePipeline(pipelineNode, discovered.name, flinkVersion),
         catch: (err) =>
           new ValidationError({
             diagnostics: [
@@ -427,7 +441,10 @@ async function runDeepValidation(
   pipelineNode: ConstructNode,
   name: string,
   flinkVersion: FlinkMajorVersion,
-  projectCtx: { config?: { flink?: { version?: FlinkMajorVersion } } | null; resolvedConfig?: { cluster?: { url?: unknown } } | null },
+  projectCtx: {
+    config?: { flink?: { version?: FlinkMajorVersion } } | null
+    resolvedConfig?: { cluster?: { url?: unknown } } | null
+  },
 ): Promise<ValidationDiagnostic[]> {
   const diagnostics: ValidationDiagnostic[] = []
 
@@ -471,17 +488,11 @@ async function runDeepValidation(
             explainSql,
           )
           // Poll for completion
-          let status = await client.getOperationStatus(
-            sessionHandle,
-            opHandle,
-          )
+          let status = await client.getOperationStatus(sessionHandle, opHandle)
           let attempts = 0
           while (status === "RUNNING" && attempts < 30) {
             await new Promise((r) => setTimeout(r, 500))
-            status = await client.getOperationStatus(
-              sessionHandle,
-              opHandle,
-            )
+            status = await client.getOperationStatus(sessionHandle, opHandle)
             attempts++
           }
 

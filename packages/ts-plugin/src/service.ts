@@ -6,10 +6,13 @@
  * flink-reactor behavior.
  */
 import type ts from "typescript"
-import type { ComponentRulesRegistry } from "./types"
-import { getNestingDiagnostics } from "./diagnostics"
+import {
+  filterCompletionsByContext,
+  rankCompletionsByContext,
+} from "./completions"
 import { getParentTagAtPosition } from "./context-detector"
-import { filterCompletionsByContext, rankCompletionsByContext } from "./completions"
+import { getNestingDiagnostics } from "./diagnostics"
+import type { ComponentRulesRegistry } from "./types"
 
 export interface PluginConfig {
   /** Override or extend component hierarchy rules */
@@ -57,11 +60,17 @@ export function createLanguageServiceProxy(
         const sourceFile = program?.getSourceFile(fileName)
         if (!sourceFile) return original
 
-        const nestingDiags = getNestingDiagnostics(sourceFile, registry, tsModule)
+        const nestingDiags = getNestingDiagnostics(
+          sourceFile,
+          registry,
+          tsModule,
+        )
         log(`Found ${nestingDiags.length} nesting diagnostic(s) in ${fileName}`)
         return [...original, ...nestingDiags]
       } catch (e) {
-        log(`ERROR in diagnostics for ${fileName}: ${e instanceof Error ? e.message : String(e)}. Falling back to baseline.`)
+        log(
+          `ERROR in diagnostics for ${fileName}: ${e instanceof Error ? e.message : String(e)}. Falling back to baseline.`,
+        )
         return original
       }
     }
@@ -92,13 +101,27 @@ export function createLanguageServiceProxy(
 
         const processed =
           strategy === "filter"
-            ? filterCompletionsByContext(original.entries, parentTag, registry, tsModule)
-            : rankCompletionsByContext(original.entries, parentTag, registry, tsModule)
+            ? filterCompletionsByContext(
+                original.entries,
+                parentTag,
+                registry,
+                tsModule,
+              )
+            : rankCompletionsByContext(
+                original.entries,
+                parentTag,
+                registry,
+                tsModule,
+              )
 
-        log(`Completions: ${strategy} mode, ${original.entries.length} → ${processed.length} entries`)
+        log(
+          `Completions: ${strategy} mode, ${original.entries.length} → ${processed.length} entries`,
+        )
         return { ...original, entries: processed }
       } catch (e) {
-        log(`ERROR in completions for ${fileName}: ${e instanceof Error ? e.message : String(e)}. Falling back to baseline.`)
+        log(
+          `ERROR in completions for ${fileName}: ${e instanceof Error ? e.message : String(e)}. Falling back to baseline.`,
+        )
         return original
       }
     }

@@ -155,9 +155,7 @@ export class SqlGatewayCompatClient {
     // Extract the typed error from the Cause
     const failures = Chunk.toArray(Cause.failures(exit.cause))
     const error =
-      failures.length > 0
-        ? (failures[0] as Record<string, unknown>)
-        : undefined
+      failures.length > 0 ? (failures[0] as Record<string, unknown>) : undefined
 
     if (error?._tag === "SqlGatewayConnectionError") {
       throw new SqlGatewayClientError(error.message as string, 0)

@@ -1,10 +1,10 @@
 import { Effect } from "effect"
 import { beforeEach, describe, expect, it } from "vitest"
+import { Drop, Rename } from "@/components/field-transforms.js"
 import { Pipeline } from "@/components/pipeline.js"
 import { KafkaSink } from "@/components/sinks.js"
 import { KafkaSource } from "@/components/sources.js"
 import { Aggregate, Filter, Map } from "@/components/transforms.js"
-import { Drop, Rename } from "@/components/field-transforms.js"
 import { synthesizeAppEffect } from "@/core/app.js"
 import { createElement, resetNodeIdCounter } from "@/core/jsx-runtime.js"
 import { Field, Schema } from "@/core/schema.js"
@@ -33,7 +33,12 @@ function makeSource(...children: ConstructNode[]) {
     bootstrapServers: "kafka:9092",
     format: "json",
     schema: TestSchema,
-    children: children.length === 1 ? children[0] : children.length > 0 ? children : undefined,
+    children:
+      children.length === 1
+        ? children[0]
+        : children.length > 0
+          ? children
+          : undefined,
   })
 }
 
@@ -52,19 +57,28 @@ describe("extractColumnReferences", () => {
   const knownColumns = ["id", "name", "amount", "status"]
 
   it("extracts backtick-quoted identifiers", () => {
-    const refs = extractColumnReferences("`id` > 0 AND `name` IS NOT NULL", knownColumns)
+    const refs = extractColumnReferences(
+      "`id` > 0 AND `name` IS NOT NULL",
+      knownColumns,
+    )
     expect(refs).toContain("id")
     expect(refs).toContain("name")
   })
 
   it("matches bare identifiers against known columns", () => {
-    const refs = extractColumnReferences("id > 0 AND amount < 100", knownColumns)
+    const refs = extractColumnReferences(
+      "id > 0 AND amount < 100",
+      knownColumns,
+    )
     expect(refs).toContain("id")
     expect(refs).toContain("amount")
   })
 
   it("does not flag SQL keywords", () => {
-    const refs = extractColumnReferences("id > 0 AND name IS NOT NULL", knownColumns)
+    const refs = extractColumnReferences(
+      "id > 0 AND name IS NOT NULL",
+      knownColumns,
+    )
     expect(refs).not.toContain("AND")
     expect(refs).not.toContain("IS")
     expect(refs).not.toContain("NOT")
@@ -104,7 +118,10 @@ describe("validateSchemaReferences", () => {
   it("detects Filter referencing nonexistent column", () => {
     // Nesting pattern: Source → Filter → Sink
     const sink = makeSink()
-    const filter = Filter({ condition: "`nonexistent_col` > 0", children: sink })
+    const filter = Filter({
+      condition: "`nonexistent_col` > 0",
+      children: sink,
+    })
     const source = makeSource(filter)
     const pipeline = Pipeline({ name: "test", children: source })
 
@@ -195,7 +212,9 @@ describe("validateSchemaReferences", () => {
     const diagnostics = validateSchemaReferences(pipeline)
     const errors = diagnostics.filter((d) => d.severity === "error")
 
-    expect(errors.some((e) => e.message.includes("nonexistent_group"))).toBe(true)
+    expect(errors.some((e) => e.message.includes("nonexistent_group"))).toBe(
+      true,
+    )
     expect(errors[0].component).toBe("Aggregate")
   })
 
@@ -261,7 +280,11 @@ describe("validateSchemaReferences", () => {
     const warnings = diagnostics.filter((d) => d.severity === "warning")
 
     expect(errors).toHaveLength(0)
-    expect(warnings.some((w) => w.message.includes("Cannot resolve upstream schema"))).toBe(true)
+    expect(
+      warnings.some((w) =>
+        w.message.includes("Cannot resolve upstream schema"),
+      ),
+    ).toBe(true)
     expect(warnings[0].category).toBe("schema")
   })
 })

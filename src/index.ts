@@ -202,6 +202,15 @@ export {
   resolveConfig,
   toInfraConfigFromResolved,
 } from "./core/config-resolver.js"
+// Core: Effect foundation — bridge utilities
+export {
+  fromThrowable,
+  fromThrowableAsync,
+  runPromise,
+  runSync,
+  runWithCause,
+  toValidationEffect,
+} from "./core/effect-utils.js"
 export type { EnvVarRef, Resolved } from "./core/env-var.js"
 export { env, isEnvVarRef, resolveEnvVars } from "./core/env-var.js"
 export type { EnvironmentConfig } from "./core/environment.js"
@@ -210,6 +219,24 @@ export {
   discoverEnvironments,
   resolveEnvironment,
 } from "./core/environment.js"
+export type { SqlGatewayError, SynthError } from "./core/errors.js"
+// Core: Effect foundation — errors
+export {
+  CliError,
+  ClusterError,
+  ConfigError,
+  CrdGenerationError,
+  CycleDetectedError,
+  DiscoveryError,
+  FileSystemError,
+  PluginError,
+  SchemaError,
+  SqlGatewayConnectionError,
+  SqlGatewayResponseError,
+  SqlGatewayTimeoutError,
+  SqlGenerationError,
+  ValidationError,
+} from "./core/errors.js"
 export type {
   FeatureGateError,
   JdbcConnectorInfo,
@@ -218,6 +245,16 @@ export type {
 export { FlinkVersionCompat } from "./core/flink-compat.js"
 // Core: JSX runtime
 export { createElement, Fragment, jsx, jsxs } from "./core/jsx-runtime.js"
+// Core: Effect foundation — layers
+export {
+  CliOutputLive,
+  ConfigProviderLive,
+  MainLive,
+  NodeFileSystemLive,
+  NodeHttpClientLive,
+  PipelineLoaderLive,
+  ProcessRunnerLive,
+} from "./core/layers.js"
 // Core: plugins
 export type {
   AfterSynthHookContext,
@@ -239,6 +276,25 @@ export type {
 } from "./core/schema.js"
 // Core: schema
 export { Field, isValidFlinkType, Schema } from "./core/schema.js"
+export type {
+  CliOutputService,
+  ConfigProviderService,
+  FrFileSystemService,
+  FrHttpClientService,
+  HttpResponse,
+  PipelineLoaderService,
+  ProcessResult,
+  ProcessRunnerService,
+} from "./core/services.js"
+// Core: Effect foundation — services
+export {
+  CliOutput,
+  ConfigProvider,
+  FrFileSystem,
+  FrHttpClient,
+  PipelineLoader,
+  ProcessRunner,
+} from "./core/services.js"
 export type { GraphEdge, ValidationDiagnostic } from "./core/synth-context.js"
 // Core: synth context
 export { SynthContext } from "./core/synth-context.js"
@@ -267,59 +323,3 @@ export type {
   TypedConstructNode,
 } from "./core/types.js"
 export { createStream } from "./core/types.js"
-// Core: Effect foundation — errors
-export {
-  CliError,
-  ClusterError,
-  ConfigError,
-  CrdGenerationError,
-  CycleDetectedError,
-  DiscoveryError,
-  FileSystemError,
-  PluginError,
-  SchemaError,
-  SqlGatewayConnectionError,
-  SqlGatewayResponseError,
-  SqlGatewayTimeoutError,
-  SqlGenerationError,
-  ValidationError,
-} from "./core/errors.js"
-export type { SqlGatewayError, SynthError } from "./core/errors.js"
-// Core: Effect foundation — services
-export {
-  CliOutput,
-  ConfigProvider,
-  FrFileSystem,
-  FrHttpClient,
-  PipelineLoader,
-  ProcessRunner,
-} from "./core/services.js"
-export type {
-  CliOutputService,
-  ConfigProviderService,
-  FrFileSystemService,
-  FrHttpClientService,
-  HttpResponse,
-  PipelineLoaderService,
-  ProcessResult,
-  ProcessRunnerService,
-} from "./core/services.js"
-// Core: Effect foundation — layers
-export {
-  CliOutputLive,
-  ConfigProviderLive,
-  MainLive,
-  NodeFileSystemLive,
-  NodeHttpClientLive,
-  PipelineLoaderLive,
-  ProcessRunnerLive,
-} from "./core/layers.js"
-// Core: Effect foundation — bridge utilities
-export {
-  fromThrowable,
-  fromThrowableAsync,
-  runPromise,
-  runSync,
-  runWithCause,
-  toValidationEffect,
-} from "./core/effect-utils.js"

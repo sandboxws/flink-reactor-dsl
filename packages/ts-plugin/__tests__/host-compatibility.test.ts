@@ -9,22 +9,16 @@
  */
 import ts from "typescript"
 import { describe, expect, it } from "vitest"
+import { createRulesRegistry } from "../src/component-rules"
 import {
+  COMPATIBILITY_MATRIX,
   isTypeScriptVersionSupported,
   parseTypeScriptVersion,
   SUPPORTED_HOSTS,
   TS_VERSION_POLICY,
-  COMPATIBILITY_MATRIX,
 } from "../src/host-compatibility"
-import { createRulesRegistry } from "../src/component-rules"
-import { createLanguageServiceProxy } from "../src/service"
 import type { PluginConfig } from "../src/service"
-import { getNestingDiagnostics } from "../src/diagnostics"
-import {
-  filterCompletionsByContext,
-  rankCompletionsByContext,
-} from "../src/completions"
-import { getParentTagAtPosition, getComponentName } from "../src/context-detector"
+import { createLanguageServiceProxy } from "../src/service"
 
 // ---------------------------------------------------------------------------
 // Host compatibility definitions
@@ -131,7 +125,7 @@ function createMockInfo(overrides?: {
   completions?: ts.CompletionEntry[]
   fileName?: string
 }): ts.server.PluginCreateInfo {
-  const fileName = overrides?.fileName ?? "test.tsx"
+  const _fileName = overrides?.fileName ?? "test.tsx"
   const baseDiags = overrides?.diagnostics ?? []
   const baseCompletions = overrides?.completions ?? []
 
@@ -157,7 +151,9 @@ function createMockInfo(overrides?: {
   } as unknown as ts.LanguageService
 
   // Copy all LS methods to make proxy creation work
-  for (const key of Object.keys(languageService) as Array<keyof ts.LanguageService>) {
+  for (const key of Object.keys(languageService) as Array<
+    keyof ts.LanguageService
+  >) {
     const val = languageService[key]
     if (typeof val === "function") {
       // biome-ignore lint/suspicious/noExplicitAny: test mock
@@ -202,12 +198,14 @@ describe("smoke: VS Code pathway", () => {
 
   it("diagnostics work for valid TSX nesting", () => {
     const source = "<Pipeline><KafkaSource /></Pipeline>"
-    const sourceFile = parse(source)
+    const _sourceFile = parse(source)
 
     const info = createMockInfo()
     const registry = createRulesRegistry()
     const logs: string[] = []
-    const proxy = createLanguageServiceProxy(info, registry, ts, {}, (msg) => logs.push(msg))
+    const proxy = createLanguageServiceProxy(info, registry, ts, {}, (msg) =>
+      logs.push(msg),
+    )
 
     const diags = proxy.getSemanticDiagnostics("test.tsx")
     // No nesting errors for valid hierarchy
@@ -225,16 +223,21 @@ describe("smoke: VS Code pathway", () => {
 
     const info = createMockInfo()
     // Override getProgram to return our custom source
-    ;(info.languageService as { getProgram: () => ts.Program }).getProgram = () => program
+    ;(info.languageService as { getProgram: () => ts.Program }).getProgram =
+      () => program
 
     const registry = createRulesRegistry()
     const logs: string[] = []
-    const proxy = createLanguageServiceProxy(info, registry, ts, {}, (msg) => logs.push(msg))
+    const proxy = createLanguageServiceProxy(info, registry, ts, {}, (msg) =>
+      logs.push(msg),
+    )
 
     const diags = proxy.getSemanticDiagnostics("test.tsx")
     const nestingDiags = diags.filter((d) => d.source === "flink-reactor")
     expect(nestingDiags.length).toBeGreaterThan(0)
-    expect(nestingDiags[0].messageText).toContain("'Filter' is not a valid child of 'Route'")
+    expect(nestingDiags[0].messageText).toContain(
+      "'Filter' is not a valid child of 'Route'",
+    )
   })
 
   it("completions rank DSL components in context", () => {
@@ -253,7 +256,8 @@ describe("smoke: VS Code pathway", () => {
     ]
 
     const info = createMockInfo({ completions: completionEntries })
-    ;(info.languageService as { getProgram: () => ts.Program }).getProgram = () => program
+    ;(info.languageService as { getProgram: () => ts.Program }).getProgram =
+      () => program
 
     const registry = createRulesRegistry()
     const logs: string[] = []
@@ -265,11 +269,15 @@ describe("smoke: VS Code pathway", () => {
       (msg) => logs.push(msg),
     )
 
-    const result = proxy.getCompletionsAtPosition("test.tsx", cursorPos, undefined)
+    const result = proxy.getCompletionsAtPosition(
+      "test.tsx",
+      cursorPos,
+      undefined,
+    )
     expect(result).toBeDefined()
     // KafkaSource is a valid Pipeline child → promoted
-    const kafkaEntry = result!.entries.find((e) => e.name === "KafkaSource")
-    expect(kafkaEntry!.sortText).toBe("011")
+    const kafkaEntry = result?.entries.find((e) => e.name === "KafkaSource")
+    expect(kafkaEntry?.sortText).toBe("011")
   })
 
   it("falls back safely when diagnostics throw", () => {
@@ -281,12 +289,16 @@ describe("smoke: VS Code pathway", () => {
 
     const registry = createRulesRegistry()
     const logs: string[] = []
-    const proxy = createLanguageServiceProxy(info, registry, ts, {}, (msg) => logs.push(msg))
+    const proxy = createLanguageServiceProxy(info, registry, ts, {}, (msg) =>
+      logs.push(msg),
+    )
 
     // Should not throw — returns baseline diagnostics
     const diags = proxy.getSemanticDiagnostics("test.tsx")
     expect(diags).toEqual([])
-    expect(logs.some((l) => l.includes("ERROR") && l.includes("Falling back"))).toBe(true)
+    expect(
+      logs.some((l) => l.includes("ERROR") && l.includes("Falling back")),
+    ).toBe(true)
   })
 
   it("falls back safely when completions throw", () => {
@@ -297,12 +309,16 @@ describe("smoke: VS Code pathway", () => {
 
     const registry = createRulesRegistry()
     const logs: string[] = []
-    const proxy = createLanguageServiceProxy(info, registry, ts, {}, (msg) => logs.push(msg))
+    const proxy = createLanguageServiceProxy(info, registry, ts, {}, (msg) =>
+      logs.push(msg),
+    )
 
     const result = proxy.getCompletionsAtPosition("test.tsx", 0, undefined)
     expect(result).toBeDefined()
-    expect(result!.entries).toHaveLength(1)
-    expect(logs.some((l) => l.includes("ERROR") && l.includes("Falling back"))).toBe(true)
+    expect(result?.entries).toHaveLength(1)
+    expect(
+      logs.some((l) => l.includes("ERROR") && l.includes("Falling back")),
+    ).toBe(true)
   })
 })
 
@@ -322,7 +338,13 @@ describe("smoke: Neovim ts_ls pathway", () => {
     const registry = createRulesRegistry()
     const logs: string[] = []
 
-    const proxy = createLanguageServiceProxy(info, registry, ts, config, (msg) => logs.push(msg))
+    const proxy = createLanguageServiceProxy(
+      info,
+      registry,
+      ts,
+      config,
+      (msg) => logs.push(msg),
+    )
     expect(proxy).toBeDefined()
     expect(typeof proxy.getSemanticDiagnostics).toBe("function")
     expect(typeof proxy.getCompletionsAtPosition).toBe("function")
@@ -336,11 +358,14 @@ describe("smoke: Neovim ts_ls pathway", () => {
     } as unknown as ts.Program
 
     const info = createMockInfo()
-    ;(info.languageService as { getProgram: () => ts.Program }).getProgram = () => program
+    ;(info.languageService as { getProgram: () => ts.Program }).getProgram =
+      () => program
 
     const registry = createRulesRegistry()
     const logs: string[] = []
-    const proxy = createLanguageServiceProxy(info, registry, ts, {}, (msg) => logs.push(msg))
+    const proxy = createLanguageServiceProxy(info, registry, ts, {}, (msg) =>
+      logs.push(msg),
+    )
 
     const diags = proxy.getSemanticDiagnostics("test.tsx")
     const nestingDiags = diags.filter((d) => d.source === "flink-reactor")
@@ -351,7 +376,9 @@ describe("smoke: Neovim ts_ls pathway", () => {
     const info = createMockInfo()
     const registry = createRulesRegistry()
     const logs: string[] = []
-    const proxy = createLanguageServiceProxy(info, registry, ts, {}, (msg) => logs.push(msg))
+    const proxy = createLanguageServiceProxy(info, registry, ts, {}, (msg) =>
+      logs.push(msg),
+    )
 
     const diags = proxy.getSemanticDiagnostics("test.ts")
     // Should return only baseline diagnostics (none in mock)
@@ -374,7 +401,8 @@ describe("smoke: Neovim ts_ls pathway", () => {
     ]
 
     const info = createMockInfo({ completions: completionEntries })
-    ;(info.languageService as { getProgram: () => ts.Program }).getProgram = () => program
+    ;(info.languageService as { getProgram: () => ts.Program }).getProgram =
+      () => program
 
     const registry = createRulesRegistry()
     const logs: string[] = []
@@ -386,9 +414,13 @@ describe("smoke: Neovim ts_ls pathway", () => {
       (msg) => logs.push(msg),
     )
 
-    const result = proxy.getCompletionsAtPosition("test.tsx", cursorPos, undefined)
+    const result = proxy.getCompletionsAtPosition(
+      "test.tsx",
+      cursorPos,
+      undefined,
+    )
     expect(result).toBeDefined()
-    const names = result!.entries.map((e) => e.name)
+    const names = result?.entries.map((e) => e.name)
     // Route.Branch is valid → kept
     expect(names).toContain("Route.Branch")
     // Filter is DSL but invalid Route child → removed
@@ -401,12 +433,14 @@ describe("smoke: Neovim ts_ls pathway", () => {
     const info = createMockInfo({ completions: [entry("test")] })
     const registry = createRulesRegistry()
     const logs: string[] = []
-    const proxy = createLanguageServiceProxy(info, registry, ts, {}, (msg) => logs.push(msg))
+    const proxy = createLanguageServiceProxy(info, registry, ts, {}, (msg) =>
+      logs.push(msg),
+    )
 
     const result = proxy.getCompletionsAtPosition("test.ts", 0, undefined)
     expect(result).toBeDefined()
     // Non-tsx → passthrough, entries unchanged
-    expect(result!.entries).toHaveLength(1)
+    expect(result?.entries).toHaveLength(1)
   })
 })
 
@@ -425,7 +459,13 @@ describe("smoke: Neovim vtsls pathway", () => {
     const registry = createRulesRegistry()
     const logs: string[] = []
 
-    const proxy = createLanguageServiceProxy(info, registry, ts, config, (msg) => logs.push(msg))
+    const proxy = createLanguageServiceProxy(
+      info,
+      registry,
+      ts,
+      config,
+      (msg) => logs.push(msg),
+    )
     expect(proxy).toBeDefined()
   })
 
@@ -438,7 +478,13 @@ describe("smoke: Neovim vtsls pathway", () => {
     const registry = createRulesRegistry(config.rules)
     const logs: string[] = []
 
-    const proxy = createLanguageServiceProxy(info, registry, ts, config, (msg) => logs.push(msg))
+    const proxy = createLanguageServiceProxy(
+      info,
+      registry,
+      ts,
+      config,
+      (msg) => logs.push(msg),
+    )
     expect(proxy).toBeDefined()
 
     // Verify custom rules take effect
@@ -457,11 +503,18 @@ describe("smoke: Neovim vtsls pathway", () => {
       rules: { Pipeline: ["KafkaSource"] },
     }
     const info = createMockInfo({ config })
-    ;(info.languageService as { getProgram: () => ts.Program }).getProgram = () => program
+    ;(info.languageService as { getProgram: () => ts.Program }).getProgram =
+      () => program
 
     const registry = createRulesRegistry(config.rules)
     const logs: string[] = []
-    const proxy = createLanguageServiceProxy(info, registry, ts, config, (msg) => logs.push(msg))
+    const proxy = createLanguageServiceProxy(
+      info,
+      registry,
+      ts,
+      config,
+      (msg) => logs.push(msg),
+    )
 
     const diags = proxy.getSemanticDiagnostics("test.tsx")
     const nestingDiags = diags.filter((d) => d.source === "flink-reactor")
@@ -478,7 +531,13 @@ describe("smoke: Neovim vtsls pathway", () => {
     const registry = createRulesRegistry()
     const logs: string[] = []
 
-    const proxy = createLanguageServiceProxy(info, registry, ts, config, (msg) => logs.push(msg))
+    const proxy = createLanguageServiceProxy(
+      info,
+      registry,
+      ts,
+      config,
+      (msg) => logs.push(msg),
+    )
     expect(proxy).toBeDefined()
 
     // Diagnostics should return only baseline (no flink-reactor diagnostics)
@@ -501,7 +560,8 @@ describe("smoke: Neovim vtsls pathway", () => {
     ]
 
     const info = createMockInfo({ completions: completionEntries })
-    ;(info.languageService as { getProgram: () => ts.Program }).getProgram = () => program
+    ;(info.languageService as { getProgram: () => ts.Program }).getProgram =
+      () => program
 
     const registry = createRulesRegistry()
     const logs: string[] = []
@@ -513,13 +573,21 @@ describe("smoke: Neovim vtsls pathway", () => {
       (msg) => logs.push(msg),
     )
 
-    const result = proxy.getCompletionsAtPosition("test.tsx", cursorPos, undefined)
+    const result = proxy.getCompletionsAtPosition(
+      "test.tsx",
+      cursorPos,
+      undefined,
+    )
     expect(result).toBeDefined()
     // All entries preserved (rank mode doesn't remove)
-    expect(result!.entries).toHaveLength(2)
+    expect(result?.entries).toHaveLength(2)
     // Valid child promoted
-    expect(result!.entries.find((e) => e.name === "KafkaSource")!.sortText).toBe("011")
+    expect(
+      result?.entries.find((e) => e.name === "KafkaSource")?.sortText,
+    ).toBe("011")
     // Invalid child demoted
-    expect(result!.entries.find((e) => e.name === "Route.Branch")!.sortText).toBe("211")
+    expect(
+      result?.entries.find((e) => e.name === "Route.Branch")?.sortText,
+    ).toBe("211")
   })
 })

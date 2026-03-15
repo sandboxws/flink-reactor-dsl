@@ -1,8 +1,8 @@
 import {
   indexTree,
+  type ResolvedColumn,
   resolveNodeSchema,
   resolveTransformSchema,
-  type ResolvedColumn,
 } from "@/codegen/schema-introspect.js"
 import { validateSqlExpression } from "./sql-expr-validator.js"
 import type {
@@ -213,7 +213,11 @@ export function validateSchemaReferences(
         currentSchema = resolveNodeSchema(node, nodeIndex)
       }
       // For Joins, also try resolving from children (join inputs)
-      if (node.kind === "Join" && currentSchema === null && node.children.length > 0) {
+      if (
+        node.kind === "Join" &&
+        currentSchema === null &&
+        node.children.length > 0
+      ) {
         const childSchemas = node.children
           .map((c) => resolveNodeSchema(c, nodeIndex))
           .filter((s): s is ResolvedColumn[] => s !== null)
@@ -232,9 +236,7 @@ export function validateSchemaReferences(
         })
       } else {
         const columnNames = currentSchema.map((c) => c.name)
-        diagnostics.push(
-          ...validateNodeColumnReferences(node, columnNames),
-        )
+        diagnostics.push(...validateNodeColumnReferences(node, columnNames))
       }
       // Propagate schema through this transform for downstream children
       if (currentSchema) {
@@ -425,8 +427,7 @@ function validateNodeColumnReferences(
       if (on) {
         const refs = extractColumnReferences(on, availableColumns)
         for (const ref of refs) {
-          if (!colSet.has(ref))
-            diagnostics.push(makeDiag("error", ref, "on"))
+          if (!colSet.has(ref)) diagnostics.push(makeDiag("error", ref, "on"))
         }
       }
       break

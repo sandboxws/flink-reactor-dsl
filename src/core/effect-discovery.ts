@@ -5,7 +5,7 @@
 import { join } from "node:path"
 import { Effect } from "effect"
 import type { DiscoveredPipeline } from "../cli/discovery.js"
-import { ConfigError, FileSystemError } from "./errors.js"
+import { ConfigError, type FileSystemError } from "./errors.js"
 import { FrFileSystem } from "./services.js"
 
 /**
@@ -18,7 +18,11 @@ import { FrFileSystem } from "./services.js"
 export function discoverPipelinesEffect(
   projectDir: string,
   targetPipeline?: string,
-): Effect.Effect<DiscoveredPipeline[], ConfigError | FileSystemError, FrFileSystem> {
+): Effect.Effect<
+  DiscoveredPipeline[],
+  ConfigError | FileSystemError,
+  FrFileSystem
+> {
   const pipelinesDir = join(projectDir, "pipelines")
 
   return Effect.gen(function* () {

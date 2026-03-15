@@ -41,12 +41,15 @@ function buildPipeline() {
     schema: TestSchema,
   })
   const filter = Filter({ condition: "`id` > 0" }, sink)
-  const source = KafkaSource({
-    topic: "input",
-    bootstrapServers: "kafka:9092",
-    format: "json",
-    schema: TestSchema,
-  }, filter)
+  const source = KafkaSource(
+    {
+      topic: "input",
+      bootstrapServers: "kafka:9092",
+      format: "json",
+      schema: TestSchema,
+    },
+    filter,
+  )
   return Pipeline({ name: "test-pipeline" }, source)
 }
 
@@ -128,11 +131,18 @@ describe("validateEither", () => {
     if (exit._tag === "Failure") {
       const cause = exit.cause
       // Extract the error from the cause
-      const error = (cause as { _tag: string; error?: { _tag: string; diagnostics: Array<{ message: string }> } }).error
+      const error = (
+        cause as {
+          _tag: string
+          error?: { _tag: string; diagnostics: Array<{ message: string }> }
+        }
+      ).error
       expect(error?._tag).toBe("ValidationError")
       expect(error?.diagnostics.length).toBeGreaterThan(0)
       expect(
-        error?.diagnostics.some((d: { message: string }) => d.message.includes("Orphan")),
+        error?.diagnostics.some((d: { message: string }) =>
+          d.message.includes("Orphan"),
+        ),
       ).toBe(true)
     }
   })
@@ -146,10 +156,17 @@ describe("validateEither", () => {
 
     if (exit._tag === "Failure") {
       const cause = exit.cause
-      const error = (cause as { _tag: string; error?: { _tag: string; diagnostics: Array<{ message: string }> } }).error
+      const error = (
+        cause as {
+          _tag: string
+          error?: { _tag: string; diagnostics: Array<{ message: string }> }
+        }
+      ).error
       expect(error?._tag).toBe("ValidationError")
       expect(
-        error?.diagnostics.some((d: { message: string }) => d.message.includes("Dangling")),
+        error?.diagnostics.some((d: { message: string }) =>
+          d.message.includes("Dangling"),
+        ),
       ).toBe(true)
     }
   })

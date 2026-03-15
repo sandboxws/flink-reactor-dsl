@@ -3,7 +3,15 @@
 // Uses the FrHttpClient service for testable HTTP, and Effect's
 // Schedule + Stream for polling/iteration.
 
-import { Context, Duration, Effect, Option, type Predicate, Schedule, Stream } from "effect"
+import {
+  Context,
+  Duration,
+  Effect,
+  Option,
+  type Predicate,
+  Schedule,
+  Stream,
+} from "effect"
 import {
   SqlGatewayConnectionError,
   type SqlGatewayError,
@@ -176,10 +184,9 @@ export function heartbeatSession(
   baseUrl: string,
   sessionHandle: string,
 ): Effect.Effect<void, SqlGatewayError> {
-  return request<unknown>(
-    baseUrl,
-    `/v1/sessions/${sessionHandle}`,
-  ).pipe(Effect.asVoid)
+  return request<unknown>(baseUrl, `/v1/sessions/${sessionHandle}`).pipe(
+    Effect.asVoid,
+  )
 }
 
 /** Submit a SQL statement, returns operation handle */

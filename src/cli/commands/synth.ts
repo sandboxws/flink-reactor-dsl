@@ -126,7 +126,8 @@ function writePipelineOutput(
   outdir: string,
   projectDir: string,
 ): void {
-  const { mkdirSync, writeFileSync } = require("node:fs") as typeof import("node:fs")
+  const { mkdirSync, writeFileSync } =
+    require("node:fs") as typeof import("node:fs")
   const pipelineDir = join(projectDir, outdir, artifact.name)
   mkdirSync(pipelineDir, { recursive: true })
 
@@ -240,12 +241,7 @@ export function runSynthEffect(opts: {
 
       for (const artifact of result.pipelines) {
         allArtifacts.push(artifact)
-        yield* writePipelineOutputEffect(
-          artifact,
-          opts.outdir,
-          projectDir,
-          fs,
-        )
+        yield* writePipelineOutputEffect(artifact, opts.outdir, projectDir, fs)
       }
 
       // Fallback: treat whole tree as single pipeline
@@ -266,12 +262,7 @@ export function runSynthEffect(opts: {
         }
 
         allArtifacts.push(artifact)
-        yield* writePipelineOutputEffect(
-          artifact,
-          opts.outdir,
-          projectDir,
-          fs,
-        )
+        yield* writePipelineOutputEffect(artifact, opts.outdir, projectDir, fs)
       }
     }
 

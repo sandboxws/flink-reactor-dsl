@@ -58,7 +58,8 @@
         "noConfusingVoidType": "off",
         "noShadowRestrictedNames": "warn",
         "noAssignInExpressions": "warn",
-        "noArrayIndexKey": "warn"
+        "noArrayIndexKey": "warn",
+        "noUnsafeDeclarationMerging": "off"
       }
     }
   },

@@ -1,6 +1,6 @@
 import { Effect } from "effect"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { makeSessionPool, PoolExhaustedError } from "../effect-session-pool.js"
+import { makeSessionPool } from "../effect-session-pool.js"
 import type { RawOpenSessionResponse } from "../types.js"
 
 // ── Mock fetch ──────────────────────────────────────────────────────────────
@@ -73,7 +73,11 @@ describe("Effect-based SessionPool", () => {
   describe("acquire", () => {
     it("creates a new session when pool is empty", async () => {
       const pool = await Effect.runPromise(
-        makeSessionPool({ baseUrl: BASE_URL, maxSessions: 5, heartbeatIntervalMs: 0 }),
+        makeSessionPool({
+          baseUrl: BASE_URL,
+          maxSessions: 5,
+          heartbeatIntervalMs: 0,
+        }),
       )
 
       const handle = await Effect.runPromise(pool.acquire())
@@ -87,7 +91,11 @@ describe("Effect-based SessionPool", () => {
 
     it("reuses idle sessions before creating new ones", async () => {
       const pool = await Effect.runPromise(
-        makeSessionPool({ baseUrl: BASE_URL, maxSessions: 5, heartbeatIntervalMs: 0 }),
+        makeSessionPool({
+          baseUrl: BASE_URL,
+          maxSessions: 5,
+          heartbeatIntervalMs: 0,
+        }),
       )
 
       // Acquire and release
@@ -112,7 +120,11 @@ describe("Effect-based SessionPool", () => {
   describe("max connections", () => {
     it("fails with PoolExhaustedError when max sessions exceeded", async () => {
       const pool = await Effect.runPromise(
-        makeSessionPool({ baseUrl: BASE_URL, maxSessions: 2, heartbeatIntervalMs: 0 }),
+        makeSessionPool({
+          baseUrl: BASE_URL,
+          maxSessions: 2,
+          heartbeatIntervalMs: 0,
+        }),
       )
 
       await Effect.runPromise(pool.acquire())
@@ -129,7 +141,11 @@ describe("Effect-based SessionPool", () => {
 
     it("allows acquiring after releasing when at max capacity", async () => {
       const pool = await Effect.runPromise(
-        makeSessionPool({ baseUrl: BASE_URL, maxSessions: 2, heartbeatIntervalMs: 0 }),
+        makeSessionPool({
+          baseUrl: BASE_URL,
+          maxSessions: 2,
+          heartbeatIntervalMs: 0,
+        }),
       )
 
       const h1 = await Effect.runPromise(pool.acquire())
@@ -149,7 +165,11 @@ describe("Effect-based SessionPool", () => {
   describe("release", () => {
     it("transitions session from active to idle", async () => {
       const pool = await Effect.runPromise(
-        makeSessionPool({ baseUrl: BASE_URL, maxSessions: 5, heartbeatIntervalMs: 0 }),
+        makeSessionPool({
+          baseUrl: BASE_URL,
+          maxSessions: 5,
+          heartbeatIntervalMs: 0,
+        }),
       )
 
       const handle = await Effect.runPromise(pool.acquire())
@@ -167,7 +187,11 @@ describe("Effect-based SessionPool", () => {
   describe("dispose", () => {
     it("closes all sessions (active and idle)", async () => {
       const pool = await Effect.runPromise(
-        makeSessionPool({ baseUrl: BASE_URL, maxSessions: 5, heartbeatIntervalMs: 0 }),
+        makeSessionPool({
+          baseUrl: BASE_URL,
+          maxSessions: 5,
+          heartbeatIntervalMs: 0,
+        }),
       )
 
       const h1 = await Effect.runPromise(pool.acquire())
@@ -191,7 +215,11 @@ describe("Effect-based SessionPool", () => {
   describe("counts", () => {
     it("tracks active and idle counts accurately", async () => {
       const pool = await Effect.runPromise(
-        makeSessionPool({ baseUrl: BASE_URL, maxSessions: 5, heartbeatIntervalMs: 0 }),
+        makeSessionPool({
+          baseUrl: BASE_URL,
+          maxSessions: 5,
+          heartbeatIntervalMs: 0,
+        }),
       )
 
       expect(await Effect.runPromise(pool.activeCount)).toBe(0)

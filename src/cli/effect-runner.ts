@@ -2,10 +2,10 @@
 // Shared entry point for running Effect programs in CLI commands.
 // Provides the AppLayer and handles error display from Cause.
 
-import { Cause, Effect, type Layer } from "effect"
-import { renderCause } from "./error-display.js"
+import { Effect, type Layer } from "effect"
 import type { SynthError } from "../core/errors.js"
 import { AppLayer } from "../core/layers.js"
+import { renderCause } from "./error-display.js"
 
 /** All services provided by AppLayer */
 type AppServices = Layer.Layer.Success<typeof AppLayer>

@@ -1,6 +1,6 @@
 import { Either } from "effect"
-import { FlinkVersionCompat } from "@/core/flink-compat.js"
 import { SqlGenerationError } from "@/core/errors.js"
+import { FlinkVersionCompat } from "@/core/flink-compat.js"
 import type { PluginDdlGenerator, PluginSqlGenerator } from "@/core/plugin.js"
 import type { SchemaDefinition } from "@/core/schema.js"
 import type { ValidationDiagnostic } from "@/core/synth-context.js"

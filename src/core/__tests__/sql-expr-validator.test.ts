@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest"
 import { Pipeline } from "@/components/pipeline.js"
 import { KafkaSink } from "@/components/sinks.js"
 import { KafkaSource } from "@/components/sources.js"
-import { Filter, Join } from "@/components/transforms.js"
+import { Filter } from "@/components/transforms.js"
 import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
 import { Field, Schema } from "@/core/schema.js"
 import { validateExpressionSyntax } from "@/core/schema-validation.js"
@@ -47,7 +47,7 @@ describe("validateSqlExpression", () => {
   })
 
   // ── 5.5: unterminated string ──────────────────────────────────────
-  it("validates \"status = 'active\" as invalid (unterminated string)", async () => {
+  it('validates "status = \'active" as invalid (unterminated string)', async () => {
     const result = await validateSqlExpression("status = 'active")
     expect(result.valid).toBe(false)
     expect(result.errors.length).toBeGreaterThan(0)
@@ -125,7 +125,7 @@ describe("validateExpressionSyntax integration", () => {
     expect(exprDiags.length).toBeGreaterThan(0)
     expect(exprDiags[0].component).toBe("Join")
     expect(exprDiags[0].details?.expressionErrors).toBeDefined()
-    expect(exprDiags[0].details!.expressionErrors!.length).toBeGreaterThan(0)
+    expect(exprDiags[0].details?.expressionErrors?.length).toBeGreaterThan(0)
   })
 
   // ── 5.8: Diagnostic includes error offset ─────────────────────────

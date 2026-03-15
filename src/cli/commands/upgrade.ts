@@ -17,10 +17,7 @@ const SHORTHANDS: Record<string, string> = {}
 export function registerUpgradeCommand(program: Command): void {
   program
     .command("upgrade")
-    .argument(
-      "[package]",
-      "Package to upgrade",
-    )
+    .argument("[package]", "Package to upgrade")
     .option("--dry-run", "Show what would be upgraded without installing")
     .description("Upgrade FlinkReactor packages to their latest versions")
     .action(async (pkg: string | undefined, opts: { dryRun?: boolean }) => {

@@ -7,8 +7,8 @@
  */
 import {
   DSL_COMPONENTS,
-  HIERARCHY_ONLY_COMPONENTS,
   getComponentsByKind,
+  HIERARCHY_ONLY_COMPONENTS,
 } from "./component-inventory"
 import type { ComponentRulesRegistry } from "./types"
 
@@ -120,7 +120,9 @@ export function formatParityReport(mismatches: ParityMismatch[]): string {
     return "Rule parity check passed: all components are in sync."
   }
 
-  const lines = [`Rule parity check failed with ${mismatches.length} issue(s):\n`]
+  const lines = [
+    `Rule parity check failed with ${mismatches.length} issue(s):\n`,
+  ]
   for (const m of mismatches) {
     lines.push(`  [${m.type}] ${m.message}`)
     lines.push(`    Fix: ${m.fix}`)

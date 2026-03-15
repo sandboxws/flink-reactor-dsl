@@ -6,12 +6,15 @@
  */
 import ts from "typescript"
 import { describe, expect, it } from "vitest"
-import { createRulesRegistry } from "../src/component-rules"
 import {
   filterCompletionsByContext,
   rankCompletionsByContext,
 } from "../src/completions"
-import { getComponentName, getParentTagAtPosition } from "../src/context-detector"
+import { createRulesRegistry } from "../src/component-rules"
+import {
+  getComponentName,
+  getParentTagAtPosition,
+} from "../src/context-detector"
 
 function parse(source: string): ts.SourceFile {
   return ts.createSourceFile(
@@ -37,7 +40,9 @@ function entry(name: string, sortText = "11"): ts.CompletionEntry {
  * Find parent tag at a marker position in source.
  * Use `|` to mark cursor position — it's removed before parsing.
  */
-function parentTagAt(markedSource: string): ts.JsxTagNameExpression | undefined {
+function parentTagAt(
+  markedSource: string,
+): ts.JsxTagNameExpression | undefined {
   const pos = markedSource.indexOf("|")
   const source = markedSource.replace("|", "")
   const sf = parse(source)
@@ -80,9 +85,7 @@ describe("getParentTagAtPosition", () => {
   })
 
   it("detects nested parent correctly", () => {
-    expect(
-      parentNameAt("<Pipeline><Route>|</Route></Pipeline>"),
-    ).toBe("Route")
+    expect(parentNameAt("<Pipeline><Route>|</Route></Pipeline>")).toBe("Route")
   })
 
   it("returns undefined outside any JSX element", () => {
@@ -106,11 +109,7 @@ describe("filterCompletionsByContext", () => {
     entry("Query.Select"),
     entry("Map"),
   ]
-  const mixedEntries = [
-    ...dslEntries,
-    entry("myVariable"),
-    entry("console"),
-  ]
+  const mixedEntries = [...dslEntries, entry("myVariable"), entry("console")]
 
   it("Pipeline: keeps all valid Pipeline children", () => {
     const sf = parse("<Pipeline></Pipeline>")
@@ -205,7 +204,12 @@ describe("filterCompletionsByContext", () => {
   })
 
   it("passes through all entries when no parent context", () => {
-    const result = filterCompletionsByContext(mixedEntries, undefined, registry, ts)
+    const result = filterCompletionsByContext(
+      mixedEntries,
+      undefined,
+      registry,
+      ts,
+    )
     expect(result).toHaveLength(mixedEntries.length)
   })
 
@@ -244,11 +248,11 @@ describe("rankCompletionsByContext", () => {
     const result = rankCompletionsByContext(entries, tag, registry, ts)
 
     // Route.Branch is valid → promoted
-    expect(result.find((e) => e.name === "Route.Branch")!.sortText).toBe("011")
+    expect(result.find((e) => e.name === "Route.Branch")?.sortText).toBe("011")
     // Filter is DSL but invalid → demoted
-    expect(result.find((e) => e.name === "Filter")!.sortText).toBe("211")
+    expect(result.find((e) => e.name === "Filter")?.sortText).toBe("211")
     // myVariable is not DSL → unchanged
-    expect(result.find((e) => e.name === "myVariable")!.sortText).toBe("11")
+    expect(result.find((e) => e.name === "myVariable")?.sortText).toBe("11")
   })
 
   it("preserves all entries (never removes)", () => {
@@ -299,9 +303,9 @@ describe("rankCompletionsByContext", () => {
     ]
     const result = rankCompletionsByContext(entries, tag, registry, ts)
 
-    expect(result.find((e) => e.name === "KafkaSource")!.sortText).toBe("011")
-    expect(result.find((e) => e.name === "Route.Branch")!.sortText).toBe("211")
-    expect(result.find((e) => e.name === "console")!.sortText).toBe("11")
+    expect(result.find((e) => e.name === "KafkaSource")?.sortText).toBe("011")
+    expect(result.find((e) => e.name === "Route.Branch")?.sortText).toBe("211")
+    expect(result.find((e) => e.name === "console")?.sortText).toBe("11")
   })
 })
 
@@ -357,9 +361,7 @@ describe("regression: non-DSL completion preservation", () => {
 
     const result = filterCompletionsByContext(nonDSLEntries, tag, registry, ts)
     expect(result).toHaveLength(nonDSLEntries.length)
-    expect(result.map((e) => e.name)).toEqual(
-      nonDSLEntries.map((e) => e.name),
-    )
+    expect(result.map((e) => e.name)).toEqual(nonDSLEntries.map((e) => e.name))
   })
 
   it("rank never modifies sortText of non-DSL entries", () => {
@@ -385,10 +387,10 @@ describe("regression: non-DSL completion preservation", () => {
       (sf.statements[0] as ts.ExpressionStatement).expression as ts.JsxElement
     ).openingElement.tagName
     const entries = [
-      entry("Query.Select"),     // valid DSL child → keep
-      entry("Filter"),           // invalid DSL child → remove
-      entry("myQueryHelper"),    // non-DSL → keep
-      entry("KafkaSource"),      // valid DSL child → keep
+      entry("Query.Select"), // valid DSL child → keep
+      entry("Filter"), // invalid DSL child → remove
+      entry("myQueryHelper"), // non-DSL → keep
+      entry("KafkaSource"), // valid DSL child → keep
     ]
     const result = filterCompletionsByContext(entries, tag, registry, ts)
 

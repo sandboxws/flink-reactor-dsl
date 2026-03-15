@@ -5,7 +5,11 @@ import { Effect } from "effect"
 import pc from "picocolors"
 import { discoverPipelines } from "@/cli/discovery.js"
 import { runCommand } from "@/cli/effect-runner.js"
-import { CliError, type DiscoveryError, type FileSystemError } from "@/core/errors.js"
+import {
+  CliError,
+  type DiscoveryError,
+  type FileSystemError,
+} from "@/core/errors.js"
 import { ProcessRunner } from "@/core/services.js"
 import { runSynth } from "./synth.js"
 
@@ -97,16 +101,12 @@ function runDeployEffect(opts: {
       const yamlPath = join(projectDir, "dist", p.name, "deployment.yaml")
       if (!existsSync(yamlPath)) {
         yield* Effect.sync(() =>
-          console.log(
-            pc.yellow(`No deployment.yaml for ${p.name}. Skipping.`),
-          ),
+          console.log(pc.yellow(`No deployment.yaml for ${p.name}. Skipping.`)),
         )
         continue
       }
 
-      yield* Effect.sync(() =>
-        console.log(pc.dim(`\nApplying ${p.name}...`)),
-      )
+      yield* Effect.sync(() => console.log(pc.dim(`\nApplying ${p.name}...`)))
 
       const result = yield* runner.exec(
         "kubectl",
@@ -117,17 +117,13 @@ function runDeployEffect(opts: {
       if (result.exitCode !== 0) {
         yield* Effect.sync(() =>
           console.error(
-            pc.red(
-              `  ${p.name}: Failed to apply — ${result.stderr.trim()}`,
-            ),
+            pc.red(`  ${p.name}: Failed to apply — ${result.stderr.trim()}`),
           ),
         )
         hasFailures = true
       } else {
         yield* Effect.sync(() =>
-          console.log(
-            pc.green(`  ${p.name}: ${result.stdout.trim()}`),
-          ),
+          console.log(pc.green(`  ${p.name}: ${result.stdout.trim()}`)),
         )
       }
     }
