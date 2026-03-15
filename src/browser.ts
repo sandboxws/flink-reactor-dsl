@@ -243,7 +243,13 @@ export type {
 // Core: Flink version compat
 export { FlinkVersionCompat } from "./core/flink-compat.js"
 // Core: JSX runtime
-export { createElement, Fragment, jsx, jsxs } from "./core/jsx-runtime.js"
+export {
+  createElement,
+  Fragment,
+  jsx,
+  jsxs,
+  resetNodeIdCounter,
+} from "./core/jsx-runtime.js"
 // NOTE: Node-specific layers are excluded:
 // ConfigProviderLive, NodeFileSystemLive, PipelineLoaderLive,
 // ProcessRunnerLive, CliOutputLive, NodeHttpClientLive, MainLive

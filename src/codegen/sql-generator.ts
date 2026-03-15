@@ -1755,25 +1755,35 @@ function buildDeduplicateQuery(
   const partitionBy = key.map(q).join(", ")
   const orderDir = keep === "first" ? "ASC" : "DESC"
 
+  const fragStart = _fragments?.length ?? 0
   const upstream = getUpstream(node, nodeIndex, pluginSql)
   const fromClause = upstream.isSimple
     ? upstream.sourceRef
     : `(\n${upstream.sql}\n)`
 
   if (FlinkVersionCompat.isVersionAtLeast(_synthVersion, "2.0")) {
-    return [
-      `SELECT *, ROW_NUMBER() OVER (PARTITION BY ${partitionBy} ORDER BY ${q(order)} ${orderDir}) AS rownum`,
-      `FROM ${fromClause}`,
-      "QUALIFY rownum = 1",
-    ].join("\n")
+    const selectPart = `SELECT *, ROW_NUMBER() OVER (PARTITION BY ${partitionBy} ORDER BY ${q(order)} ${orderDir}) AS rownum`
+    const qualifyPart = "QUALIFY rownum = 1"
+    const result = `${selectPart}\nFROM ${fromClause}\n${qualifyPart}`
+    if (!upstream.isSimple)
+      shiftFragmentsSince(fragStart, selectPart.length + 1 + "FROM (\n".length)
+    pushFragment(0, selectPart.length, node)
+    pushFragment(result.length - qualifyPart.length, qualifyPart.length, node)
+    return result
   }
 
-  return [
-    "SELECT * FROM (",
-    `  SELECT *, ROW_NUMBER() OVER (PARTITION BY ${partitionBy} ORDER BY ${q(order)} ${orderDir}) AS rownum`,
-    `  FROM ${fromClause}`,
-    ") WHERE rownum = 1",
-  ].join("\n")
+  const innerSelect = `  SELECT *, ROW_NUMBER() OVER (PARTITION BY ${partitionBy} ORDER BY ${q(order)} ${orderDir}) AS rownum`
+  const wherePart = ") WHERE rownum = 1"
+  const result = `SELECT * FROM (\n${innerSelect}\n  FROM ${fromClause}\n${wherePart}`
+  if (!upstream.isSimple)
+    shiftFragmentsSince(
+      fragStart,
+      "SELECT * FROM (\n".length + innerSelect.length + 1 + "  FROM (\n".length,
+    )
+  pushFragment(0, "SELECT * FROM (".length, node)
+  pushFragment("SELECT * FROM (\n".length, innerSelect.length, node)
+  pushFragment(result.length - wherePart.length, wherePart.length, node)
+  return result
 }
 
 // ── TopN ────────────────────────────────────────────────────────────
@@ -1793,25 +1803,35 @@ function buildTopNQuery(
     .map(([field, dir]) => `${q(field)} ${dir}`)
     .join(", ")
 
+  const fragStart = _fragments?.length ?? 0
   const upstream = getUpstream(node, nodeIndex, pluginSql)
   const fromClause = upstream.isSimple
     ? upstream.sourceRef
     : `(\n${upstream.sql}\n)`
 
   if (FlinkVersionCompat.isVersionAtLeast(_synthVersion, "2.0")) {
-    return [
-      `SELECT *, ROW_NUMBER() OVER (PARTITION BY ${partitionBy} ORDER BY ${orderClause}) AS rownum`,
-      `FROM ${fromClause}`,
-      `QUALIFY rownum <= ${n}`,
-    ].join("\n")
+    const selectPart = `SELECT *, ROW_NUMBER() OVER (PARTITION BY ${partitionBy} ORDER BY ${orderClause}) AS rownum`
+    const qualifyPart = `QUALIFY rownum <= ${n}`
+    const result = `${selectPart}\nFROM ${fromClause}\n${qualifyPart}`
+    if (!upstream.isSimple)
+      shiftFragmentsSince(fragStart, selectPart.length + 1 + "FROM (\n".length)
+    pushFragment(0, selectPart.length, node)
+    pushFragment(result.length - qualifyPart.length, qualifyPart.length, node)
+    return result
   }
 
-  return [
-    "SELECT * FROM (",
-    `  SELECT *, ROW_NUMBER() OVER (PARTITION BY ${partitionBy} ORDER BY ${orderClause}) AS rownum`,
-    `  FROM ${fromClause}`,
-    `) WHERE rownum <= ${n}`,
-  ].join("\n")
+  const innerSelect = `  SELECT *, ROW_NUMBER() OVER (PARTITION BY ${partitionBy} ORDER BY ${orderClause}) AS rownum`
+  const wherePart = `) WHERE rownum <= ${n}`
+  const result = `SELECT * FROM (\n${innerSelect}\n  FROM ${fromClause}\n${wherePart}`
+  if (!upstream.isSimple)
+    shiftFragmentsSince(
+      fragStart,
+      "SELECT * FROM (\n".length + innerSelect.length + 1 + "  FROM (\n".length,
+    )
+  pushFragment(0, "SELECT * FROM (".length, node)
+  pushFragment("SELECT * FROM (\n".length, innerSelect.length, node)
+  pushFragment(result.length - wherePart.length, wherePart.length, node)
+  return result
 }
 
 // ── Qualify (escape hatch) ───────────────────────────────────────────

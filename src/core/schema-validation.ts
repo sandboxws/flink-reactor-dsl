@@ -311,7 +311,9 @@ function validateNodeColumnReferences(
       const partitionBy = node.props.partitionBy as
         | readonly string[]
         | undefined
-      const orderBy = node.props.orderBy as readonly string[] | undefined
+      const orderBy = node.props.orderBy as
+        | Record<string, "ASC" | "DESC">
+        | undefined
       if (partitionBy) {
         for (const col of partitionBy) {
           if (!colSet.has(col))
@@ -319,10 +321,9 @@ function validateNodeColumnReferences(
         }
       }
       if (orderBy) {
-        for (const col of orderBy) {
-          const colName = col.replace(/\s+(ASC|DESC)$/i, "").trim()
-          if (!colSet.has(colName))
-            diagnostics.push(makeDiag("error", colName, "orderBy"))
+        for (const col of Object.keys(orderBy)) {
+          if (!colSet.has(col))
+            diagnostics.push(makeDiag("error", col, "orderBy"))
         }
       }
       break
