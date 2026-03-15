@@ -6,6 +6,7 @@ import { runCommand } from "@/cli/effect-runner.js"
 import { synthesizeApp } from "@/core/app.js"
 import { DiscoveryError, ValidationError } from "@/core/errors.js"
 import { FlinkVersionCompat } from "@/core/flink-compat.js"
+import { validateConnectorProperties } from "@/core/connector-validation.js"
 import {
   validateExpressionSyntax,
   validateSchemaReferences,
@@ -195,11 +196,17 @@ async function validatePipeline(
   // Run expression syntax validation (SQL parse checks)
   const expressionDiagnostics = await validateExpressionSyntax(pipelineNode)
 
+  // Run connector property validation (standalone mode: warn for infra-provided props)
+  const connectorDiagnostics = validateConnectorProperties(pipelineNode, {
+    standalone: true,
+  })
+
   const allDiagnostics = [
     ...dagDiagnostics,
     ...versionDiagnostics,
     ...schemaDiagnostics,
     ...expressionDiagnostics,
+    ...connectorDiagnostics,
   ]
 
   return {

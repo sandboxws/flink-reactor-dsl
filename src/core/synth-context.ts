@@ -1,6 +1,7 @@
 import { Effect, Either } from "effect"
 import { CycleDetectedError, ValidationError } from "./errors.js"
 import type { PluginValidator } from "./plugin.js"
+import { validateConnectorProperties } from "./connector-validation.js"
 import {
   validateExpressionSyntax,
   validateSchemaReferences,
@@ -441,6 +442,11 @@ export class SynthContext {
     // Schema validators (category: "schema") — run when no filter or "schema" included
     if (root && (!cats || cats.includes("schema"))) {
       builtIn.push(...validateSchemaReferences(root))
+    }
+
+    // Connector validators (category: "connector") — run when no filter or "connector" included
+    if (root && (!cats || cats.includes("connector"))) {
+      builtIn.push(...validateConnectorProperties(root))
     }
 
     if (!pluginValidators || pluginValidators.length === 0 || !root) {
