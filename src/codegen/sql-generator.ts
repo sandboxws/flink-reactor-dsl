@@ -30,6 +30,45 @@ import { verifySql } from "./sql-verifier.js"
 // synchronous, there's no reentrancy risk.
 let _synthVersion: FlinkMajorVersion = "2.0"
 
+// ── Module-scoped fragment collector ────────────────────────────────
+// Tracks which construct nodes contributed which byte ranges within
+// the current DML statement being built. Set by collectSinkDml before
+// query building, cleared afterward.
+let _fragments: SqlFragment[] | null = null
+
+function beginFragmentCollection(): SqlFragment[] {
+  const fragments: SqlFragment[] = []
+  _fragments = fragments
+  return fragments
+}
+
+function endFragmentCollection(): void {
+  _fragments = null
+}
+
+/** Push a fragment for the current node's contribution. No-op when not collecting. */
+function pushFragment(
+  offset: number,
+  length: number,
+  node: ConstructNode,
+): void {
+  if (_fragments) {
+    _fragments.push({
+      offset,
+      length,
+      origin: { nodeId: node.id, component: node.component, kind: node.kind },
+    })
+  }
+}
+
+/** Shift all fragments from startIndex onward by delta bytes. */
+function shiftFragmentsSince(startIndex: number, delta: number): void {
+  if (!_fragments) return
+  for (let i = startIndex; i < _fragments.length; i++) {
+    _fragments[i] = { ..._fragments[i], offset: _fragments[i].offset + delta }
+  }
+}
+
 // ── Public API ──────────────────────────────────────────────────────
 
 export interface GenerateSqlOptions {
@@ -46,10 +85,34 @@ export interface GenerateSqlOptions {
   readonly optimize?: boolean | OptimizeOptions
 }
 
+/** Maps a statement index to the construct node that produced it. */
+export interface StatementOrigin {
+  /** Unique node ID from the ConstructNode tree */
+  readonly nodeId: string
+  /** Component class name (e.g. "KafkaSource", "Filter", "Aggregate") */
+  readonly component: string
+  /** Node kind (e.g. "Source", "Sink", "Transform", "Pipeline") */
+  readonly kind: string
+}
+
+/** A fragment of a SQL statement attributed to a construct node. */
+export interface SqlFragment {
+  /** Byte offset from the start of the statement. */
+  readonly offset: number
+  /** Length in bytes. */
+  readonly length: number
+  /** The construct node that produced this fragment. */
+  readonly origin: StatementOrigin
+}
+
 export interface GenerateSqlResult {
   readonly statements: readonly string[]
   readonly sql: string
   readonly diagnostics: readonly ValidationDiagnostic[]
+  /** Maps each statement index to the node that produced it. Entries may be absent for synthetic statements (SET, STATEMENT SET wrappers). */
+  readonly statementOrigins: ReadonlyMap<number, StatementOrigin>
+  /** All contributing nodes per statement, with optional sub-statement spans. */
+  readonly statementContributors: ReadonlyMap<number, readonly SqlFragment[]>
 }
 
 /**
@@ -91,25 +154,43 @@ export function generateSql(
   ctx.buildFromTree(currentTree)
 
   const statements: string[] = []
+  const statementOrigins = new Map<number, StatementOrigin>()
+  const statementContributors = new Map<number, readonly SqlFragment[]>()
 
-  // 1. SET statements from pipeline props
-  statements.push(...generateSetStatements(currentTree, version))
+  /** Push a statement and record which node produced it. */
+  function emit(sql: string, node?: ConstructNode): void {
+    if (node) {
+      statementOrigins.set(statements.length, {
+        nodeId: node.id,
+        component: node.component,
+        kind: node.kind,
+      })
+    }
+    statements.push(sql)
+  }
+
+  // 1. SET statements from pipeline props (attributed to pipeline node)
+  for (const s of generateSetStatements(currentTree, version)) {
+    emit(s, currentTree)
+  }
 
   // 1.5. Auto-injected optimizer SET statements (after user SETs for precedence)
   if (optimizerSets.length > 0) {
-    statements.push(...optimizerSets)
+    for (const s of optimizerSets) {
+      emit(s, currentTree)
+    }
   }
 
   // 2. CREATE CATALOG
   const catalogs = ctx.getNodesByKind("Catalog")
   for (const cat of catalogs) {
-    statements.push(generateCatalogDdl(cat))
+    emit(generateCatalogDdl(cat), cat)
   }
 
   // 2.5. CREATE FUNCTION (UDFs)
   const udfs = ctx.getNodesByKind("UDF")
   for (const udf of udfs) {
-    statements.push(generateUdfDdl(udf))
+    emit(generateUdfDdl(udf), udf)
   }
 
   // 3. CREATE TABLE (sources) — check plugin DDL generators first
@@ -118,10 +199,10 @@ export function generateSql(
     const pluginGen = pluginDdl?.get(src.component)
     if (pluginGen) {
       const ddl = pluginGen(src)
-      if (ddl) statements.push(ddl)
+      if (ddl) emit(ddl, src)
     } else {
       const ddl = generateSourceDdl(src)
-      if (ddl) statements.push(ddl)
+      if (ddl) emit(ddl, src)
     }
   }
 
@@ -132,9 +213,9 @@ export function generateSql(
     const pluginGen = pluginDdl?.get(sink.component)
     if (pluginGen) {
       const ddl = pluginGen(sink)
-      if (ddl) statements.push(ddl)
+      if (ddl) emit(ddl, sink)
     } else {
-      statements.push(generateSinkDdl(sink, sinkMeta.get(sink.id)))
+      emit(generateSinkDdl(sink, sinkMeta.get(sink.id)), sink)
     }
   }
 
@@ -142,26 +223,42 @@ export function generateSql(
   const views = ctx.getNodesByKind("View")
   for (const view of views) {
     if (view.children.length > 0) {
-      statements.push(generateViewDdl(view, nodeIndex, pluginSql))
+      emit(generateViewDdl(view, nodeIndex, pluginSql), view)
     }
   }
 
   // 4.75. CREATE MATERIALIZED TABLE
   const matTables = ctx.getNodesByKind("MaterializedTable")
   for (const matTable of matTables) {
-    statements.push(
+    emit(
       generateMaterializedTableDdl(matTable, nodeIndex, pluginSql, version),
+      matTable,
     )
   }
 
   // 5. DML: INSERT INTO / STATEMENT SET
-  const dmlStatements = generateDml(currentTree, nodeIndex, pluginSql)
-  if (dmlStatements.length === 1) {
-    statements.push(dmlStatements[0])
-  } else if (dmlStatements.length > 1) {
-    statements.push(
-      `EXECUTE STATEMENT SET BEGIN\n${dmlStatements.join("\n")}\nEND;`,
-    )
+  const dmlEntries = generateDml(currentTree, nodeIndex, pluginSql)
+  if (dmlEntries.length === 1) {
+    const entry = dmlEntries[0]
+    if (entry.contributors.length > 0) {
+      statementContributors.set(statements.length, entry.contributors)
+    }
+    statements.push(entry.sql)
+  } else if (dmlEntries.length > 1) {
+    // Wrap multiple DML in EXECUTE STATEMENT SET, shifting fragment offsets
+    const prefix = "EXECUTE STATEMENT SET BEGIN\n"
+    const allContributors: SqlFragment[] = []
+    let currentOffset = prefix.length
+    for (const entry of dmlEntries) {
+      for (const c of entry.contributors) {
+        allContributors.push({ ...c, offset: c.offset + currentOffset })
+      }
+      currentOffset += entry.sql.length + 1 // +1 for \n between statements
+    }
+    if (allContributors.length > 0) {
+      statementContributors.set(statements.length, allContributors)
+    }
+    statements.push(`${prefix}${dmlEntries.map((d) => d.sql).join("\n")}\nEND;`)
   }
 
   const diagnostics = verifySql(statements)
@@ -170,6 +267,8 @@ export function generateSql(
     statements,
     sql: `${statements.join("\n\n")}\n`,
     diagnostics,
+    statementOrigins,
+    statementContributors,
   }
 }
 
@@ -865,17 +964,23 @@ function resolveSinkMetadata(
  * (toward sources) to assemble the SELECT expression.
  */
 
+/** A DML statement with its fragment contributors. */
+interface DmlEntry {
+  sql: string
+  contributors: SqlFragment[]
+}
+
 function generateDml(
   pipelineNode: ConstructNode,
   nodeIndex: Map<string, ConstructNode>,
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
-): string[] {
-  const statements: string[] = []
+): DmlEntry[] {
+  const entries: DmlEntry[] = []
 
   // Collect all sinks from the pipeline's direct children
-  collectSinkDml(pipelineNode, nodeIndex, statements, pluginSql)
+  collectSinkDml(pipelineNode, nodeIndex, entries, pluginSql)
 
-  return statements
+  return entries
 }
 
 /**
@@ -919,8 +1024,12 @@ function buildSiblingChainQuery(
   let chainSchema: ResolvedColumn[] | null =
     chain[0].kind === "Source" ? resolveNodeSchema(chain[0], nodeIndex) : null
 
+  const chainFragStart = _fragments?.length ?? 0
+
   for (let i = 1; i < chain.length; i++) {
     const transform = chain[i]
+    const prevSql = currentUpstream.sql
+    const fragBeforeIter = _fragments?.length ?? 0
 
     // Only inject VirtualRef if the transform has no children (forward-reading pattern)
     if (transform.children.length > 0) {
@@ -962,6 +1071,25 @@ function buildSiblingChainQuery(
     const sql = buildQuery(transform, nodeIndex, pluginSql)
     ;(transform as { children: ConstructNode[] }).children = savedChildren
 
+    // Shift fragments from previous iterations to account for embedding.
+    // When the previous SQL is wrapped inside the new query (e.g. as a subquery),
+    // earlier fragments need their offsets adjusted to where prevSql appears in sql.
+    if (
+      !currentUpstream.isSimple &&
+      _fragments &&
+      fragBeforeIter > chainFragStart
+    ) {
+      const embedIdx = sql.indexOf(prevSql)
+      if (embedIdx >= 0) {
+        for (let f = chainFragStart; f < fragBeforeIter; f++) {
+          _fragments[f] = {
+            ..._fragments[f],
+            offset: _fragments[f].offset + embedIdx,
+          }
+        }
+      }
+    }
+
     // Propagate schema through the transform
     if (chainSchema) {
       chainSchema = resolveTransformSchema(transform, chainSchema)
@@ -976,53 +1104,73 @@ function buildSiblingChainQuery(
 function collectSinkDml(
   node: ConstructNode,
   nodeIndex: Map<string, ConstructNode>,
-  statements: string[],
+  entries: DmlEntry[],
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
   parent?: ConstructNode,
 ): void {
   if (node.kind === "Sink") {
     const sinkRef = resolveSinkRef(node)
+
+    // Collect fragments during query building
+    const fragments = beginFragmentCollection()
     let upstream: string
     if (node.children.length > 0) {
       // Pattern 1: reverse-nesting — sink wraps its upstream as children
       upstream = buildQuery(node.children[0], nodeIndex, pluginSql)
     } else if (parent) {
       // Pattern 2: forward-reading JSX — sink is a sibling of its upstream
-      // Collect preceding siblings (sources + transforms) in reading order and chain them
       const sinkIndex = parent.children.indexOf(node)
       upstream = buildSiblingChainQuery(parent, sinkIndex, nodeIndex, pluginSql)
     } else {
       upstream = "SELECT * FROM unknown"
     }
-    statements.push(`INSERT INTO ${sinkRef}\n${upstream};`)
+    endFragmentCollection()
+
+    const insertPrefix = `INSERT INTO ${sinkRef}\n`
+    const fullSql = `${insertPrefix}${upstream};`
+
+    // Shift all query fragments by the INSERT INTO prefix length
+    const contributors: SqlFragment[] = fragments.map((f) => ({
+      ...f,
+      offset: f.offset + insertPrefix.length,
+    }))
+    // Add the INSERT INTO target as a Sink fragment
+    contributors.unshift({
+      offset: 0,
+      length: insertPrefix.length - 1, // exclude the trailing \n
+      origin: { nodeId: node.id, component: node.component, kind: node.kind },
+    })
+
+    entries.push({ sql: fullSql, contributors })
+
     // Recurse into upstream to find SideOutput/Validate side-path DML
     for (const child of node.children) {
-      collectSideDml(child, nodeIndex, statements, pluginSql)
+      collectSideDml(child, nodeIndex, entries, pluginSql)
     }
     return
   }
 
   // Route generates multiple INSERT statements (one per branch)
   if (node.component === "Route") {
-    collectRouteDml(node, nodeIndex, statements, pluginSql, parent)
+    collectRouteDml(node, nodeIndex, entries, pluginSql, parent)
     return
   }
 
   // SideOutput generates two INSERT statements (main + side)
   if (node.component === "SideOutput") {
-    collectSideOutputDml(node, nodeIndex, statements, pluginSql)
+    collectSideOutputDml(node, nodeIndex, entries, pluginSql)
     return
   }
 
   // Validate generates two INSERT statements (valid + rejected)
   if (node.component === "Validate") {
-    collectValidateDml(node, nodeIndex, statements, pluginSql)
+    collectValidateDml(node, nodeIndex, entries, pluginSql)
     return
   }
 
   // Recurse into children to find sinks
   for (const child of node.children) {
-    collectSinkDml(child, nodeIndex, statements, pluginSql, node)
+    collectSinkDml(child, nodeIndex, entries, pluginSql, node)
   }
 }
 
@@ -1143,8 +1291,12 @@ function buildBranchQuery(
   }
 
   // Chain remaining transforms using VirtualRef for temporary child injection
+  const branchFragStart = _fragments?.length ?? 0
+
   for (let i = startIndex; i < transforms.length; i++) {
     const transform = transforms[i]
+    const prevSql = currentUpstream.sql
+    const fragBeforeIter = _fragments?.length ?? 0
     const savedChildren = transform.children
 
     // Strip backticks from sourceRef to avoid double-quoting when q() is applied
@@ -1174,6 +1326,23 @@ function buildBranchQuery(
     const sql = buildQuery(transform, nodeIndex, pluginSql)
     ;(transform as { children: ConstructNode[] }).children = savedChildren
 
+    // Shift fragments from previous iterations to account for embedding
+    if (
+      !currentUpstream.isSimple &&
+      _fragments &&
+      fragBeforeIter > branchFragStart
+    ) {
+      const embedIdx = sql.indexOf(prevSql)
+      if (embedIdx >= 0) {
+        for (let f = branchFragStart; f < fragBeforeIter; f++) {
+          _fragments[f] = {
+            ..._fragments[f],
+            offset: _fragments[f].offset + embedIdx,
+          }
+        }
+      }
+    }
+
     // Propagate schema through the transform
     if (chainSchema) {
       chainSchema = resolveTransformSchema(transform, chainSchema)
@@ -1188,7 +1357,7 @@ function buildBranchQuery(
 function collectRouteDml(
   routeNode: ConstructNode,
   nodeIndex: Map<string, ConstructNode>,
-  statements: string[],
+  entries: DmlEntry[],
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
   parent?: ConstructNode,
 ): void {
@@ -1208,7 +1377,8 @@ function collectRouteDml(
     const transforms = branch.children.filter((c) => c.kind !== "Sink")
     const sinks = branch.children.filter((c) => c.kind === "Sink")
 
-    // Build query chain: source → transforms → (branch condition)
+    // Collect fragments during branch query building
+    const fragments = beginFragmentCollection()
     const query = buildBranchQuery(
       transforms,
       upstream,
@@ -1216,10 +1386,28 @@ function collectRouteDml(
       nodeIndex,
       pluginSql,
     )
+    endFragmentCollection()
 
     for (const sink of sinks) {
       const sinkRef = resolveSinkRef(sink)
-      statements.push(`INSERT INTO ${sinkRef}\n${query};`)
+      const insertPrefix = `INSERT INTO ${sinkRef}\n`
+      const fullSql = `${insertPrefix}${query};`
+
+      const contributors: SqlFragment[] = fragments.map((f) => ({
+        ...f,
+        offset: f.offset + insertPrefix.length,
+      }))
+      contributors.unshift({
+        offset: 0,
+        length: insertPrefix.length - 1,
+        origin: {
+          nodeId: sink.id,
+          component: sink.component,
+          kind: sink.kind,
+        },
+      })
+
+      entries.push({ sql: fullSql, contributors })
     }
   }
 }
@@ -1405,12 +1593,21 @@ function buildFilterQuery(
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
 ): string {
   const condition = node.props.condition as string
+  const fragStart = _fragments?.length ?? 0
   const upstream = getUpstream(node, nodeIndex, pluginSql)
 
+  const wherePart = ` WHERE ${condition}`
+
   if (upstream.isSimple) {
-    return `SELECT * FROM ${upstream.sourceRef} WHERE ${condition}`
+    const result = `SELECT * FROM ${upstream.sourceRef}${wherePart}`
+    pushFragment(result.length - wherePart.length, wherePart.length, node)
+    return result
   }
-  return `SELECT * FROM (\n${upstream.sql}\n) WHERE ${condition}`
+  const prefix = `SELECT * FROM (\n`
+  const result = `${prefix}${upstream.sql}\n)${wherePart}`
+  shiftFragmentsSince(fragStart, prefix.length)
+  pushFragment(result.length - wherePart.length, wherePart.length, node)
+  return result
 }
 
 // ── Map ─────────────────────────────────────────────────────────────
@@ -1425,12 +1622,21 @@ function buildMapQuery(
     .map(([alias, expr]) => `${expr} AS ${q(alias)}`)
     .join(", ")
 
+  const fragStart = _fragments?.length ?? 0
   const upstream = getUpstream(node, nodeIndex, pluginSql)
 
+  const selectPart = `SELECT ${projections}`
+
   if (upstream.isSimple) {
-    return `SELECT ${projections} FROM ${upstream.sourceRef}`
+    const result = `${selectPart} FROM ${upstream.sourceRef}`
+    pushFragment(0, selectPart.length, node)
+    return result
   }
-  return `SELECT ${projections} FROM (\n${upstream.sql}\n)`
+  const prefix = `${selectPart} FROM (\n`
+  const result = `${prefix}${upstream.sql}\n)`
+  shiftFragmentsSince(fragStart, prefix.length)
+  pushFragment(0, selectPart.length, node)
+  return result
 }
 
 // ── FlatMap ─────────────────────────────────────────────────────────
@@ -1444,10 +1650,27 @@ function buildFlatMapQuery(
   const asFields = node.props.as as Record<string, string>
   const aliases = Object.keys(asFields).map(q).join(", ")
 
+  const fragStart = _fragments?.length ?? 0
   const upstream = getUpstream(node, nodeIndex, pluginSql)
   const ref = upstream.sourceRef
 
-  return `SELECT ${q(ref)}.*, ${aliases} FROM ${upstream.isSimple ? ref : `(\n${upstream.sql}\n) AS ${q(ref)}`} CROSS JOIN UNNEST(${q(ref)}.${q(unnestField)}) AS T(${aliases})`
+  const selectPart = `SELECT ${q(ref)}.*, ${aliases}`
+  const fromPart = upstream.isSimple
+    ? ref
+    : `(\n${upstream.sql}\n) AS ${q(ref)}`
+  const crossJoinPart = `CROSS JOIN UNNEST(${q(ref)}.${q(unnestField)}) AS T(${aliases})`
+  const result = `${selectPart} FROM ${fromPart} ${crossJoinPart}`
+
+  if (!upstream.isSimple) {
+    const prefix = `${selectPart} FROM (\n`
+    shiftFragmentsSince(fragStart, prefix.length)
+  }
+
+  // Track: the added aliases in SELECT and the CROSS JOIN UNNEST are FlatMap's contribution
+  pushFragment(0, selectPart.length, node)
+  pushFragment(result.length - crossJoinPart.length, crossJoinPart.length, node)
+
+  return result
 }
 
 // ── Aggregate ───────────────────────────────────────────────────────
@@ -1470,12 +1693,24 @@ function buildAggregateQuery(
       .map(([alias, expr]) => `${expr} AS ${q(alias)}`),
   ].join(", ")
 
+  const fragStart = _fragments?.length ?? 0
   const upstream = getUpstream(node, nodeIndex, pluginSql)
 
+  const selectPart = `SELECT ${projections}`
+  const groupByPart = ` GROUP BY ${groupCols}`
+
   if (upstream.isSimple) {
-    return `SELECT ${projections} FROM ${upstream.sourceRef} GROUP BY ${groupCols}`
+    const result = `${selectPart} FROM ${upstream.sourceRef}${groupByPart}`
+    pushFragment(0, selectPart.length, node)
+    pushFragment(result.length - groupByPart.length, groupByPart.length, node)
+    return result
   }
-  return `SELECT ${projections} FROM (\n${upstream.sql}\n) GROUP BY ${groupCols}`
+  const prefix = `${selectPart} FROM (\n`
+  const result = `${prefix}${upstream.sql}\n)${groupByPart}`
+  shiftFragmentsSince(fragStart, prefix.length)
+  pushFragment(0, selectPart.length, node)
+  pushFragment(result.length - groupByPart.length, groupByPart.length, node)
+  return result
 }
 
 // ── Union ───────────────────────────────────────────────────────────
@@ -1492,7 +1727,18 @@ function buildUnionQuery(
   }
 
   if (parts.length === 0) return "SELECT * FROM unknown"
-  return parts.join("\nUNION ALL\n")
+  const result = parts.join("\nUNION ALL\n")
+
+  // Track each "UNION ALL" keyword as a Union fragment
+  if (parts.length > 1) {
+    let offset = parts[0].length + 1 // +1 for the \n before "UNION ALL"
+    for (let i = 1; i < parts.length; i++) {
+      pushFragment(offset, "UNION ALL".length, node)
+      offset += "UNION ALL".length + 1 + parts[i].length + 1 // +1 for \n after, +1 for \n before next
+    }
+  }
+
+  return result
 }
 
 // ── Deduplicate ─────────────────────────────────────────────────────
@@ -1600,6 +1846,7 @@ function buildRenameQuery(
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
 ): string {
   const columns = node.props.columns as Record<string, string>
+  const fragStart = _fragments?.length ?? 0
   const upstream = getUpstream(node, nodeIndex, pluginSql)
 
   const schema = resolveNodeSchema(node.children[0], nodeIndex)
@@ -1609,17 +1856,39 @@ function buildRenameQuery(
     return `SELECT * FROM (\n${upstream.sql}\n)`
   }
 
-  const projections = schema
-    .map((c) => {
-      const newName = columns[c.name]
-      return newName ? `${q(c.name)} AS ${q(newName)}` : q(c.name)
-    })
-    .join(", ")
+  // Build projections while tracking per-column offsets for renamed columns
+  const colParts: { text: string; renamed: boolean }[] = schema.map((c) => {
+    const newName = columns[c.name]
+    return newName
+      ? { text: `${q(c.name)} AS ${q(newName)}`, renamed: true }
+      : { text: q(c.name), renamed: false }
+  })
+
+  const projections = colParts.map((p) => p.text).join(", ")
+  const selectPart = `SELECT ${projections}`
+
+  // Push a fragment for each renamed column (not the entire SELECT)
+  const pushRenameFragments = (baseOffset: number): void => {
+    let offset = baseOffset + "SELECT ".length
+    for (let i = 0; i < colParts.length; i++) {
+      if (colParts[i].renamed) {
+        pushFragment(offset, colParts[i].text.length, node)
+      }
+      offset += colParts[i].text.length
+      if (i < colParts.length - 1) offset += 2 // ", "
+    }
+  }
 
   if (upstream.isSimple) {
-    return `SELECT ${projections} FROM ${upstream.sourceRef}`
+    const result = `${selectPart} FROM ${upstream.sourceRef}`
+    pushRenameFragments(0)
+    return result
   }
-  return `SELECT ${projections} FROM (\n${upstream.sql}\n)`
+  const prefix = `${selectPart} FROM (\n`
+  const result = `${prefix}${upstream.sql}\n)`
+  shiftFragmentsSince(fragStart, prefix.length)
+  pushRenameFragments(0)
+  return result
 }
 
 // ── Drop ────────────────────────────────────────────────────────────
@@ -1630,6 +1899,7 @@ function buildDropQuery(
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
 ): string {
   const dropCols = new Set(node.props.columns as readonly string[])
+  const fragStart = _fragments?.length ?? 0
   const upstream = getUpstream(node, nodeIndex, pluginSql)
 
   const schema = resolveNodeSchema(node.children[0], nodeIndex)
@@ -1643,10 +1913,18 @@ function buildDropQuery(
     .map((c) => q(c.name))
     .join(", ")
 
+  const selectPart = `SELECT ${projections}`
+
   if (upstream.isSimple) {
-    return `SELECT ${projections} FROM ${upstream.sourceRef}`
+    const result = `${selectPart} FROM ${upstream.sourceRef}`
+    pushFragment(0, selectPart.length, node)
+    return result
   }
-  return `SELECT ${projections} FROM (\n${upstream.sql}\n)`
+  const prefix = `${selectPart} FROM (\n`
+  const result = `${prefix}${upstream.sql}\n)`
+  shiftFragmentsSince(fragStart, prefix.length)
+  pushFragment(0, selectPart.length, node)
+  return result
 }
 
 // ── Cast ────────────────────────────────────────────────────────────
@@ -1659,6 +1937,7 @@ function buildCastQuery(
   const castCols = node.props.columns as Record<string, string>
   const safe = node.props.safe as boolean | undefined
   const castFn = safe ? "TRY_CAST" : "CAST"
+  const fragStart = _fragments?.length ?? 0
   const upstream = getUpstream(node, nodeIndex, pluginSql)
 
   const schema = resolveNodeSchema(node.children[0], nodeIndex)
@@ -1667,19 +1946,42 @@ function buildCastQuery(
     return `SELECT * FROM (\n${upstream.sql}\n)`
   }
 
-  const projections = schema
-    .map((c) => {
-      const targetType = castCols[c.name]
-      return targetType
-        ? `${castFn}(${q(c.name)} AS ${targetType}) AS ${q(c.name)}`
-        : q(c.name)
-    })
-    .join(", ")
+  // Build projections while tracking per-column offsets for cast columns
+  const colParts: { text: string; cast: boolean }[] = schema.map((c) => {
+    const targetType = castCols[c.name]
+    return targetType
+      ? {
+          text: `${castFn}(${q(c.name)} AS ${targetType}) AS ${q(c.name)}`,
+          cast: true,
+        }
+      : { text: q(c.name), cast: false }
+  })
+
+  const projections = colParts.map((p) => p.text).join(", ")
+  const selectPart = `SELECT ${projections}`
+
+  // Push a fragment for each cast column only
+  const pushCastFragments = (baseOffset: number): void => {
+    let offset = baseOffset + "SELECT ".length
+    for (let i = 0; i < colParts.length; i++) {
+      if (colParts[i].cast) {
+        pushFragment(offset, colParts[i].text.length, node)
+      }
+      offset += colParts[i].text.length
+      if (i < colParts.length - 1) offset += 2 // ", "
+    }
+  }
 
   if (upstream.isSimple) {
-    return `SELECT ${projections} FROM ${upstream.sourceRef}`
+    const result = `${selectPart} FROM ${upstream.sourceRef}`
+    pushCastFragments(0)
+    return result
   }
-  return `SELECT ${projections} FROM (\n${upstream.sql}\n)`
+  const prefix = `${selectPart} FROM (\n`
+  const result = `${prefix}${upstream.sql}\n)`
+  shiftFragmentsSince(fragStart, prefix.length)
+  pushCastFragments(0)
+  return result
 }
 
 // ── Coalesce ────────────────────────────────────────────────────────
@@ -1690,6 +1992,7 @@ function buildCoalesceQuery(
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
 ): string {
   const coalesceCols = node.props.columns as Record<string, string>
+  const fragStart = _fragments?.length ?? 0
   const upstream = getUpstream(node, nodeIndex, pluginSql)
 
   const schema = resolveNodeSchema(node.children[0], nodeIndex)
@@ -1698,19 +2001,42 @@ function buildCoalesceQuery(
     return `SELECT * FROM (\n${upstream.sql}\n)`
   }
 
-  const projections = schema
-    .map((c) => {
-      const defaultExpr = coalesceCols[c.name]
-      return defaultExpr
-        ? `COALESCE(${q(c.name)}, ${defaultExpr}) AS ${q(c.name)}`
-        : q(c.name)
-    })
-    .join(", ")
+  // Build projections while tracking per-column offsets for coalesced columns
+  const colParts: { text: string; coalesced: boolean }[] = schema.map((c) => {
+    const defaultExpr = coalesceCols[c.name]
+    return defaultExpr
+      ? {
+          text: `COALESCE(${q(c.name)}, ${defaultExpr}) AS ${q(c.name)}`,
+          coalesced: true,
+        }
+      : { text: q(c.name), coalesced: false }
+  })
+
+  const projections = colParts.map((p) => p.text).join(", ")
+  const selectPart = `SELECT ${projections}`
+
+  // Push a fragment for each coalesced column only
+  const pushCoalesceFragments = (baseOffset: number): void => {
+    let offset = baseOffset + "SELECT ".length
+    for (let i = 0; i < colParts.length; i++) {
+      if (colParts[i].coalesced) {
+        pushFragment(offset, colParts[i].text.length, node)
+      }
+      offset += colParts[i].text.length
+      if (i < colParts.length - 1) offset += 2 // ", "
+    }
+  }
 
   if (upstream.isSimple) {
-    return `SELECT ${projections} FROM ${upstream.sourceRef}`
+    const result = `${selectPart} FROM ${upstream.sourceRef}`
+    pushCoalesceFragments(0)
+    return result
   }
-  return `SELECT ${projections} FROM (\n${upstream.sql}\n)`
+  const prefix = `${selectPart} FROM (\n`
+  const result = `${prefix}${upstream.sql}\n)`
+  shiftFragmentsSince(fragStart, prefix.length)
+  pushCoalesceFragments(0)
+  return result
 }
 
 // ── AddField ────────────────────────────────────────────────────────
@@ -1721,6 +2047,7 @@ function buildAddFieldQuery(
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
 ): string {
   const addCols = node.props.columns as Record<string, string>
+  const fragStart = _fragments?.length ?? 0
   const upstream = getUpstream(node, nodeIndex, pluginSql)
 
   // Check for name collisions with upstream schema
@@ -1740,10 +2067,21 @@ function buildAddFieldQuery(
     .map(([alias, expr]) => `${expr} AS ${q(alias)}`)
     .join(", ")
 
+  const selectPart = `SELECT *, ${addedProjections}`
+  // Fragment covers only the added fields (after "SELECT *, ")
+  const addedOffset = "SELECT *, ".length
+  const addedLength = addedProjections.length
+
   if (upstream.isSimple) {
-    return `SELECT *, ${addedProjections} FROM ${upstream.sourceRef}`
+    const result = `${selectPart} FROM ${upstream.sourceRef}`
+    pushFragment(addedOffset, addedLength, node)
+    return result
   }
-  return `SELECT *, ${addedProjections} FROM (\n${upstream.sql}\n)`
+  const prefix = `${selectPart} FROM (\n`
+  const result = `${prefix}${upstream.sql}\n)`
+  shiftFragmentsSince(fragStart, prefix.length)
+  pushFragment(addedOffset, addedLength, node)
+  return result
 }
 
 // ── Join ────────────────────────────────────────────────────────────
@@ -2137,18 +2475,18 @@ function buildMatchRecognizeQuery(
 function collectSideDml(
   node: ConstructNode,
   nodeIndex: Map<string, ConstructNode>,
-  statements: string[],
+  entries: DmlEntry[],
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
 ): void {
   if (node.component === "SideOutput") {
-    collectSideOutputDml(node, nodeIndex, statements, pluginSql)
+    collectSideOutputDml(node, nodeIndex, entries, pluginSql)
   } else if (node.component === "Validate") {
-    collectValidateDml(node, nodeIndex, statements, pluginSql)
+    collectValidateDml(node, nodeIndex, entries, pluginSql)
   }
 
   // Continue recursing to find nested SideOutput/Validate
   for (const child of node.children) {
-    collectSideDml(child, nodeIndex, statements, pluginSql)
+    collectSideDml(child, nodeIndex, entries, pluginSql)
   }
 }
 
@@ -2183,7 +2521,7 @@ function buildSideOutputQuery(
 function collectSideOutputDml(
   sideOutputNode: ConstructNode,
   nodeIndex: Map<string, ConstructNode>,
-  statements: string[],
+  entries: DmlEntry[],
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
 ): void {
   const condition = sideOutputNode.props.condition as string
@@ -2224,9 +2562,10 @@ function collectSideOutputDml(
         }
         const selectList =
           metaCols.length > 0 ? `*, ${metaCols.join(", ")}` : "*"
-        statements.push(
-          `INSERT INTO ${sinkRef}\nSELECT ${selectList} FROM ${fromClause} WHERE (${condition});`,
-        )
+        entries.push({
+          sql: `INSERT INTO ${sinkRef}\nSELECT ${selectList} FROM ${fromClause} WHERE (${condition});`,
+          contributors: [],
+        })
       }
     }
   }
@@ -2333,7 +2672,7 @@ function buildValidateErrorCase(rules: {
 function collectValidateDml(
   validateNode: ConstructNode,
   nodeIndex: Map<string, ConstructNode>,
-  statements: string[],
+  entries: DmlEntry[],
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
 ): void {
   const rules = validateNode.props.rules as {
@@ -2372,9 +2711,10 @@ function collectValidateDml(
       if (child.kind === "Sink") {
         const sinkRef = resolveSinkRef(child)
         const errorCase = buildValidateErrorCase(rules)
-        statements.push(
-          `INSERT INTO ${sinkRef}\nSELECT *,\n    CASE\n${errorCase}\n    END AS \`_validation_error\`,\n    CURRENT_TIMESTAMP AS \`_validated_at\`\nFROM ${fromClause}\nWHERE NOT (\n    ${validCondition}\n);`,
-        )
+        entries.push({
+          sql: `INSERT INTO ${sinkRef}\nSELECT *,\n    CASE\n${errorCase}\n    END AS \`_validation_error\`,\n    CURRENT_TIMESTAMP AS \`_validated_at\`\nFROM ${fromClause}\nWHERE NOT (\n    ${validCondition}\n);`,
+          contributors: [],
+        })
       }
     }
   }
