@@ -292,19 +292,17 @@ function validateNodeColumnReferences(
     // ── Array-lookup components ──────────────────────────────────
     case "Deduplicate": {
       const key = node.props.key as readonly string[] | undefined
-      const order = node.props.order as readonly string[] | undefined
+      const order = node.props.order as string | undefined
       if (key) {
         for (const col of key) {
           if (!colSet.has(col)) diagnostics.push(makeDiag("error", col, "key"))
         }
       }
       if (order) {
-        for (const col of order) {
-          // order may have "ASC"/"DESC" suffix
-          const colName = col.replace(/\s+(ASC|DESC)$/i, "").trim()
-          if (!colSet.has(colName))
-            diagnostics.push(makeDiag("error", colName, "order"))
-        }
+        // order is a single column name, optionally with ASC/DESC suffix
+        const colName = order.replace(/\s+(ASC|DESC)$/i, "").trim()
+        if (!colSet.has(colName))
+          diagnostics.push(makeDiag("error", colName, "order"))
       }
       break
     }
