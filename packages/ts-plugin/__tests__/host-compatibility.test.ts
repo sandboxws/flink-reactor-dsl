@@ -156,7 +156,6 @@ function createMockInfo(overrides?: {
   >) {
     const val = languageService[key]
     if (typeof val === "function") {
-      // biome-ignore lint/suspicious/noExplicitAny: test mock
       ;(languageService as any)[key] = val.bind(languageService)
     }
   }

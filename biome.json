@@ -91,6 +91,20 @@
           "correctness": { "noUnusedImports": "off" }
         }
       }
+    },
+    {
+      "includes": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.test-d.ts",
+        "**/*.test-d.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "style": { "noNonNullAssertion": "off" },
+          "suspicious": { "noExplicitAny": "off" }
+        }
+      }
     }
   ]
 }

@@ -78,7 +78,6 @@ describe("LateralJoin", () => {
   it("throws when input is missing", () => {
     expect(() =>
       LateralJoin({
-        // biome-ignore lint/suspicious/noExplicitAny: intentional invalid input for error-path test
         input: undefined as unknown as any,
         function: "parse_address",
         args: ["addr"],
