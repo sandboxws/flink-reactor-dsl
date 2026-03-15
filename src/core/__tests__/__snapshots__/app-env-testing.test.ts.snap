@@ -1,9 +1,26 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`5.5: synth() test helper > works with toMatchSnapshot() 1`] = `
-"SET 'pipeline.name' = 'snapshot-test';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : snapshot-test
+-- parallelism : 1
+-- ====================================================================
+
+SET 'pipeline.name' = 'snapshot-test';
 
 SET 'parallelism.default' = '1';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
@@ -18,6 +35,15 @@ CREATE TABLE \`orders\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : output
+-- type        : kafka
+-- topic       : output
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`output\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
@@ -28,6 +54,13 @@ CREATE TABLE \`output\` (
   'topic' = 'output',
   'format' = 'json'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : orders
+-- output      : output
+-- ====================================================================
 
 INSERT INTO \`output\`
 SELECT * FROM \`orders\`;

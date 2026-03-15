@@ -105,6 +105,32 @@ export interface SqlFragment {
   readonly origin: StatementOrigin
 }
 
+export type SqlSection =
+  | "configuration"
+  | "catalogs"
+  | "functions"
+  | "sources"
+  | "sinks"
+  | "views"
+  | "materialized-tables"
+  | "pipeline"
+
+/** Metadata for a single SQL statement, used by dashboard for hover tooltips. */
+export interface StatementMeta {
+  /** Human-readable label (e.g., 'KafkaSource: raw_events'). */
+  readonly label: string
+  /** Section this statement belongs to. */
+  readonly section: SqlSection
+  /** Node kind. Absent for comment-only entries. */
+  readonly kind?: string
+  /** Component class name (e.g., "KafkaSource"). */
+  readonly component?: string
+  /** Key-value details for tooltip body. */
+  readonly details: ReadonlyArray<{ key: string; value: string }>
+  /** Schema columns, if applicable (sources/sinks). */
+  readonly schema?: ReadonlyArray<{ name: string; type: string }>
+}
+
 export interface GenerateSqlResult {
   readonly statements: readonly string[]
   readonly sql: string
@@ -113,6 +139,10 @@ export interface GenerateSqlResult {
   readonly statementOrigins: ReadonlyMap<number, StatementOrigin>
   /** All contributing nodes per statement, with optional sub-statement spans. */
   readonly statementContributors: ReadonlyMap<number, readonly SqlFragment[]>
+  /** Indices of comment-only statements (not executable SQL). */
+  readonly commentIndices: ReadonlySet<number>
+  /** Per-statement metadata for hover tooltips (keyed by statement index). */
+  readonly statementMeta: ReadonlyMap<number, StatementMeta>
 }
 
 /**
@@ -156,6 +186,8 @@ export function generateSql(
   const statements: string[] = []
   const statementOrigins = new Map<number, StatementOrigin>()
   const statementContributors = new Map<number, readonly SqlFragment[]>()
+  const commentIndices = new Set<number>()
+  const statementMeta = new Map<number, StatementMeta>()
 
   /** Push a statement and record which node produced it. */
   function emit(sql: string, node?: ConstructNode): void {
@@ -169,14 +201,40 @@ export function generateSql(
     statements.push(sql)
   }
 
-  // 1. SET statements from pipeline props (attributed to pipeline node)
-  for (const s of generateSetStatements(currentTree, version)) {
-    emit(s, currentTree)
+  /** Push a comment-only statement (comment block). */
+  function emitComment(comment: string, meta?: StatementMeta): void {
+    const idx = statements.length
+    commentIndices.add(idx)
+    if (meta) statementMeta.set(idx, meta)
+    statements.push(comment)
   }
 
-  // 1.5. Auto-injected optimizer SET statements (after user SETs for precedence)
-  if (optimizerSets.length > 0) {
-    for (const s of optimizerSets) {
+  // 1. SET statements from pipeline props
+  const setStatements = generateSetStatements(currentTree, version)
+  const allSets = [...setStatements, ...optimizerSets]
+  if (allSets.length > 0) {
+    const pProps = currentTree.props
+    const details: Array<{ key: string; value: string }> = []
+    if (pProps.name) details.push({ key: "name", value: String(pProps.name) })
+    if (pProps.parallelism !== undefined)
+      details.push({ key: "parallelism", value: String(pProps.parallelism) })
+    if (pProps.mode) details.push({ key: "mode", value: String(pProps.mode) })
+    if (pProps.checkpoint) {
+      const cp = pProps.checkpoint as { interval: string; mode?: string }
+      details.push({ key: "checkpoint", value: cp.interval })
+      if (cp.mode) details.push({ key: "cp-mode", value: cp.mode })
+    }
+    if (pProps.stateBackend)
+      details.push({ key: "state", value: String(pProps.stateBackend) })
+    if (pProps.stateTtl)
+      details.push({ key: "state-ttl", value: String(pProps.stateTtl) })
+
+    emitComment(buildCommentBlock("PIPELINE", details), {
+      label: "Pipeline",
+      section: "configuration",
+      details,
+    })
+    for (const s of allSets) {
       emit(s, currentTree)
     }
   }
@@ -184,25 +242,59 @@ export function generateSql(
   // 2. CREATE CATALOG
   const catalogs = ctx.getNodesByKind("Catalog")
   for (const cat of catalogs) {
+    const details = buildCatalogDetails(cat)
+    emitComment(buildCommentBlock("CATALOG", details), {
+      label: `Catalog: ${cat.id}`,
+      section: "catalogs",
+      kind: cat.kind,
+      component: cat.component,
+      details,
+    })
     emit(generateCatalogDdl(cat), cat)
   }
 
   // 2.5. CREATE FUNCTION (UDFs)
   const udfs = ctx.getNodesByKind("UDF")
   for (const udf of udfs) {
+    const funcName = udf.props.name as string
+    const className = udf.props.className as string
+    const details: Array<{ key: string; value: string }> = [
+      { key: "name", value: funcName },
+      { key: "class", value: className },
+      { key: "language", value: (udf.props.language as string) ?? "java" },
+    ]
+    emitComment(buildCommentBlock("FUNCTION", details), {
+      label: `UDF: ${funcName}`,
+      section: "functions",
+      kind: udf.kind,
+      component: "UDF",
+      details,
+    })
     emit(generateUdfDdl(udf), udf)
   }
 
-  // 3. CREATE TABLE (sources) — check plugin DDL generators first
+  // 3. CREATE TABLE (sources)
   const sources = ctx.getNodesByKind("Source")
   for (const src of sources) {
     const pluginGen = pluginDdl?.get(src.component)
+    let ddl: string | null = null
     if (pluginGen) {
-      const ddl = pluginGen(src)
-      if (ddl) emit(ddl, src)
+      ddl = pluginGen(src)
     } else {
-      const ddl = generateSourceDdl(src)
-      if (ddl) emit(ddl, src)
+      ddl = generateSourceDdl(src)
+    }
+    if (ddl) {
+      const details = buildSourceDetails(src)
+      const schema = buildSourceSchema(src)
+      emitComment(buildCommentBlock("SOURCE TABLE", details), {
+        label: `Source: ${src.id}`,
+        section: "sources",
+        kind: src.kind,
+        component: src.component,
+        details,
+        schema,
+      })
+      emit(ddl, src)
     }
   }
 
@@ -211,18 +303,42 @@ export function generateSql(
   const sinkMeta = resolveSinkMetadata(currentTree, nodeIndex)
   for (const sink of sinks) {
     const pluginGen = pluginDdl?.get(sink.component)
+    const resolved = sinkMeta.get(sink.id)
+    const details = buildSinkDetails(sink)
+    const schema = resolved?.schema
+      ? resolved.schema.map((c) => ({ name: c.name, type: c.type }))
+      : undefined
+    emitComment(buildCommentBlock("SINK TABLE", details), {
+      label: `Sink: ${sink.id}`,
+      section: "sinks",
+      kind: sink.kind,
+      component: sink.component,
+      details,
+      schema,
+    })
     if (pluginGen) {
       const ddl = pluginGen(sink)
       if (ddl) emit(ddl, sink)
     } else {
-      emit(generateSinkDdl(sink, sinkMeta.get(sink.id)), sink)
+      emit(generateSinkDdl(sink, resolved), sink)
     }
   }
 
-  // 4.5. CREATE VIEW (only for View nodes that define a query, not references)
+  // 4.5. CREATE VIEW
   const views = ctx.getNodesByKind("View")
   for (const view of views) {
     if (view.children.length > 0) {
+      const viewName = view.props.name as string
+      const details: Array<{ key: string; value: string }> = [
+        { key: "name", value: viewName },
+      ]
+      emitComment(buildCommentBlock("VIEW", details), {
+        label: `View: ${viewName}`,
+        section: "views",
+        kind: view.kind,
+        component: "View",
+        details,
+      })
       emit(generateViewDdl(view, nodeIndex, pluginSql), view)
     }
   }
@@ -230,6 +346,27 @@ export function generateSql(
   // 4.75. CREATE MATERIALIZED TABLE
   const matTables = ctx.getNodesByKind("MaterializedTable")
   for (const matTable of matTables) {
+    const mtName = matTable.props.name as string
+    const details: Array<{ key: string; value: string }> = [
+      { key: "name", value: mtName },
+    ]
+    if (matTable.props.catalogName)
+      details.push({
+        key: "catalog",
+        value: String(matTable.props.catalogName),
+      })
+    if (matTable.props.freshness)
+      details.push({
+        key: "freshness",
+        value: String(matTable.props.freshness),
+      })
+    emitComment(buildCommentBlock("MATERIALIZED TABLE", details), {
+      label: `MaterializedTable: ${mtName}`,
+      section: "materialized-tables",
+      kind: matTable.kind,
+      component: "MaterializedTable",
+      details,
+    })
     emit(
       generateMaterializedTableDdl(matTable, nodeIndex, pluginSql, version),
       matTable,
@@ -238,6 +375,14 @@ export function generateSql(
 
   // 5. DML: INSERT INTO / STATEMENT SET
   const dmlEntries = generateDml(currentTree, nodeIndex, pluginSql)
+  for (const entry of dmlEntries) {
+    const details = buildDmlDetails(entry, nodeIndex)
+    emitComment(buildCommentBlock("TRANSFORMATION", details), {
+      label: `Transformation: ${details.find((d) => d.key === "output")?.value ?? "unknown"}`,
+      section: "pipeline",
+      details,
+    })
+  }
   if (dmlEntries.length === 1) {
     const entry = dmlEntries[0]
     if (entry.contributors.length > 0) {
@@ -261,7 +406,11 @@ export function generateSql(
     statements.push(`${prefix}${dmlEntries.map((d) => d.sql).join("\n")}\nEND;`)
   }
 
-  const diagnostics = verifySql(statements)
+  // Filter out comment-only entries before SQL verification (comments aren't executable)
+  const executableStatements = statements.filter(
+    (_, i) => !commentIndices.has(i),
+  )
+  const diagnostics = verifySql(executableStatements)
 
   return {
     statements,
@@ -269,6 +418,277 @@ export function generateSql(
     diagnostics,
     statementOrigins,
     statementContributors,
+    commentIndices,
+    statementMeta,
+  }
+}
+
+// ── Comment block builder ────────────────────────────────────────────
+
+const RULER = `-- ${"=".repeat(68)}`
+const SEP = `-- ${"-".repeat(68)}`
+
+function buildCommentBlock(
+  type: string,
+  entries: ReadonlyArray<{ key: string; value: string }>,
+): string {
+  const lines = [RULER, `-- ${type}`, SEP]
+  for (const { key, value } of entries) {
+    lines.push(`-- ${key.padEnd(12)}: ${value}`)
+  }
+  lines.push(RULER)
+  return lines.join("\n")
+}
+
+// ── Per-node detail builders ─────────────────────────────────────────
+
+function connectorTypeFor(component: string): string {
+  switch (component) {
+    case "KafkaSource":
+    case "KafkaSink":
+      return "kafka"
+    case "JdbcSource":
+    case "JdbcSink":
+      return "jdbc"
+    case "FileSystemSink":
+      return "filesystem"
+    case "IcebergSink":
+      return "iceberg"
+    case "PaimonSink":
+      return "paimon"
+    default:
+      return component.toLowerCase().replace(/source$|sink$/i, "")
+  }
+}
+
+function buildCatalogDetails(
+  node: ConstructNode,
+): Array<{ key: string; value: string }> {
+  const props = node.props
+  const details: Array<{ key: string; value: string }> = [
+    { key: "id", value: node.id },
+    { key: "type", value: catalogTypeForComponent(node.component) },
+  ]
+  if (props.defaultDatabase)
+    details.push({ key: "database", value: String(props.defaultDatabase) })
+  if (props.warehouse)
+    details.push({ key: "warehouse", value: String(props.warehouse) })
+  if (props.uri) details.push({ key: "uri", value: String(props.uri) })
+  if (props.baseUrl)
+    details.push({ key: "base-url", value: String(props.baseUrl) })
+  if (props.hiveConfDir)
+    details.push({ key: "hive-conf", value: String(props.hiveConfDir) })
+  return details
+}
+
+function catalogTypeForComponent(component: string): string {
+  switch (component) {
+    case "PaimonCatalog":
+      return "paimon"
+    case "IcebergCatalog":
+      return "iceberg"
+    case "HiveCatalog":
+      return "hive"
+    case "JdbcCatalog":
+      return "jdbc"
+    case "GenericCatalog":
+      return "generic"
+    default:
+      return component
+  }
+}
+
+function buildSourceDetails(
+  node: ConstructNode,
+): Array<{ key: string; value: string }> {
+  const props = node.props
+  const details: Array<{ key: string; value: string }> = [
+    { key: "id", value: node.id },
+    { key: "type", value: connectorTypeFor(node.component) },
+  ]
+
+  switch (node.component) {
+    case "KafkaSource":
+      details.push({ key: "topic", value: (props.topic as string) ?? "" })
+      details.push({ key: "format", value: (props.format as string) ?? "json" })
+      if (props.bootstrapServers)
+        details.push({
+          key: "bootstrap",
+          value: String(props.bootstrapServers),
+        })
+      details.push({
+        key: "startup",
+        value: (props.startupMode as string) ?? "earliest-offset",
+      })
+      if (props.consumerGroup)
+        details.push({ key: "group-id", value: String(props.consumerGroup) })
+      break
+    case "JdbcSource":
+      details.push({ key: "table", value: (props.table as string) ?? "" })
+      details.push({ key: "url", value: (props.url as string) ?? "" })
+      break
+    default: {
+      const connector = (props.connector as string) ?? node.component
+      details[1] = { key: "type", value: connector }
+      if (props.format)
+        details.push({ key: "format", value: String(props.format) })
+      if (props.options) {
+        for (const [k, v] of Object.entries(
+          props.options as Record<string, string>,
+        )) {
+          details.push({ key: k, value: v })
+        }
+      }
+      break
+    }
+  }
+
+  return details
+}
+
+function buildSourceSchema(
+  node: ConstructNode,
+): Array<{ name: string; type: string }> | undefined {
+  const schemaDef = node.props.schema as
+    | import("@/core/schema.js").SchemaDefinition
+    | undefined
+  if (!schemaDef) return undefined
+  return Object.entries(schemaDef.fields).map(([name, type]) => ({
+    name,
+    type: String(type),
+  }))
+}
+
+function buildSinkDetails(
+  node: ConstructNode,
+): Array<{ key: string; value: string }> {
+  const props = node.props
+  const cType = connectorTypeFor(node.component)
+  const details: Array<{ key: string; value: string }> = [
+    { key: "id", value: node.id },
+    { key: "type", value: cType },
+  ]
+
+  switch (node.component) {
+    case "KafkaSink":
+      details.push({ key: "topic", value: (props.topic as string) ?? "" })
+      details.push({ key: "format", value: (props.format as string) ?? "json" })
+      if (props.bootstrapServers)
+        details.push({
+          key: "bootstrap",
+          value: String(props.bootstrapServers),
+        })
+      break
+    case "JdbcSink":
+      details.push({ key: "table", value: (props.table as string) ?? "" })
+      details.push({ key: "url", value: (props.url as string) ?? "" })
+      break
+    case "FileSystemSink":
+      details.push({ key: "path", value: (props.path as string) ?? "" })
+      if (props.format)
+        details.push({ key: "format", value: String(props.format) })
+      break
+    case "GenericSink": {
+      const connector = (props.connector as string) ?? "generic"
+      details[1] = { key: "type", value: connector }
+      if (connector === "print" || connector === "blackhole")
+        details.push({ key: "purpose", value: "debug / development sink" })
+      if (props.options) {
+        for (const [k, v] of Object.entries(
+          props.options as Record<string, string>,
+        )) {
+          details.push({ key: k, value: v })
+        }
+      }
+      break
+    }
+    default:
+      break
+  }
+
+  return details
+}
+
+function buildDmlDetails(
+  entry: DmlEntry,
+  nodeIndex: Map<string, ConstructNode>,
+): Array<{ key: string; value: string }> {
+  const details: Array<{ key: string; value: string }> = []
+
+  // Extract sink name from INSERT INTO `name`
+  const sinkMatch = entry.sql.match(/INSERT INTO `([^`]+)`/)
+  const sinkName = sinkMatch?.[1] ?? "unknown"
+
+  // Collect unique sources and transforms from contributors
+  const sourceIds: string[] = []
+  const transformNodes: ConstructNode[] = []
+  const seen = new Set<string>()
+  for (const c of entry.contributors) {
+    if (seen.has(c.origin.nodeId)) continue
+    seen.add(c.origin.nodeId)
+    if (c.origin.kind === "Source") sourceIds.push(c.origin.nodeId)
+    if (c.origin.kind === "Transform") {
+      const n = nodeIndex.get(c.origin.nodeId)
+      if (n) transformNodes.push(n)
+    }
+  }
+
+  // If no contributors, try parsing FROM clause
+  if (sourceIds.length === 0) {
+    const fromMatch = entry.sql.match(/FROM `([^`]+)`/)
+    if (fromMatch) sourceIds.push(fromMatch[1])
+  }
+
+  // Build details based on transform chain
+  if (transformNodes.length === 1) {
+    const t = transformNodes[0]
+    details.push({ key: "step", value: t.id })
+    details.push({ key: "type", value: t.component })
+    details.push({ key: "input", value: sourceIds.join(", ") || "unknown" })
+    details.push({ key: "output", value: sinkName })
+    const detail = getTransformDetail(t)
+    if (detail) details.push(detail)
+  } else if (transformNodes.length > 1) {
+    details.push({
+      key: "transforms",
+      value: transformNodes.map((t) => t.component).join(" → "),
+    })
+    details.push({ key: "input", value: sourceIds.join(", ") || "unknown" })
+    details.push({ key: "output", value: sinkName })
+  } else {
+    // No transforms — direct source to sink
+    details.push({ key: "input", value: sourceIds.join(", ") || "unknown" })
+    details.push({ key: "output", value: sinkName })
+  }
+
+  return details
+}
+
+function getTransformDetail(
+  node: ConstructNode,
+): { key: string; value: string } | null {
+  switch (node.component) {
+    case "Filter":
+      return node.props.condition
+        ? { key: "rule", value: String(node.props.condition) }
+        : null
+    case "Aggregate":
+      return node.props.groupBy
+        ? {
+            key: "group-by",
+            value: Array.isArray(node.props.groupBy)
+              ? (node.props.groupBy as string[]).join(", ")
+              : String(node.props.groupBy),
+          }
+        : null
+    case "TopN":
+      return node.props.n ? { key: "top-n", value: String(node.props.n) } : null
+    case "Deduplicate":
+      return node.props.orderBy
+        ? { key: "order-by", value: String(node.props.orderBy) }
+        : null
+    default:
+      return null
   }
 }
 

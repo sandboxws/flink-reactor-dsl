@@ -1,7 +1,24 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`Dead branch elimination pass > eliminates Route branches with statically false conditions 1`] = `
-"SET 'pipeline.name' = 'dead-branch-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : dead-branch-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'dead-branch-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : events
+-- type        : kafka
+-- topic       : events
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`events\` (
   \`order_id\` BIGINT,
@@ -18,6 +35,15 @@ CREATE TABLE \`events\` (
   'properties.bootstrap.servers' = 'kafka:9092',
   'scan.startup.mode' = 'earliest-offset'
 );
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : live_branch
+-- type        : kafka
+-- topic       : live-branch
+-- format      : json
+-- ====================================================================
 
 CREATE TABLE \`live_branch\` (
   \`order_id\` BIGINT,
@@ -32,6 +58,15 @@ CREATE TABLE \`live_branch\` (
   'format' = 'json'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : default_branch
+-- type        : kafka
+-- topic       : default-branch
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`default_branch\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
@@ -45,6 +80,20 @@ CREATE TABLE \`default_branch\` (
   'format' = 'json'
 );
 
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : events
+-- output      : live_branch
+-- ====================================================================
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : events
+-- output      : default_branch
+-- ====================================================================
+
 EXECUTE STATEMENT SET BEGIN
 INSERT INTO \`live_branch\`
 SELECT * FROM \`events\`
@@ -56,13 +105,30 @@ END;
 `;
 
 exports[`Deterministic snapshot tests > optimizer produces deterministic output for aggregate pipeline 1`] = `
-"SET 'pipeline.name' = 'deterministic-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : deterministic-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'deterministic-pipeline';
 
 SET 'table.exec.mini-batch.enabled' = 'true';
 
 SET 'table.exec.mini-batch.allow-latency' = '5 s';
 
 SET 'table.exec.mini-batch.size' = '1000';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
@@ -79,6 +145,15 @@ CREATE TABLE \`orders\` (
   'properties.bootstrap.servers' = 'kafka:9092',
   'scan.startup.mode' = 'earliest-offset'
 );
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : user_totals
+-- type        : kafka
+-- topic       : user-totals
+-- format      : json
+-- ====================================================================
 
 CREATE TABLE \`user_totals\` (
   \`user_id\` STRING,
@@ -92,13 +167,40 @@ CREATE TABLE \`user_totals\` (
   'value.format' = 'json'
 );
 
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Aggregate_1
+-- type        : Aggregate
+-- input       : orders
+-- output      : user_totals
+-- group-by    : user_id
+-- ====================================================================
+
 INSERT INTO \`user_totals\`
 SELECT \`user_id\`, SUM(\`amount\`) AS \`total_amount\`, COUNT(*) AS \`order_count\` FROM \`orders\` GROUP BY \`user_id\`;
 "
 `;
 
 exports[`Deterministic snapshot tests > optimizer produces deterministic output for join pipeline 1`] = `
-"SET 'pipeline.name' = 'deterministic-join-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : deterministic-join-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'deterministic-join-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
@@ -116,6 +218,17 @@ CREATE TABLE \`orders\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : users
+-- type        : kafka
+-- topic       : users
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
 CREATE TABLE \`users\` (
   \`user_id\` STRING,
   \`name\` STRING,
@@ -127,6 +240,15 @@ CREATE TABLE \`users\` (
   'properties.bootstrap.servers' = 'kafka:9092',
   'scan.startup.mode' = 'earliest-offset'
 );
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : enriched
+-- type        : kafka
+-- topic       : enriched
+-- format      : json
+-- ====================================================================
 
 CREATE TABLE \`enriched\` (
   \`order_id\` BIGINT,
@@ -141,13 +263,37 @@ CREATE TABLE \`enriched\` (
   'format' = 'json'
 );
 
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : orders
+-- output      : enriched
+-- ====================================================================
+
 INSERT INTO \`enriched\`
 SELECT /*+ BROADCAST(\`users\`) */ * FROM \`orders\` INNER JOIN \`users\` ON \`orders\`.\`user_id\` = \`users\`.\`user_id\`;
 "
 `;
 
 exports[`Deterministic snapshot tests > optimizer produces deterministic output for route pipeline 1`] = `
-"SET 'pipeline.name' = 'deterministic-route-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : deterministic-route-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'deterministic-route-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : events
+-- type        : kafka
+-- topic       : events
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`events\` (
   \`order_id\` BIGINT,
@@ -165,6 +311,15 @@ CREATE TABLE \`events\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : high_value
+-- type        : kafka
+-- topic       : high-value
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`high_value\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
@@ -177,6 +332,15 @@ CREATE TABLE \`high_value\` (
   'topic' = 'high-value',
   'format' = 'json'
 );
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : other
+-- type        : kafka
+-- topic       : other
+-- format      : json
+-- ====================================================================
 
 CREATE TABLE \`other\` (
   \`order_id\` BIGINT,
@@ -191,6 +355,20 @@ CREATE TABLE \`other\` (
   'format' = 'json'
 );
 
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : events
+-- output      : high_value
+-- ====================================================================
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : events
+-- output      : other
+-- ====================================================================
+
 EXECUTE STATEMENT SET BEGIN
 INSERT INTO \`high_value\`
 SELECT * FROM \`events\`
@@ -202,13 +380,30 @@ END;
 `;
 
 exports[`SET injection pass > injects mini-batch SET statements when Aggregate detected 1`] = `
-"SET 'pipeline.name' = 'agg-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : agg-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'agg-pipeline';
 
 SET 'table.exec.mini-batch.enabled' = 'true';
 
 SET 'table.exec.mini-batch.allow-latency' = '5 s';
 
 SET 'table.exec.mini-batch.size' = '1000';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
@@ -225,6 +420,15 @@ CREATE TABLE \`orders\` (
   'properties.bootstrap.servers' = 'kafka:9092',
   'scan.startup.mode' = 'earliest-offset'
 );
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : user_totals
+-- type        : kafka
+-- topic       : user-totals
+-- format      : json
+-- ====================================================================
 
 CREATE TABLE \`user_totals\` (
   \`user_id\` STRING,
@@ -238,13 +442,40 @@ CREATE TABLE \`user_totals\` (
   'value.format' = 'json'
 );
 
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Aggregate_1
+-- type        : Aggregate
+-- input       : orders
+-- output      : user_totals
+-- group-by    : user_id
+-- ====================================================================
+
 INSERT INTO \`user_totals\`
 SELECT \`user_id\`, SUM(\`amount\`) AS \`total_amount\`, COUNT(*) AS \`order_count\` FROM \`orders\` GROUP BY \`user_id\`;
 "
 `;
 
 exports[`SQL hint emission pass > emits BROADCAST hint for Join with hint: broadcast 1`] = `
-"SET 'pipeline.name' = 'broadcast-join-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : broadcast-join-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'broadcast-join-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
@@ -262,6 +493,17 @@ CREATE TABLE \`orders\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : users
+-- type        : kafka
+-- topic       : users
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
 CREATE TABLE \`users\` (
   \`user_id\` STRING,
   \`name\` STRING,
@@ -273,6 +515,15 @@ CREATE TABLE \`users\` (
   'properties.bootstrap.servers' = 'kafka:9092',
   'scan.startup.mode' = 'earliest-offset'
 );
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : enriched_orders
+-- type        : kafka
+-- topic       : enriched-orders
+-- format      : json
+-- ====================================================================
 
 CREATE TABLE \`enriched_orders\` (
   \`order_id\` BIGINT,
@@ -287,13 +538,37 @@ CREATE TABLE \`enriched_orders\` (
   'format' = 'json'
 );
 
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : orders
+-- output      : enriched_orders
+-- ====================================================================
+
 INSERT INTO \`enriched_orders\`
 SELECT /*+ BROADCAST(\`users\`) */ * FROM \`orders\` INNER JOIN \`users\` ON \`orders\`.\`user_id\` = \`users\`.\`user_id\`;
 "
 `;
 
 exports[`Source schema narrowing pass > narrows source DDL to only referenced columns 1`] = `
-"SET 'pipeline.name' = 'narrowing-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : narrowing-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'narrowing-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
@@ -310,6 +585,15 @@ CREATE TABLE \`orders\` (
   'properties.bootstrap.servers' = 'kafka:9092',
   'scan.startup.mode' = 'earliest-offset'
 );
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : slim_orders
+-- type        : kafka
+-- topic       : slim-orders
+-- format      : json
+-- ====================================================================
 
 CREATE TABLE \`slim_orders\` (
   \`user_id\` STRING,
@@ -320,19 +604,45 @@ CREATE TABLE \`slim_orders\` (
   'format' = 'json'
 );
 
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Map_1
+-- type        : Map
+-- input       : orders
+-- output      : slim_orders
+-- ====================================================================
+
 INSERT INTO \`slim_orders\`
 SELECT \`user_id\` AS \`user_id\`, \`amount\` AS \`total\` FROM \`orders\`;
 "
 `;
 
 exports[`User SET precedence > does not override user-defined SET statements 1`] = `
-"SET 'pipeline.name' = 'user-set-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : user-set-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'user-set-pipeline';
 
 SET 'table.exec.mini-batch.enabled' = 'false';
 
 SET 'table.exec.mini-batch.allow-latency' = '10 s';
 
 SET 'table.exec.mini-batch.size' = '1000';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
@@ -349,6 +659,15 @@ CREATE TABLE \`orders\` (
   'properties.bootstrap.servers' = 'kafka:9092',
   'scan.startup.mode' = 'earliest-offset'
 );
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : totals
+-- type        : kafka
+-- topic       : totals
+-- format      : json
+-- ====================================================================
 
 CREATE TABLE \`totals\` (
   \`user_id\` STRING,
@@ -360,6 +679,16 @@ CREATE TABLE \`totals\` (
   'key.format' = 'json',
   'value.format' = 'json'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Aggregate_1
+-- type        : Aggregate
+-- input       : orders
+-- output      : totals
+-- group-by    : user_id
+-- ====================================================================
 
 INSERT INTO \`totals\`
 SELECT \`user_id\`, SUM(\`amount\`) AS \`total_amount\` FROM \`orders\` GROUP BY \`user_id\`;

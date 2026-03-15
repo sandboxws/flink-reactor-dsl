@@ -1,6 +1,6 @@
 {
   "name": "flink-reactor",
-  "version": "0.1.4",
+  "version": "0.1.6",
   "description": "React-style TSX DSL that synthesizes to Flink SQL + Kubernetes FlinkDeployment CRDs",
   "type": "module",
   "main": "./dist/index.js",
