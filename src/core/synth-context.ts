@@ -1,4 +1,5 @@
 import { Effect, Either } from "effect"
+import { validateChangelogModes } from "./changelog-propagation.js"
 import { validateConnectorProperties } from "./connector-validation.js"
 import { CycleDetectedError, ValidationError } from "./errors.js"
 import type { PluginValidator } from "./plugin.js"
@@ -6,23 +7,7 @@ import {
   validateExpressionSyntax,
   validateSchemaReferences,
 } from "./schema-validation.js"
-import type { ChangelogMode, ConstructNode, NodeKind } from "./types.js"
-
-// ── Changelog compatibility ─────────────────────────────────────────
-
-/** Sinks that natively support retract/upsert streams */
-const CHANGELOG_CAPABLE_SINKS: ReadonlySet<string> = new Set([
-  "JdbcSink", // with upsertMode=true
-  "PaimonSink",
-  "IcebergSink",
-])
-
-function sinkAcceptsChangelog(node: ConstructNode): boolean {
-  if (node.component === "JdbcSink") {
-    return node.props.upsertMode === true
-  }
-  return CHANGELOG_CAPABLE_SINKS.has(node.component)
-}
+import type { ConstructNode, NodeKind } from "./types.js"
 
 // ── Graph types ──────────────────────────────────────────────────────
 
@@ -300,65 +285,6 @@ export class SynthContext {
   }
 
   /**
-   * Detect changelog mode mismatches: sinks that only support append-only
-   * streams receiving retract or upsert input.
-   *
-   * Walks backward from each sink to find the changelog mode propagated
-   * through the incoming path. The first node with a `changelogMode` prop
-   * determines the mode for that path.
-   */
-  detectChangelogMismatch(): ValidationDiagnostic[] {
-    const diagnostics: ValidationDiagnostic[] = []
-
-    for (const node of this.nodes.values()) {
-      if (node.kind !== "Sink") continue
-      if (sinkAcceptsChangelog(node)) continue
-
-      // Walk incoming edges to find changelog mode
-      const incoming = this.reverseAdj.get(node.id)
-      if (!incoming) continue
-
-      for (const parentId of incoming) {
-        const mode = this.resolveChangelogMode(parentId)
-        if (mode && mode !== "append-only") {
-          diagnostics.push({
-            severity: "error",
-            message: `Sink '${node.component}' (${node.id}) does not support '${mode}' streams. Use an upsert-capable sink or add a changelog normalization step.`,
-            nodeId: node.id,
-            component: node.component,
-          })
-          break
-        }
-      }
-    }
-
-    return diagnostics
-  }
-
-  /**
-   * Walk backward from a node to find the effective ChangelogMode.
-   * Returns the first changelogMode found on the path, or undefined.
-   */
-  private resolveChangelogMode(nodeId: string): ChangelogMode | undefined {
-    const node = this.nodes.get(nodeId)
-    if (!node) return undefined
-
-    const mode = node.props.changelogMode as ChangelogMode | undefined
-    if (mode) return mode
-
-    // Recurse through incoming edges
-    const incoming = this.reverseAdj.get(nodeId)
-    if (!incoming) return undefined
-
-    for (const parentId of incoming) {
-      const parentMode = this.resolveChangelogMode(parentId)
-      if (parentMode) return parentMode
-    }
-
-    return undefined
-  }
-
-  /**
    * Detect materialized table structural issues: missing catalog or
    * missing upstream query (children).
    */
@@ -436,7 +362,7 @@ export class SynthContext {
 
     // Changelog validators (category: "changelog") — run when no filter or "changelog" included
     if (!cats || cats.includes("changelog")) {
-      builtIn.push(...this.detectChangelogMismatch())
+      builtIn.push(...validateChangelogModes(this))
     }
 
     // Schema validators (category: "schema") — run when no filter or "schema" included

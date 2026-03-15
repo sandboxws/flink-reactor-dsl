@@ -260,8 +260,8 @@ function validateTreeAware(
   // Cycles (DFS-based — works regardless of edge direction)
   diagnostics.push(...ctx.detectCycles())
 
-  // Changelog mode mismatches
-  diagnostics.push(...ctx.detectChangelogMismatch())
+  // Changelog mode mismatches — now handled by SynthContext.validate()
+  // via validateChangelogModes() (full propagation, not just sink checks)
 
   return diagnostics
 }
