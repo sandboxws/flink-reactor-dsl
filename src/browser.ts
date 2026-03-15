@@ -5,6 +5,7 @@
 
 // Codegen: YAML serializer (pure, no I/O — safe for browser)
 export { toYaml } from "./codegen/crd-generator.js"
+export { verifySql } from "./codegen/sql-verifier.js"
 // Components: catalog source
 export type { CatalogSourceProps } from "./components/catalog-source.js"
 export { CatalogSource } from "./components/catalog-source.js"
@@ -183,6 +184,7 @@ export type {
 } from "./core/app.js"
 // Core: app
 export { synthesizeApp } from "./core/app.js"
+export { validateChangelogModes } from "./core/changelog-propagation.js"
 export type {
   ClusterConfig,
   ConnectorConfig,
@@ -199,6 +201,7 @@ export type {
 } from "./core/config.js"
 // Core: config
 export { defineConfig } from "./core/config.js"
+export { validateConnectorProperties } from "./core/connector-validation.js"
 // NOTE: resolveConfig and toInfraConfigFromResolved are excluded (Node-dependent)
 // NOTE: discoverEnvironments is excluded (Node-dependent via node:fs)
 // Core: Effect foundation — bridge utilities
@@ -264,6 +267,11 @@ export type {
 } from "./core/schema.js"
 // Core: schema
 export { Field, isValidFlinkType, Schema } from "./core/schema.js"
+// Core: validation — individual validators for sandbox integration
+export {
+  validateExpressionSyntax,
+  validateSchemaReferences,
+} from "./core/schema-validation.js"
 export type {
   CliOutputService,
   ConfigProviderService,
