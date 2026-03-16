@@ -9,7 +9,9 @@ const OrderSchema = Schema({
   fields: {
     order_id: Field.STRING(),
     customer_id: Field.STRING(),
-    line_items: Field.ARRAY(Field.STRING()),
+    line_items: Field.ARRAY(
+      Field.ROW("product_id STRING, quantity INT, price DECIMAL(10, 2)"),
+    ),
     order_time: Field.TIMESTAMP(3),
   },
 })

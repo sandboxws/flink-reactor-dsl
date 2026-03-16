@@ -1,4 +1,4 @@
-# BUG-005: FlatMap UNNEST — column alias count doesn't match ARRAY<STRING> cardinality
+# BUG-005: FlatMap UNNEST — column alias count doesn't match ARRAY<STRING> cardinality [FIXED]
 
 ## Affected Examples
 - `30-flatmap-unnest`

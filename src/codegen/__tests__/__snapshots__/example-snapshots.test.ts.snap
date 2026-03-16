@@ -2739,7 +2739,7 @@ SET 'parallelism.default' = '4';
 CREATE TABLE \`orders\` (
   \`order_id\` STRING,
   \`customer_id\` STRING,
-  \`line_items\` ARRAY<STRING>,
+  \`line_items\` ARRAY<ROW<product_id STRING, quantity INT, price DECIMAL(10, 2)>>,
   \`order_time\` TIMESTAMP(3)
 ) WITH (
   'connector' = 'kafka',
@@ -2761,7 +2761,7 @@ CREATE TABLE \`orders\` (
 CREATE TABLE \`order_line_items\` (
   \`order_id\` STRING,
   \`customer_id\` STRING,
-  \`line_items\` ARRAY<STRING>,
+  \`line_items\` ARRAY<ROW<product_id STRING, quantity INT, price DECIMAL(10, 2)>>,
   \`order_time\` TIMESTAMP(3),
   \`product_id\` STRING,
   \`quantity\` INT,
