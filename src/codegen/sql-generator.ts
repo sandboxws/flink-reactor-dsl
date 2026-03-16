@@ -2705,14 +2705,23 @@ function buildWindowQuery(
         pluginSql,
       )
     : getUpstream(node, nodeIndex, pluginSql)
-  const sourceRef = upstream.isSimple
-    ? upstream.sourceRef
-    : `(\n${upstream.sql}\n)`
+  // Flink TVF syntax requires TABLE <identifier>, not TABLE (<subquery>).
+  // When the upstream is a subquery, lift it into a CTE so the TVF gets
+  // a named table reference.
+  let ctePrefix = ""
+  let sourceRef: string
+  if (upstream.isSimple) {
+    sourceRef = upstream.sourceRef
+  } else {
+    const cteName = `_windowed_input`
+    ctePrefix = `WITH ${q(cteName)} AS (\n${upstream.sql}\n)\n`
+    sourceRef = q(cteName)
+  }
 
   const tvf = buildWindowTvf(node, sourceRef, windowCol)
 
   if (!aggChild) {
-    return `SELECT * FROM TABLE(\n  ${tvf}\n)`
+    return `${ctePrefix}SELECT * FROM TABLE(\n  ${tvf}\n)`
   }
 
   const groupBy = aggChild.props.groupBy as readonly string[]
@@ -2731,7 +2740,7 @@ function buildWindowQuery(
     "window_end",
   ].join(", ")
 
-  return `SELECT ${projections} FROM TABLE(\n  ${tvf}\n) GROUP BY ${groupCols}`
+  return `${ctePrefix}SELECT ${projections} FROM TABLE(\n  ${tvf}\n) GROUP BY ${groupCols}`
 }
 
 function buildWindowTvf(

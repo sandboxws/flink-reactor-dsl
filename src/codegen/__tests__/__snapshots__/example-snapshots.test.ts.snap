@@ -743,12 +743,13 @@ CREATE TABLE \`hourly_user_events\` (
 -- ====================================================================
 
 INSERT INTO \`hourly_user_events\`
-SELECT \`user_id\`, \`event_type\`, COUNT(*) AS \`event_count\`, window_start, window_end FROM TABLE(
-  TUMBLE(TABLE (
+WITH \`_windowed_input\` AS (
 SELECT *, ROW_NUMBER() OVER (PARTITION BY \`event_id\` ORDER BY \`event_time\` ASC) AS rownum
 FROM \`raw_events\`
 QUALIFY rownum = 1
-), DESCRIPTOR(\`event_time\`), INTERVAL '1' HOUR)
+)
+SELECT \`user_id\`, \`event_type\`, COUNT(*) AS \`event_count\`, window_start, window_end FROM TABLE(
+  TUMBLE(TABLE \`_windowed_input\`, DESCRIPTOR(\`event_time\`), INTERVAL '1' HOUR)
 ) GROUP BY \`user_id\`, \`event_type\`, window_start, window_end;
 "
 `;
@@ -1358,14 +1359,15 @@ CREATE TABLE \`platform_hourly_metrics\` (
 -- ====================================================================
 
 INSERT INTO \`platform_hourly_metrics\`
-SELECT \`platform\`, \`event_type\`, COUNT(*) AS \`event_count\`, COUNT(DISTINCT user_id) AS \`unique_users\`, window_start, window_end FROM TABLE(
-  TUMBLE(TABLE (
+WITH \`_windowed_input\` AS (
 SELECT * FROM \`mobile_events\`
 UNION ALL
 SELECT * FROM \`web_events\`
 UNION ALL
 SELECT * FROM \`iot_events\`
-), DESCRIPTOR(\`event_time\`), INTERVAL '1' HOUR)
+)
+SELECT \`platform\`, \`event_type\`, COUNT(*) AS \`event_count\`, COUNT(DISTINCT user_id) AS \`unique_users\`, window_start, window_end FROM TABLE(
+  TUMBLE(TABLE \`_windowed_input\`, DESCRIPTOR(\`event_time\`), INTERVAL '1' HOUR)
 ) GROUP BY \`platform\`, \`event_type\`, window_start, window_end;
 "
 `;
@@ -1447,10 +1449,11 @@ CREATE TABLE \`dashboard_top_categories_per_region\` (
 INSERT INTO \`dashboard_top_categories_per_region\`
 SELECT *, ROW_NUMBER() OVER (PARTITION BY \`window_start\`, \`region\` ORDER BY \`revenue\` DESC) AS rownum
 FROM (
-SELECT \`region\`, \`category\`, SUM(quantity * unit_price) AS \`revenue\`, SUM(quantity) AS \`units_sold\`, COUNT(*) AS \`transaction_count\`, window_start, window_end FROM TABLE(
-  TUMBLE(TABLE (
+WITH \`_windowed_input\` AS (
 SELECT * FROM \`LookupJoin_1\` LEFT JOIN \`dim_stores\` FOR SYSTEM_TIME AS OF \`LookupJoin_1\`.proc_time ON store_id
-), DESCRIPTOR(\`transaction_time\`), INTERVAL '1' MINUTE)
+)
+SELECT \`region\`, \`category\`, SUM(quantity * unit_price) AS \`revenue\`, SUM(quantity) AS \`units_sold\`, COUNT(*) AS \`transaction_count\`, window_start, window_end FROM TABLE(
+  TUMBLE(TABLE \`_windowed_input\`, DESCRIPTOR(\`transaction_time\`), INTERVAL '1' MINUTE)
 ) GROUP BY \`region\`, \`category\`, window_start, window_end
 )
 QUALIFY rownum <= 5;
@@ -1604,12 +1607,13 @@ SELECT * FROM unknown
 )
 WHERE order_status = 'FAILED';
 INSERT INTO \`regional_metrics_per_minute\`
-SELECT * FROM TABLE(
-  TUMBLE(TABLE (
+WITH \`_windowed_input\` AS (
 SELECT order_id AS \`order_id\`, customer_id AS \`customer_id\`, product_id AS \`product_id\`, quantity * unit_price AS \`total_amount\`, order_time AS \`order_time\`, region AS \`region\`, order_status AS \`order_status\` FROM (
 SELECT * FROM unknown
 )
-), DESCRIPTOR(\`order_time\`), INTERVAL '1' MINUTE)
+)
+SELECT * FROM TABLE(
+  TUMBLE(TABLE \`_windowed_input\`, DESCRIPTOR(\`order_time\`), INTERVAL '1' MINUTE)
 );
 END;
 "
@@ -3349,12 +3353,13 @@ CREATE TABLE \`hourly_user_events\` (
 -- ====================================================================
 
 INSERT INTO \`hourly_user_events\`
-SELECT \`user_id\`, \`event_type\`, COUNT(*) AS \`event_count\`, window_start, window_end FROM TABLE(
-  TUMBLE(TABLE (
+WITH \`_windowed_input\` AS (
 SELECT *, ROW_NUMBER() OVER (PARTITION BY \`event_id\` ORDER BY \`event_time\` ASC) AS rownum
 FROM \`raw_events\`
 QUALIFY rownum = 1
-), DESCRIPTOR(\`event_time\`), INTERVAL '1' HOUR)
+)
+SELECT \`user_id\`, \`event_type\`, COUNT(*) AS \`event_count\`, window_start, window_end FROM TABLE(
+  TUMBLE(TABLE \`_windowed_input\`, DESCRIPTOR(\`event_time\`), INTERVAL '1' HOUR)
 ) GROUP BY \`user_id\`, \`event_type\`, window_start, window_end;
 "
 `;

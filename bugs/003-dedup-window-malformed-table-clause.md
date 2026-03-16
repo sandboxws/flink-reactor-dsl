@@ -1,4 +1,4 @@
-# BUG-003: Deduplicate inside Window generates malformed TABLE() clause
+# BUG-003: Deduplicate inside Window generates malformed TABLE() clause [FIXED]
 
 ## Affected Examples
 - `11-dedup-window` — Deduplicate → TumbleWindow → Aggregate
