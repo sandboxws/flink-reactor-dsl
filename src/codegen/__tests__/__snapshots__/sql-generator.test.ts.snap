@@ -561,7 +561,8 @@ CREATE TABLE \`dbserver1_inventory_orders\` (
   'connector' = 'kafka',
   'topic' = 'dbserver1.inventory.orders',
   'format' = 'debezium-json',
-  'properties.bootstrap.servers' = 'kafka:9092'
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
 );
 
 -- ====================================================================

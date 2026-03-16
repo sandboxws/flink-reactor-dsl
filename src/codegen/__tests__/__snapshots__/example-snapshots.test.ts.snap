@@ -1989,7 +1989,7 @@ CREATE TABLE \`raw\` (
   \`user_agent\` STRING,
   \`ip_address\` STRING,
   \`dt\` DATE,
-  \`hr\` INT
+  \`hr\` BIGINT
 ) PARTITIONED BY (\`dt\`, \`hr\`) WITH (
   'connector' = 'filesystem',
   'path' = '/tmp/data-lake/clickstream/raw/',
@@ -2319,7 +2319,8 @@ CREATE TABLE \`mysql_inventory_products\` (
   'connector' = 'kafka',
   'topic' = 'mysql.inventory.products',
   'format' = 'debezium-json',
-  'properties.bootstrap.servers' = 'kafka:9092'
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
 );
 
 -- ====================================================================

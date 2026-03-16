@@ -1,4 +1,4 @@
-# BUG-014: Route branch FileSystemSink partition columns cause type mismatch
+# BUG-014: Route branch FileSystemSink partition columns cause type mismatch [FIXED]
 
 ## Affected Examples
 - `24-lambda-architecture` — FileSystemSink with `partitionBy={["DATE(event_time)", "HOUR(event_time)"]}`

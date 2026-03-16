@@ -1033,7 +1033,9 @@ function generateSourceWithClause(node: ConstructNode): string {
         withProps["properties.bootstrap.servers"] =
           props.bootstrapServers as string
       }
-      if (!hasPk) {
+      // upsert-kafka doesn't support scan.startup.mode
+      const isUpsertKafka = hasPk && !isChangelogFormat
+      if (!isUpsertKafka) {
         withProps["scan.startup.mode"] =
           (props.startupMode as string) ?? "earliest-offset"
       }
@@ -1199,25 +1201,25 @@ function resolvePartitionExpression(
     case "HOUR":
       return {
         name: "hr",
-        type: "INT",
+        type: "BIGINT",
         expr: `HOUR(CAST(${q(col)} AS TIMESTAMP))`,
       }
     case "YEAR":
       return {
         name: "yr",
-        type: "INT",
+        type: "BIGINT",
         expr: `YEAR(CAST(${q(col)} AS TIMESTAMP))`,
       }
     case "MONTH":
       return {
         name: "mo",
-        type: "INT",
+        type: "BIGINT",
         expr: `MONTH(CAST(${q(col)} AS TIMESTAMP))`,
       }
     case "DAY":
       return {
         name: "dy",
-        type: "INT",
+        type: "BIGINT",
         expr: `DAY(CAST(${q(col)} AS TIMESTAMP))`,
       }
     default: {
