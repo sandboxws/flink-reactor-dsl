@@ -1101,16 +1101,40 @@ function generateSinkDdl(
       )
     }
   } else if (node.component === "FileSystemSink" && props.partitionBy) {
-    const partCols = (props.partitionBy as readonly string[]).join(", ")
-    if (columnDefs) {
+    const rawPartCols = props.partitionBy as readonly string[]
+    // Flink PARTITIONED BY only accepts physical column references.
+    // When partitionBy contains function calls (e.g. DATE(col)), generate
+    // physical partition columns and reference those names instead.
+    const physicalPartCols: string[] = []
+    const partColRefs: string[] = []
+    for (const expr of rawPartCols) {
+      const funcMatch = expr.match(/^(\w+)\((\w+)\)$/i)
+      if (funcMatch) {
+        const [, func, col] = funcMatch
+        const resolved = resolvePartitionExpression(func, col)
+        physicalPartCols.push(`  ${q(resolved.name)} ${resolved.type}`)
+        partColRefs.push(q(resolved.name))
+      } else {
+        partColRefs.push(q(expr))
+      }
+    }
+    const partClause = partColRefs.join(", ")
+    const allColumnDefs = columnDefs
+      ? physicalPartCols.length > 0
+        ? `${columnDefs},\n${physicalPartCols.join(",\n")}`
+        : columnDefs
+      : physicalPartCols.length > 0
+        ? physicalPartCols.join(",\n")
+        : null
+    if (allColumnDefs) {
       parts.push(
         `CREATE TABLE ${q(tableName)} (`,
-        columnDefs,
-        `) PARTITIONED BY (${partCols}) WITH (\n${withClause}\n);`,
+        allColumnDefs,
+        `) PARTITIONED BY (${partClause}) WITH (\n${withClause}\n);`,
       )
     } else {
       parts.push(
-        `CREATE TABLE ${q(tableName)} PARTITIONED BY (${partCols}) WITH (\n${withClause}\n);`,
+        `CREATE TABLE ${q(tableName)} PARTITIONED BY (${partClause}) WITH (\n${withClause}\n);`,
       )
     }
   } else if (needsUpsertPk && columnDefs) {
@@ -1132,6 +1156,58 @@ function generateSinkDdl(
   }
 
   return parts.join("\n")
+}
+
+/**
+ * Map a partition function expression to a physical column and SQL expression.
+ * Flink PARTITIONED BY requires physical columns, not computed columns.
+ * E.g. DATE(event_time) → { name: "dt", type: "DATE", expr: "CAST(`event_time` AS DATE)" }
+ */
+function resolvePartitionExpression(
+  func: string,
+  col: string,
+): { name: string; type: string; expr: string } {
+  const upperFunc = func.toUpperCase()
+  switch (upperFunc) {
+    case "DATE":
+      return {
+        name: "dt",
+        type: "DATE",
+        expr: `CAST(${q(col)} AS DATE)`,
+      }
+    case "HOUR":
+      return {
+        name: "hr",
+        type: "INT",
+        expr: `HOUR(CAST(${q(col)} AS TIMESTAMP))`,
+      }
+    case "YEAR":
+      return {
+        name: "yr",
+        type: "INT",
+        expr: `YEAR(CAST(${q(col)} AS TIMESTAMP))`,
+      }
+    case "MONTH":
+      return {
+        name: "mo",
+        type: "INT",
+        expr: `MONTH(CAST(${q(col)} AS TIMESTAMP))`,
+      }
+    case "DAY":
+      return {
+        name: "dy",
+        type: "INT",
+        expr: `DAY(CAST(${q(col)} AS TIMESTAMP))`,
+      }
+    default: {
+      const name = `_p_${func.toLowerCase()}`
+      return {
+        name,
+        type: "STRING",
+        expr: `${upperFunc}(${q(col)})`,
+      }
+    }
+  }
 }
 
 function generateSinkWithClause(
@@ -1609,6 +1685,24 @@ function collectSinkDml(
     }
     endFragmentCollection()
 
+    // FileSystemSink with function-based partitionBy: wrap the query
+    // to add computed partition columns (e.g. CAST(event_time AS DATE) AS dt)
+    if (node.component === "FileSystemSink" && node.props.partitionBy) {
+      const rawPartCols = node.props.partitionBy as readonly string[]
+      const partProjections: string[] = []
+      for (const expr of rawPartCols) {
+        const funcMatch = expr.match(/^(\w+)\((\w+)\)$/i)
+        if (funcMatch) {
+          const [, func, col] = funcMatch
+          const resolved = resolvePartitionExpression(func, col)
+          partProjections.push(`${resolved.expr} AS ${q(resolved.name)}`)
+        }
+      }
+      if (partProjections.length > 0) {
+        upstream = `SELECT *, ${partProjections.join(", ")} FROM (\n${upstream}\n)`
+      }
+    }
+
     const insertPrefix = `INSERT INTO ${sinkRef}\n`
     const fullSql = `${insertPrefix}${upstream};`
 
@@ -1877,8 +1971,28 @@ function collectRouteDml(
 
     for (const sink of sinks) {
       const sinkRef = resolveSinkRef(sink)
+      let sinkQuery = query
+
+      // FileSystemSink with function-based partitionBy: wrap the query
+      // to add computed partition columns
+      if (sink.component === "FileSystemSink" && sink.props.partitionBy) {
+        const rawPartCols = sink.props.partitionBy as readonly string[]
+        const partProjections: string[] = []
+        for (const expr of rawPartCols) {
+          const funcMatch = expr.match(/^(\w+)\((\w+)\)$/i)
+          if (funcMatch) {
+            const [, func, col] = funcMatch
+            const resolved = resolvePartitionExpression(func, col)
+            partProjections.push(`${resolved.expr} AS ${q(resolved.name)}`)
+          }
+        }
+        if (partProjections.length > 0) {
+          sinkQuery = `SELECT *, ${partProjections.join(", ")} FROM (\n${sinkQuery}\n)`
+        }
+      }
+
       const insertPrefix = `INSERT INTO ${sinkRef}\n`
-      const fullSql = `${insertPrefix}${query};`
+      const fullSql = `${insertPrefix}${sinkQuery};`
 
       const contributors: SqlFragment[] = fragments.map((f) => ({
         ...f,

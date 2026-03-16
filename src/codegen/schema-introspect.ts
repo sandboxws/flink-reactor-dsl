@@ -480,7 +480,11 @@ export function findRouteUpstreamNode(
     const routeIndex = parent.children.indexOf(routeNode)
     for (let i = routeIndex - 1; i >= 0; i--) {
       const sibling = parent.children[i]
-      if (sibling.kind === "Source" || sibling.kind === "Transform") {
+      if (
+        sibling.kind === "Source" ||
+        sibling.kind === "Transform" ||
+        sibling.kind === "Join"
+      ) {
         return sibling
       }
     }

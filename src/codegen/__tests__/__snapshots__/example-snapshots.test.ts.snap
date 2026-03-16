@@ -1673,8 +1673,9 @@ CREATE TABLE \`user_events_2\` (
   \`event_type\` STRING,
   \`event_data\` STRING,
   \`event_time\` TIMESTAMP(3),
-  \`processed_time\` TIMESTAMP(3)
-) PARTITIONED BY (DATE(event_time)) WITH (
+  \`processed_time\` TIMESTAMP(3),
+  \`dt\` DATE
+) PARTITIONED BY (\`dt\`) WITH (
   'connector' = 'filesystem',
   'path' = 's3://data-lake/raw/user_events',
   'format' = 'parquet'
@@ -1752,7 +1753,9 @@ CREATE TABLE \`premium_user_conversions\` (
 
 EXECUTE STATEMENT SET BEGIN
 INSERT INTO \`user_events_2\`
-SELECT * FROM \`user_events\`;
+SELECT *, CAST(\`event_time\` AS DATE) AS \`dt\` FROM (
+SELECT * FROM \`user_events\`
+);
 INSERT INTO \`enriched_user_events\`
 SELECT * FROM \`user_events\` LEFT JOIN \`user_profiles\` FOR SYSTEM_TIME AS OF \`user_events\`.proc_time ON user_id;
 INSERT INTO \`premium_user_conversions\`
@@ -1832,7 +1835,14 @@ CREATE TABLE \`products\` (
 -- format      : parquet
 -- ====================================================================
 
-CREATE TABLE \`daily_category_sales\` PARTITIONED BY (sale_date) WITH (
+CREATE TABLE \`daily_category_sales\` (
+  \`category\` STRING,
+  \`subcategory\` STRING,
+  \`sale_date\` DATE,
+  \`total_revenue\` DECIMAL(10, 2),
+  \`total_units\` BIGINT,
+  \`unique_customers\` BIGINT
+) PARTITIONED BY (\`sale_date\`) WITH (
   'connector' = 'filesystem',
   'path' = 's3://data-warehouse/aggregates/daily_category_sales/',
   'format' = 'parquet'
@@ -1847,7 +1857,13 @@ CREATE TABLE \`daily_category_sales\` PARTITIONED BY (sale_date) WITH (
 -- url         : jdbc:postgresql://db:5432/analytics
 -- ====================================================================
 
-CREATE TABLE \`daily_brand_performance\` WITH (
+CREATE TABLE \`daily_brand_performance\` (
+  \`brand\` STRING,
+  \`sale_date\` DATE,
+  \`brand_revenue\` DECIMAL(10, 2),
+  \`transaction_count\` BIGINT,
+  PRIMARY KEY (\`brand\`, \`sale_date\`) NOT ENFORCED
+) WITH (
   'connector' = 'jdbc',
   'url' = 'jdbc:postgresql://db:5432/analytics',
   'table-name' = 'daily_brand_performance'
@@ -1944,8 +1960,10 @@ CREATE TABLE \`raw\` (
   \`event_type\` STRING,
   \`event_time\` TIMESTAMP(3),
   \`user_agent\` STRING,
-  \`ip_address\` STRING
-) PARTITIONED BY (DATE(event_time), HOUR(event_time)) WITH (
+  \`ip_address\` STRING,
+  \`dt\` DATE,
+  \`hr\` INT
+) PARTITIONED BY (\`dt\`, \`hr\`) WITH (
   'connector' = 'filesystem',
   'path' = 's3://data-lake/clickstream/raw/',
   'format' = 'parquet'
@@ -2052,7 +2070,9 @@ CREATE TABLE \`error_events_alerts\` (
 
 EXECUTE STATEMENT SET BEGIN
 INSERT INTO \`raw\`
-SELECT * FROM \`clickstream\`;
+SELECT *, CAST(\`event_time\` AS DATE) AS \`dt\`, HOUR(CAST(\`event_time\` AS TIMESTAMP)) AS \`hr\` FROM (
+SELECT * FROM \`clickstream\`
+);
 INSERT INTO \`realtime_page_metrics\`
 SELECT * FROM TABLE(
   TUMBLE(TABLE \`clickstream\`, DESCRIPTOR(\`event_time\`), INTERVAL '1' MINUTE)
@@ -2134,7 +2154,13 @@ CREATE TABLE \`filesystem_2\` (
 -- format      : parquet
 -- ====================================================================
 
-CREATE TABLE \`category_summary\` WITH (
+CREATE TABLE \`category_summary\` (
+  \`merchant_category\` STRING,
+  \`transaction_date\` DATE,
+  \`total_volume\` DECIMAL(10, 2),
+  \`txn_count\` BIGINT,
+  \`fraud_count\` STRING
+) WITH (
   'connector' = 'filesystem',
   'path' = 's3://reports/monthly/category_summary/',
   'format' = 'parquet'
@@ -2149,7 +2175,14 @@ CREATE TABLE \`category_summary\` WITH (
 -- url         : jdbc:postgresql://db:5432/reporting
 -- ====================================================================
 
-CREATE TABLE \`monthly_country_report\` WITH (
+CREATE TABLE \`monthly_country_report\` (
+  \`merchant_country\` STRING,
+  \`transaction_type\` STRING,
+  \`country_volume\` DECIMAL(10, 2),
+  \`avg_txn_amount\` DECIMAL(10, 2),
+  \`unique_accounts\` BIGINT,
+  PRIMARY KEY (\`merchant_country\`, \`transaction_type\`) NOT ENFORCED
+) WITH (
   'connector' = 'jdbc',
   'url' = 'jdbc:postgresql://db:5432/reporting',
   'table-name' = 'monthly_country_report'
@@ -2164,7 +2197,16 @@ CREATE TABLE \`monthly_country_report\` WITH (
 -- format      : csv
 -- ====================================================================
 
-CREATE TABLE \`january_2024\` WITH (
+CREATE TABLE \`january_2024\` (
+  \`transaction_id\` STRING,
+  \`account_id\` STRING,
+  \`merchant_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`currency\` STRING,
+  \`transaction_type\` STRING,
+  \`transaction_date\` DATE,
+  \`is_fraud\` BOOLEAN
+) WITH (
   'connector' = 'filesystem',
   'path' = 's3://reports/fraud/january_2024/',
   'format' = 'csv'
@@ -2626,8 +2668,9 @@ CREATE TABLE \`raw\` (
   \`sensor_type\` STRING,
   \`reading_value\` DOUBLE,
   \`reading_time\` TIMESTAMP(3),
-  \`location_id\` STRING
-) PARTITIONED BY (DATE(reading_time)) WITH (
+  \`location_id\` STRING,
+  \`dt\` DATE
+) PARTITIONED BY (\`dt\`) WITH (
   'connector' = 'filesystem',
   'path' = 's3://iot-archive/raw/',
   'format' = 'parquet'
@@ -2663,7 +2706,9 @@ SELECT * FROM TABLE(
   TUMBLE(TABLE \`iot_sensor_data\`, DESCRIPTOR(\`reading_time\`), INTERVAL '5' MINUTE)
 );
 INSERT INTO \`raw\`
-SELECT * FROM \`iot_sensor_data\`;
+SELECT *, CAST(\`reading_time\` AS DATE) AS \`dt\` FROM (
+SELECT * FROM \`iot_sensor_data\`
+);
 END;
 "
 `;

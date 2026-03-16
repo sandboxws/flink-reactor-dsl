@@ -1,4 +1,4 @@
-# BUG-004: Filesystem sink PARTITIONED BY — missing columns and invalid function syntax
+# BUG-004: Filesystem sink PARTITIONED BY — missing columns and invalid function syntax [FIXED]
 
 ## Affected Examples
 - `23-batch-etl` — `PARTITIONED BY (sale_date)` but `sale_date` not in column list
