@@ -1453,7 +1453,7 @@ CREATE TABLE \`sales_transactions\` (
 CREATE TABLE \`dashboard_top_categories_per_region\` (
   \`region\` STRING,
   \`category\` STRING,
-  \`revenue\` DECIMAL(10, 2),
+  \`revenue\` BIGINT,
   \`units_sold\` BIGINT,
   \`transaction_count\` BIGINT,
   \`window_start\` TIMESTAMP(3),
@@ -2186,7 +2186,7 @@ CREATE TABLE \`category_summary\` (
   \`transaction_date\` DATE,
   \`total_volume\` DECIMAL(10, 2),
   \`txn_count\` BIGINT,
-  \`fraud_count\` STRING
+  \`fraud_count\` BIGINT
 ) WITH (
   'connector' = 'filesystem',
   'path' = '/tmp/reports/monthly/category_summary/',
@@ -2531,7 +2531,7 @@ CREATE TABLE \`item_popularity_features\` (
   \`item_id\` STRING,
   \`view_count\` BIGINT,
   \`unique_viewers\` BIGINT,
-  \`purchase_count\` BOOLEAN,
+  \`purchase_count\` BIGINT,
   \`conversion_rate\` BIGINT
 ) WITH (
   'connector' = 'filesystem',

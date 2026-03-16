@@ -1,4 +1,4 @@
-# BUG-013: SUM(CASE ...) expression inferred as STRING instead of BIGINT
+# BUG-013: SUM(CASE ...) expression inferred as STRING instead of BIGINT [FIXED]
 
 ## Affected Examples
 - `25-batch-reporting` — `fraud_count: "SUM(CASE WHEN is_fraud THEN 1 ELSE 0 END)"`

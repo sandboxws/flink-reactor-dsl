@@ -46,6 +46,10 @@ export function inferExpressionType(
       return "BIGINT"
     return fieldType
   }
+  // SUM with complex expression (e.g. SUM(CASE WHEN ...)) — always numeric
+  if (/^SUM\s*\(/i.test(trimmed)) {
+    return "BIGINT"
+  }
 
   // AVG(col) — always DOUBLE for integer types, keep DECIMAL
   const avgMatch = trimmed.match(/^AVG\s*\(\s*`?(\w+)`?\s*\)/i)
