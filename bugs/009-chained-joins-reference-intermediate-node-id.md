@@ -1,4 +1,4 @@
-# BUG-009: Chained joins reference intermediate node ID as table name
+# BUG-009: Chained joins reference intermediate node ID as table name [FIXED]
 
 ## Affected Examples
 - `08-multi-stream-join`

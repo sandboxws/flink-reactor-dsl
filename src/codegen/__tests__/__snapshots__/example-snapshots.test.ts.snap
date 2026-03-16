@@ -661,14 +661,17 @@ CREATE TABLE \`user_funnel_metrics\` (
 -- --------------------------------------------------------------------
 -- step        : Aggregate_5
 -- type        : Aggregate
--- input       : IntervalJoin_3
+-- input       : page_views
 -- output      : user_funnel_metrics
 -- group-by    : user_id
 -- ====================================================================
 
 INSERT INTO \`user_funnel_metrics\`
 SELECT \`user_id\`, COUNT(*) AS \`total_views\`, COUNT(click_id) AS \`total_clicks\`, COUNT(conversion_id) AS \`total_conversions\`, SUM(revenue) AS \`total_revenue\` FROM (
-SELECT * FROM \`IntervalJoin_3\` LEFT JOIN \`conversions\` ON session_id = session_id AND \`conversions\`.\`conversion_time\` BETWEEN \`IntervalJoin_3\`.view_time AND \`IntervalJoin_3\`.view_time + INTERVAL '1' HOUR
+WITH \`IntervalJoin_3\` AS (
+SELECT * FROM \`page_views\` LEFT JOIN \`clicks\` ON \`page_views\`.session_id = \`clicks\`.session_id AND \`clicks\`.\`click_time\` BETWEEN \`page_views\`.view_time AND \`page_views\`.view_time + INTERVAL '30' MINUTE
+)
+SELECT * FROM \`IntervalJoin_3\` LEFT JOIN \`conversions\` ON \`IntervalJoin_3\`.session_id = \`conversions\`.session_id AND \`conversions\`.\`conversion_time\` BETWEEN \`IntervalJoin_3\`.view_time AND \`IntervalJoin_3\`.view_time + INTERVAL '1' HOUR
 ) GROUP BY \`user_id\`;
 "
 `;
@@ -1466,7 +1469,7 @@ CREATE TABLE \`dashboard_top_categories_per_region\` (
 -- --------------------------------------------------------------------
 -- step        : TopN_5
 -- type        : TopN
--- input       : LookupJoin_1
+-- input       : sales_transactions
 -- output      : dashboard_top_categories_per_region
 -- top-n       : 5
 -- ====================================================================
@@ -1475,6 +1478,9 @@ INSERT INTO \`dashboard_top_categories_per_region\`
 SELECT *, ROW_NUMBER() OVER (PARTITION BY \`window_start\`, \`region\` ORDER BY \`revenue\` DESC) AS rownum
 FROM (
 WITH \`_windowed_input\` AS (
+WITH \`LookupJoin_1\` AS (
+SELECT * FROM \`sales_transactions\` LEFT JOIN \`dim_products\` FOR SYSTEM_TIME AS OF \`sales_transactions\`.proc_time ON product_id
+)
 SELECT * FROM \`LookupJoin_1\` LEFT JOIN \`dim_stores\` FOR SYSTEM_TIME AS OF \`LookupJoin_1\`.proc_time ON store_id
 )
 SELECT \`region\`, \`category\`, SUM(quantity * unit_price) AS \`revenue\`, SUM(quantity) AS \`units_sold\`, COUNT(*) AS \`transaction_count\`, window_start, window_end FROM TABLE(

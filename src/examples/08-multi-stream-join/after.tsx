@@ -75,7 +75,7 @@ const viewsWithClicks = (
   <IntervalJoin
     left={pageViews}
     right={clicks}
-    on="session_id = session_id"
+    on="`page_views`.session_id = `clicks`.session_id"
     type="left"
     interval={{
       from: "view_time",
@@ -89,7 +89,7 @@ const fullFunnel = (
   <IntervalJoin
     left={viewsWithClicks}
     right={conversions}
-    on="session_id = session_id"
+    on="`IntervalJoin_3`.session_id = `conversions`.session_id"
     type="left"
     interval={{
       from: "view_time",

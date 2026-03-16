@@ -2788,15 +2788,17 @@ function buildJoinQuery(
   const leftId = node.props.left as string
   const rightId = node.props.right as string
 
-  const leftRef = resolveRef(leftId, nodeIndex)
-  const rightRef = resolveRef(rightId, nodeIndex)
+  const left = resolveJoinOperand(leftId, nodeIndex)
+  const right = resolveJoinOperand(rightId, nodeIndex)
+  const ctes = [left.cte, right.cte].filter(Boolean)
+  const ctePrefix = ctes.length > 0 ? `WITH ${ctes.join(",\n")}\n` : ""
 
   if (joinType === "anti") {
-    return `SELECT ${leftRef}.* FROM ${leftRef} WHERE NOT EXISTS (\n  SELECT 1 FROM ${rightRef} WHERE ${onCondition}\n)`
+    return `${ctePrefix}SELECT ${left.ref}.* FROM ${left.ref} WHERE NOT EXISTS (\n  SELECT 1 FROM ${right.ref} WHERE ${onCondition}\n)`
   }
 
   if (joinType === "semi") {
-    return `SELECT ${leftRef}.* FROM ${leftRef} WHERE EXISTS (\n  SELECT 1 FROM ${rightRef} WHERE ${onCondition}\n)`
+    return `${ctePrefix}SELECT ${left.ref}.* FROM ${left.ref} WHERE EXISTS (\n  SELECT 1 FROM ${right.ref} WHERE ${onCondition}\n)`
   }
 
   const sqlJoinType =
@@ -2806,7 +2808,7 @@ function buildJoinQuery(
     ? `/*+ BROADCAST(${resolveRef(hints.broadcast === "left" ? leftId : rightId, nodeIndex)}) */ `
     : ""
 
-  return `SELECT ${hintClause}* FROM ${leftRef} ${sqlJoinType} JOIN ${rightRef} ON ${onCondition}`
+  return `${ctePrefix}SELECT ${hintClause}* FROM ${left.ref} ${sqlJoinType} JOIN ${right.ref} ON ${onCondition}`
 }
 
 // ── Temporal Join ───────────────────────────────────────────────────
@@ -2820,10 +2822,12 @@ function buildTemporalJoinQuery(
   const streamId = node.props.stream as string
   const temporalId = node.props.temporal as string
 
-  const streamRef = resolveRef(streamId, nodeIndex)
-  const temporalRef = resolveRef(temporalId, nodeIndex)
+  const stream = resolveJoinOperand(streamId, nodeIndex)
+  const temporal = resolveJoinOperand(temporalId, nodeIndex)
+  const ctes = [stream.cte, temporal.cte].filter(Boolean)
+  const ctePrefix = ctes.length > 0 ? `WITH ${ctes.join(",\n")}\n` : ""
 
-  return `SELECT * FROM ${streamRef} LEFT JOIN ${temporalRef} FOR SYSTEM_TIME AS OF ${streamRef}.${q(asOf)} ON ${onCondition}`
+  return `${ctePrefix}SELECT * FROM ${stream.ref} LEFT JOIN ${temporal.ref} FOR SYSTEM_TIME AS OF ${stream.ref}.${q(asOf)} ON ${onCondition}`
 }
 
 // ── Lookup Join ─────────────────────────────────────────────────────
@@ -2837,7 +2841,8 @@ function buildLookupJoinQuery(
   const table = node.props.table as string
   const select = node.props.select as Record<string, string> | undefined
 
-  const inputRef = resolveRef(inputId, nodeIndex)
+  const input = resolveJoinOperand(inputId, nodeIndex)
+  const ctePrefix = input.cte ? `WITH ${input.cte}\n` : ""
 
   const projections = select
     ? Object.entries(select)
@@ -2845,7 +2850,7 @@ function buildLookupJoinQuery(
         .join(", ")
     : "*"
 
-  return `SELECT ${projections} FROM ${inputRef} LEFT JOIN ${q(table)} FOR SYSTEM_TIME AS OF ${inputRef}.proc_time ON ${onCondition}`
+  return `${ctePrefix}SELECT ${projections} FROM ${input.ref} LEFT JOIN ${q(table)} FOR SYSTEM_TIME AS OF ${input.ref}.proc_time ON ${onCondition}`
 }
 
 // ── Interval Join ───────────────────────────────────────────────────
@@ -2860,8 +2865,10 @@ function buildIntervalJoinQuery(
   const leftId = node.props.left as string
   const rightId = node.props.right as string
 
-  const leftRef = resolveRef(leftId, nodeIndex)
-  const rightRef = resolveRef(rightId, nodeIndex)
+  const left = resolveJoinOperand(leftId, nodeIndex)
+  const right = resolveJoinOperand(rightId, nodeIndex)
+  const ctes = [left.cte, right.cte].filter(Boolean)
+  const ctePrefix = ctes.length > 0 ? `WITH ${ctes.join(",\n")}\n` : ""
 
   const sqlJoinType = joinType === "inner" ? "" : `${joinType.toUpperCase()} `
 
@@ -2872,10 +2879,10 @@ function buildIntervalJoinQuery(
     | undefined
   const rightTimeCol = rightSchema?.watermark?.column
   const betweenCol = rightTimeCol
-    ? `${rightRef}.${q(rightTimeCol)}`
-    : `${rightRef}.${interval.from}`
+    ? `${right.ref}.${q(rightTimeCol)}`
+    : `${right.ref}.${interval.from}`
 
-  return `SELECT * FROM ${leftRef} ${sqlJoinType}JOIN ${rightRef} ON ${onCondition} AND ${betweenCol} BETWEEN ${leftRef}.${interval.from} AND ${leftRef}.${interval.to}`
+  return `${ctePrefix}SELECT * FROM ${left.ref} ${sqlJoinType}JOIN ${right.ref} ON ${onCondition} AND ${betweenCol} BETWEEN ${left.ref}.${interval.from} AND ${left.ref}.${interval.to}`
 }
 
 // ── Window ──────────────────────────────────────────────────────────
@@ -3595,6 +3602,26 @@ function resolveRef(
   }
 
   return q(nodeId)
+}
+
+/**
+ * Resolve a join operand (left/right input).
+ * If the operand is a Source, returns a simple table reference.
+ * If the operand is a non-Source (e.g. another Join), inlines its SQL
+ * as a CTE so the join can reference it by name.
+ */
+function resolveJoinOperand(
+  nodeId: string,
+  nodeIndex: Map<string, ConstructNode>,
+): { ref: string; cte: string | null } {
+  const node = nodeIndex.get(nodeId)
+  if (!node || node.kind === "Source") {
+    return { ref: resolveRef(nodeId, nodeIndex), cte: null }
+  }
+  // Non-source operand — build its query and wrap as a CTE
+  const sql = buildQuery(node, nodeIndex)
+  const cteName = q(nodeId)
+  return { ref: cteName, cte: `${cteName} AS (\n${sql}\n)` }
 }
 
 // ── Effect-typed variant ─────────────────────────────────────────────
