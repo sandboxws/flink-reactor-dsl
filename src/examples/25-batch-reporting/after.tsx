@@ -32,18 +32,18 @@ const MerchantSchema = Schema({
 const transactions = (
   <GenericSource
     connector="filesystem"
-    format="parquet"
+    format="json"
     schema={TransactionSchema}
-    options={{ path: "s3://data-warehouse/transactions/year=2024/month=01/" }}
+    options={{ path: "/tmp/data-warehouse/transactions/year=2024/month=01/" }}
   />
 )
 
 const merchants = (
   <GenericSource
     connector="filesystem"
-    format="parquet"
+    format="json"
     schema={MerchantSchema}
-    options={{ path: "s3://data-warehouse/merchants/" }}
+    options={{ path: "/tmp/data-warehouse/merchants/" }}
   />
 )
 
@@ -51,7 +51,7 @@ const enriched = (
   <Join
     left={transactions}
     right={merchants}
-    on="merchant_id = merchant_id"
+    on="`filesystem`.merchant_id = `filesystem_2`.merchant_id"
     hints={{ broadcast: "right" }}
   />
 )
@@ -73,8 +73,8 @@ export default (
           }}
         />
         <FileSystemSink
-          path="s3://reports/monthly/category_summary/"
-          format="parquet"
+          path="/tmp/reports/monthly/category_summary/"
+          format="json"
         />
       </Route.Branch>
 
@@ -98,7 +98,7 @@ export default (
 
       {/* Report 3: Fraud extract */}
       <Route.Branch condition="is_fraud = true">
-        <FileSystemSink path="s3://reports/fraud/january_2024/" format="csv" />
+        <FileSystemSink path="/tmp/reports/fraud/january_2024/" format="csv" />
       </Route.Branch>
     </Route>
   </Pipeline>

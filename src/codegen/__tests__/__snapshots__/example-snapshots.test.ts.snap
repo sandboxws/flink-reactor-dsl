@@ -446,7 +446,7 @@ CREATE TABLE \`order_fulfillment\` (
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
   \`carrier\` STRING,
-  \`fulfillment_time\` BIGINT
+  \`fulfillment_time\` INT
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'order_fulfillment',
@@ -464,8 +464,8 @@ CREATE TABLE \`order_fulfillment\` (
 -- ====================================================================
 
 INSERT INTO \`order_fulfillment\`
-SELECT order_id AS \`order_id\`, user_id AS \`user_id\`, amount AS \`amount\`, carrier AS \`carrier\`, ship_time - order_time AS \`fulfillment_time\` FROM (
-SELECT * FROM \`orders\` JOIN \`shipments\` ON order_id = order_id AND \`orders\`.order_time BETWEEN \`shipments\`.order_time AND \`shipments\`.order_time + INTERVAL '7' DAY
+SELECT order_id AS \`order_id\`, user_id AS \`user_id\`, amount AS \`amount\`, carrier AS \`carrier\`, TIMESTAMPDIFF(SECOND, order_time, ship_time) AS \`fulfillment_time\` FROM (
+SELECT * FROM \`orders\` JOIN \`shipments\` ON \`orders\`.order_id = \`shipments\`.order_id AND \`shipments\`.\`ship_time\` BETWEEN \`orders\`.order_time AND \`orders\`.order_time + INTERVAL '7' DAY
 );
 "
 `;
@@ -668,7 +668,7 @@ CREATE TABLE \`user_funnel_metrics\` (
 
 INSERT INTO \`user_funnel_metrics\`
 SELECT \`user_id\`, COUNT(*) AS \`total_views\`, COUNT(click_id) AS \`total_clicks\`, COUNT(conversion_id) AS \`total_conversions\`, SUM(revenue) AS \`total_revenue\` FROM (
-SELECT * FROM \`IntervalJoin_3\` LEFT JOIN \`conversions\` ON session_id = session_id AND \`IntervalJoin_3\`.view_time BETWEEN \`conversions\`.view_time AND \`conversions\`.view_time + INTERVAL '1' HOUR
+SELECT * FROM \`IntervalJoin_3\` LEFT JOIN \`conversions\` ON session_id = session_id AND \`conversions\`.\`conversion_time\` BETWEEN \`IntervalJoin_3\`.view_time AND \`IntervalJoin_3\`.view_time + INTERVAL '1' HOUR
 ) GROUP BY \`user_id\`;
 "
 `;
@@ -1144,7 +1144,7 @@ CREATE TABLE \`converted_orders\` (
 
 INSERT INTO \`converted_orders\`
 SELECT order_id AS \`order_id\`, currency_pair AS \`currency_pair\`, amount AS \`amount\`, order_time AS \`order_time\`, exchange_rate AS \`exchange_rate\`, amount * exchange_rate AS \`converted_amount\` FROM (
-SELECT * FROM \`forex_orders\` LEFT JOIN \`currency_rates\` FOR SYSTEM_TIME AS OF \`forex_orders\`.\`order_time\` ON currency_pair = currency_pair
+SELECT * FROM \`forex_orders\` LEFT JOIN \`currency_rates\` FOR SYSTEM_TIME AS OF \`forex_orders\`.\`order_time\` ON \`forex_orders\`.currency_pair = \`currency_rates\`.currency_pair
 );
 "
 `;
@@ -1236,7 +1236,7 @@ CREATE TABLE \`valid_events\` (
 
 INSERT INTO \`valid_events\`
 SELECT \`user_events\`.* FROM \`user_events\` WHERE NOT EXISTS (
-  SELECT 1 FROM \`blacklist\` WHERE user_id = user_id
+  SELECT 1 FROM \`blacklist\` WHERE \`user_events\`.user_id = \`blacklist\`.user_id
 );
 "
 `;
@@ -1787,8 +1787,8 @@ SET 'parallelism.default' = '32';
 -- --------------------------------------------------------------------
 -- id          : filesystem
 -- type        : filesystem
--- format      : parquet
--- path        : s3://data-warehouse/sales/2024/
+-- format      : json
+-- path        : /tmp/data-warehouse/sales/2024/
 -- ====================================================================
 
 CREATE TABLE \`filesystem\` (
@@ -1802,8 +1802,8 @@ CREATE TABLE \`filesystem\` (
   \`sale_timestamp\` TIMESTAMP(3)
 ) WITH (
   'connector' = 'filesystem',
-  'format' = 'parquet',
-  'path' = 's3://data-warehouse/sales/2024/'
+  'format' = 'json',
+  'path' = '/tmp/data-warehouse/sales/2024/'
 );
 
 -- ====================================================================
@@ -1832,8 +1832,8 @@ CREATE TABLE \`products\` (
 -- --------------------------------------------------------------------
 -- id          : daily_category_sales
 -- type        : filesystem
--- path        : s3://data-warehouse/aggregates/daily_category_sales/
--- format      : parquet
+-- path        : /tmp/data-warehouse/aggregates/daily_category_sales/
+-- format      : json
 -- ====================================================================
 
 CREATE TABLE \`daily_category_sales\` (
@@ -1845,8 +1845,8 @@ CREATE TABLE \`daily_category_sales\` (
   \`unique_customers\` BIGINT
 ) PARTITIONED BY (\`sale_date\`) WITH (
   'connector' = 'filesystem',
-  'path' = 's3://data-warehouse/aggregates/daily_category_sales/',
-  'format' = 'parquet'
+  'path' = '/tmp/data-warehouse/aggregates/daily_category_sales/',
+  'format' = 'json'
 );
 
 -- ====================================================================
@@ -1893,11 +1893,11 @@ CREATE TABLE \`daily_brand_performance\` (
 EXECUTE STATEMENT SET BEGIN
 INSERT INTO \`daily_category_sales\`
 SELECT \`category\`, \`subcategory\`, \`sale_date\`, SUM(amount) AS \`total_revenue\`, SUM(quantity) AS \`total_units\`, COUNT(DISTINCT customer_id) AS \`unique_customers\` FROM (
-SELECT /*+ BROADCAST(\`products\`) */ * FROM \`filesystem\` INNER JOIN \`products\` ON product_id = product_id
+SELECT /*+ BROADCAST(\`products\`) */ * FROM \`filesystem\` INNER JOIN \`products\` ON \`filesystem\`.product_id = \`products\`.product_id
 ) GROUP BY \`category\`, \`subcategory\`, \`sale_date\`;
 INSERT INTO \`daily_brand_performance\`
 SELECT \`brand\`, \`sale_date\`, SUM(amount) AS \`brand_revenue\`, COUNT(*) AS \`transaction_count\` FROM (
-SELECT /*+ BROADCAST(\`products\`) */ * FROM \`filesystem\` INNER JOIN \`products\` ON product_id = product_id
+SELECT /*+ BROADCAST(\`products\`) */ * FROM \`filesystem\` INNER JOIN \`products\` ON \`filesystem\`.product_id = \`products\`.product_id
 ) GROUP BY \`brand\`, \`sale_date\`;
 END;
 "
@@ -1949,8 +1949,8 @@ CREATE TABLE \`clickstream\` (
 -- --------------------------------------------------------------------
 -- id          : raw
 -- type        : filesystem
--- path        : s3://data-lake/clickstream/raw/
--- format      : parquet
+-- path        : /tmp/data-lake/clickstream/raw/
+-- format      : json
 -- ====================================================================
 
 CREATE TABLE \`raw\` (
@@ -1966,8 +1966,8 @@ CREATE TABLE \`raw\` (
   \`hr\` INT
 ) PARTITIONED BY (\`dt\`, \`hr\`) WITH (
   'connector' = 'filesystem',
-  'path' = 's3://data-lake/clickstream/raw/',
-  'format' = 'parquet'
+  'path' = '/tmp/data-lake/clickstream/raw/',
+  'format' = 'json'
 );
 
 -- ====================================================================
@@ -2107,8 +2107,8 @@ SET 'parallelism.default' = '64';
 -- --------------------------------------------------------------------
 -- id          : filesystem
 -- type        : filesystem
--- format      : parquet
--- path        : s3://data-warehouse/transactions/year=2024/month=01/
+-- format      : json
+-- path        : /tmp/data-warehouse/transactions/year=2024/month=01/
 -- ====================================================================
 
 CREATE TABLE \`filesystem\` (
@@ -2122,8 +2122,8 @@ CREATE TABLE \`filesystem\` (
   \`is_fraud\` BOOLEAN
 ) WITH (
   'connector' = 'filesystem',
-  'format' = 'parquet',
-  'path' = 's3://data-warehouse/transactions/year=2024/month=01/'
+  'format' = 'json',
+  'path' = '/tmp/data-warehouse/transactions/year=2024/month=01/'
 );
 
 -- ====================================================================
@@ -2131,8 +2131,8 @@ CREATE TABLE \`filesystem\` (
 -- --------------------------------------------------------------------
 -- id          : filesystem_2
 -- type        : filesystem
--- format      : parquet
--- path        : s3://data-warehouse/merchants/
+-- format      : json
+-- path        : /tmp/data-warehouse/merchants/
 -- ====================================================================
 
 CREATE TABLE \`filesystem_2\` (
@@ -2142,8 +2142,8 @@ CREATE TABLE \`filesystem_2\` (
   \`merchant_country\` STRING
 ) WITH (
   'connector' = 'filesystem',
-  'format' = 'parquet',
-  'path' = 's3://data-warehouse/merchants/'
+  'format' = 'json',
+  'path' = '/tmp/data-warehouse/merchants/'
 );
 
 -- ====================================================================
@@ -2151,8 +2151,8 @@ CREATE TABLE \`filesystem_2\` (
 -- --------------------------------------------------------------------
 -- id          : category_summary
 -- type        : filesystem
--- path        : s3://reports/monthly/category_summary/
--- format      : parquet
+-- path        : /tmp/reports/monthly/category_summary/
+-- format      : json
 -- ====================================================================
 
 CREATE TABLE \`category_summary\` (
@@ -2163,8 +2163,8 @@ CREATE TABLE \`category_summary\` (
   \`fraud_count\` STRING
 ) WITH (
   'connector' = 'filesystem',
-  'path' = 's3://reports/monthly/category_summary/',
-  'format' = 'parquet'
+  'path' = '/tmp/reports/monthly/category_summary/',
+  'format' = 'json'
 );
 
 -- ====================================================================
@@ -2194,7 +2194,7 @@ CREATE TABLE \`monthly_country_report\` (
 -- --------------------------------------------------------------------
 -- id          : january_2024
 -- type        : filesystem
--- path        : s3://reports/fraud/january_2024/
+-- path        : /tmp/reports/fraud/january_2024/
 -- format      : csv
 -- ====================================================================
 
@@ -2209,7 +2209,7 @@ CREATE TABLE \`january_2024\` (
   \`is_fraud\` BOOLEAN
 ) WITH (
   'connector' = 'filesystem',
-  'path' = 's3://reports/fraud/january_2024/',
+  'path' = '/tmp/reports/fraud/january_2024/',
   'format' = 'csv'
 );
 
@@ -2243,15 +2243,15 @@ CREATE TABLE \`january_2024\` (
 EXECUTE STATEMENT SET BEGIN
 INSERT INTO \`category_summary\`
 SELECT \`merchant_category\`, \`transaction_date\`, SUM(amount) AS \`total_volume\`, COUNT(*) AS \`txn_count\`, SUM(CASE WHEN is_fraud THEN 1 ELSE 0 END) AS \`fraud_count\` FROM (
-SELECT /*+ BROADCAST(\`filesystem_2\`) */ * FROM \`filesystem\` INNER JOIN \`filesystem_2\` ON merchant_id = merchant_id
+SELECT /*+ BROADCAST(\`filesystem_2\`) */ * FROM \`filesystem\` INNER JOIN \`filesystem_2\` ON \`filesystem\`.merchant_id = \`filesystem_2\`.merchant_id
 ) GROUP BY \`merchant_category\`, \`transaction_date\`;
 INSERT INTO \`monthly_country_report\`
 SELECT \`merchant_country\`, \`transaction_type\`, SUM(amount) AS \`country_volume\`, AVG(amount) AS \`avg_txn_amount\`, COUNT(DISTINCT account_id) AS \`unique_accounts\` FROM (
-SELECT /*+ BROADCAST(\`filesystem_2\`) */ * FROM \`filesystem\` INNER JOIN \`filesystem_2\` ON merchant_id = merchant_id
+SELECT /*+ BROADCAST(\`filesystem_2\`) */ * FROM \`filesystem\` INNER JOIN \`filesystem_2\` ON \`filesystem\`.merchant_id = \`filesystem_2\`.merchant_id
 ) GROUP BY \`merchant_country\`, \`transaction_type\`;
 INSERT INTO \`january_2024\`
 SELECT * FROM (
-SELECT /*+ BROADCAST(\`filesystem_2\`) */ * FROM \`filesystem\` INNER JOIN \`filesystem_2\` ON merchant_id = merchant_id
+SELECT /*+ BROADCAST(\`filesystem_2\`) */ * FROM \`filesystem\` INNER JOIN \`filesystem_2\` ON \`filesystem\`.merchant_id = \`filesystem_2\`.merchant_id
 )
 WHERE is_fraud = true;
 END;
@@ -2660,8 +2660,8 @@ CREATE TABLE \`sensor_metrics_5min\` (
 -- --------------------------------------------------------------------
 -- id          : raw
 -- type        : filesystem
--- path        : s3://iot-archive/raw/
--- format      : parquet
+-- path        : /tmp/iot-archive/raw/
+-- format      : json
 -- ====================================================================
 
 CREATE TABLE \`raw\` (
@@ -2673,8 +2673,8 @@ CREATE TABLE \`raw\` (
   \`dt\` DATE
 ) PARTITIONED BY (\`dt\`) WITH (
   'connector' = 'filesystem',
-  'path' = 's3://iot-archive/raw/',
-  'format' = 'parquet'
+  'path' = '/tmp/iot-archive/raw/',
+  'format' = 'json'
 );
 
 -- ====================================================================

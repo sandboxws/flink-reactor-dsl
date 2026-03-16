@@ -57,8 +57,8 @@ export default (
       {/* Raw archive to S3 */}
       <Route.Default>
         <FileSystemSink
-          path="s3://iot-archive/raw/"
-          format="parquet"
+          path="/tmp/iot-archive/raw/"
+          format="json"
           partitionBy={["DATE(reading_time)"]}
         />
       </Route.Default>

@@ -53,7 +53,7 @@ export default (
     <TemporalJoin
       stream={orders}
       temporal={rates}
-      on="currency_pair = currency_pair"
+      on="`forex_orders`.currency_pair = `currency_rates`.currency_pair"
       asOf="order_time"
     />
     <Map

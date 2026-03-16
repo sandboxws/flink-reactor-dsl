@@ -1419,6 +1419,17 @@ function resolveSinkMetadata(
           if (sibling.kind === "Source") {
             changelogMode = resolveSourceChangelogMode(sibling)
             primaryKey = resolveSourcePrimaryKey(sibling)
+          } else if (sibling.kind === "Join") {
+            // Anti/semi joins produce retract (result changes when right side changes)
+            const joinType = sibling.props.type as string | undefined
+            if (joinType === "anti" || joinType === "semi") {
+              changelogMode = "retract"
+            }
+            // Propagate PK from the left (primary) source
+            const leftSource = findDeepestSource(sibling)
+            if (leftSource) {
+              primaryKey = resolveSourcePrimaryKey(leftSource)
+            }
           }
           // Propagate through intermediate transforms
           const transforms: ConstructNode[] = []
@@ -2806,7 +2817,17 @@ function buildIntervalJoinQuery(
 
   const sqlJoinType = joinType === "inner" ? "" : `${joinType.toUpperCase()} `
 
-  return `SELECT * FROM ${leftRef} ${sqlJoinType}JOIN ${rightRef} ON ${onCondition} AND ${leftRef}.${interval.from} BETWEEN ${rightRef}.${interval.from} AND ${rightRef}.${interval.to}`
+  // Interval join: right.watermarkCol BETWEEN left.from AND left.to
+  const rightNode = nodeIndex.get(rightId)
+  const rightSchema = rightNode?.props.schema as
+    | { watermark?: { column: string } }
+    | undefined
+  const rightTimeCol = rightSchema?.watermark?.column
+  const betweenCol = rightTimeCol
+    ? `${rightRef}.${q(rightTimeCol)}`
+    : `${rightRef}.${interval.from}`
+
+  return `SELECT * FROM ${leftRef} ${sqlJoinType}JOIN ${rightRef} ON ${onCondition} AND ${betweenCol} BETWEEN ${leftRef}.${interval.from} AND ${leftRef}.${interval.to}`
 }
 
 // ── Window ──────────────────────────────────────────────────────────

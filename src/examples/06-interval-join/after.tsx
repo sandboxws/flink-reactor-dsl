@@ -54,7 +54,7 @@ export default (
     <IntervalJoin
       left={orders}
       right={shipments}
-      on="order_id = order_id"
+      on="`orders`.order_id = `shipments`.order_id"
       interval={{
         from: "order_time",
         to: "order_time + INTERVAL '7' DAY",
@@ -66,7 +66,7 @@ export default (
         user_id: "user_id",
         amount: "amount",
         carrier: "carrier",
-        fulfillment_time: "ship_time - order_time",
+        fulfillment_time: "TIMESTAMPDIFF(SECOND, order_time, ship_time)",
       }}
     />
     <KafkaSink topic="order_fulfillment" />
