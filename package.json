@@ -1,6 +1,6 @@
 {
   "name": "flink-reactor",
-  "version": "0.1.6",
+  "version": "0.1.8-rc.1",
   "description": "React-style TSX DSL that synthesizes to Flink SQL + Kubernetes FlinkDeployment CRDs",
   "type": "module",
   "main": "./dist/index.js",
@@ -23,7 +23,12 @@
     "flink-reactor": "./dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "src/cli/cluster/docker-compose.yml",
+    "src/cli/cluster/Dockerfile.flink",
+    "src/cli/cluster/data",
+    "src/cli/cluster/init",
+    "src/cli/cluster/pipelines"
   ],
   "packageManager": "pnpm@10.30.1",
   "repository": {

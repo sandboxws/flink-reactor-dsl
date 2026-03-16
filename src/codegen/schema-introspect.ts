@@ -61,6 +61,32 @@ export function inferExpressionType(
     return upstreamFields.get(minMaxMatch[1]) ?? "STRING"
   }
 
+  // Comparison operators — result is BOOLEAN
+  if (
+    /[><=!]/.test(trimmed) ||
+    /\b(?:AND|OR|NOT|IN|BETWEEN|LIKE|IS)\b/i.test(trimmed)
+  ) {
+    return "BOOLEAN"
+  }
+
+  // Arithmetic expression (contains +, -, *, /) — infer from operand types
+  if (/[+\-*/]/.test(trimmed)) {
+    // Extract column references from the expression
+    const colRefs =
+      trimmed.match(/`?(\w+)`?/g)?.map((c) => c.replace(/`/g, "")) ?? []
+    const operandTypes = colRefs
+      .map((c) => upstreamFields.get(c))
+      .filter(Boolean) as string[]
+    if (operandTypes.length > 0) {
+      // If any operand is DECIMAL, result is DECIMAL; if DOUBLE, result is DOUBLE; else BIGINT
+      if (operandTypes.some((t) => t.startsWith("DECIMAL"))) {
+        return operandTypes.find((t) => t.startsWith("DECIMAL")) ?? "DECIMAL"
+      }
+      if (operandTypes.some((t) => t === "DOUBLE")) return "DOUBLE"
+      return "BIGINT"
+    }
+  }
+
   // Fallback
   return "STRING"
 }
@@ -89,11 +115,49 @@ export function resolveNodeSchema(
 
     // Passthrough transforms — same schema as upstream
     case "Filter":
-    case "Deduplicate":
-    case "TopN":
       return node.children.length > 0
         ? resolveNodeSchema(node.children[0], nodeIndex)
         : null
+
+    // Deduplicate/TopN add a rownum column via ROW_NUMBER()
+    case "Deduplicate":
+    case "TopN": {
+      const upstreamSchema =
+        node.children.length > 0
+          ? resolveNodeSchema(node.children[0], nodeIndex)
+          : null
+      if (!upstreamSchema) return null
+      return [...upstreamSchema, { name: "rownum", type: "BIGINT" }]
+    }
+
+    // Window nodes: resolve child schema + append window_start/window_end
+    case "TumbleWindow":
+    case "SlideWindow":
+    case "SessionWindow": {
+      // Window typically wraps an Aggregate child
+      const aggChild = node.children.find((c) => c.component === "Aggregate")
+      if (aggChild) {
+        // Resolve the aggregate against its own upstream (the source inside the window)
+        const aggSchema = resolveNodeSchema(aggChild, nodeIndex)
+        if (!aggSchema) return null
+        return [
+          ...aggSchema,
+          { name: "window_start", type: "TIMESTAMP(3)" },
+          { name: "window_end", type: "TIMESTAMP(3)" },
+        ]
+      }
+      // No aggregate child — passthrough with window columns
+      const childSchema =
+        node.children.length > 0
+          ? resolveNodeSchema(node.children[0], nodeIndex)
+          : null
+      if (!childSchema) return null
+      return [
+        ...childSchema,
+        { name: "window_start", type: "TIMESTAMP(3)" },
+        { name: "window_end", type: "TIMESTAMP(3)" },
+      ]
+    }
 
     // Rename — same fields with some names changed
     case "Rename": {
@@ -157,6 +221,21 @@ export function resolveNodeSchema(
         type: types?.[name] ?? inferExpressionType(expr, upstreamFields),
       }))
       return [...base, ...added]
+    }
+
+    // FlatMap — upstream fields + unnested fields
+    case "FlatMap": {
+      const asFields = node.props.as as Record<string, string>
+      const upstreamSchema =
+        node.children.length > 0
+          ? resolveNodeSchema(node.children[0], nodeIndex)
+          : null
+      const base = upstreamSchema ?? []
+      const unnested = Object.entries(asFields).map(([name, type]) => ({
+        name,
+        type,
+      }))
+      return [...base, ...unnested]
     }
 
     // Map — output columns from `select` keys, types inferred from upstream
@@ -241,9 +320,48 @@ export function resolveTransformSchema(
 
   switch (transform.component) {
     case "Filter":
+      return inputSchema // passthrough
+
+    // Deduplicate/TopN add a rownum column via ROW_NUMBER()
     case "Deduplicate":
     case "TopN":
-      return inputSchema // passthrough
+      return [...inputSchema, { name: "rownum", type: "BIGINT" }]
+
+    // Window nodes: append window_start/window_end
+    case "TumbleWindow":
+    case "SlideWindow":
+    case "SessionWindow": {
+      // Window typically wraps an Aggregate child
+      const aggChild = transform.children?.find(
+        (c) => c.component === "Aggregate",
+      )
+      if (aggChild) {
+        // Resolve aggregate output from inputSchema
+        const aggSchema = resolveTransformSchema(aggChild, inputSchema)
+        if (!aggSchema) return null
+        return [
+          ...aggSchema,
+          { name: "window_start", type: "TIMESTAMP(3)" },
+          { name: "window_end", type: "TIMESTAMP(3)" },
+        ]
+      }
+      // No aggregate — passthrough with window columns
+      return [
+        ...inputSchema,
+        { name: "window_start", type: "TIMESTAMP(3)" },
+        { name: "window_end", type: "TIMESTAMP(3)" },
+      ]
+    }
+
+    // FlatMap — upstream fields + unnested fields
+    case "FlatMap": {
+      const asFields = transform.props.as as Record<string, string>
+      const unnested = Object.entries(asFields).map(([name, type]) => ({
+        name,
+        type,
+      }))
+      return [...inputSchema, ...unnested]
+    }
 
     case "Rename": {
       const columns = transform.props.columns as Record<string, string>
@@ -525,18 +643,34 @@ function resolveSinkSchemas(
         const sinkIndex = parent.children.indexOf(node)
         for (let i = sinkIndex - 1; i >= 0; i--) {
           const sibling = parent.children[i]
+          // Start from Sources, or from Transforms/Windows that have their own children
+          // (e.g. Union with source children). Skip childless Transforms — they need
+          // upstream data and should only be applied as intermediate transformations.
           if (sibling.kind === "Source") {
-            let schema = resolveNodeSchema(sibling, nodeIndex)
-            // Propagate through intermediate transforms
-            for (let j = i + 1; j < sinkIndex; j++) {
-              const transform = parent.children[j]
-              if (transform.kind === "Transform" && schema) {
-                schema = resolveTransformSchema(transform, schema)
-              }
-            }
-            if (schema) result.set(node.id, schema)
-            break
+            // Sources always resolve
+          } else if (
+            (sibling.kind === "Transform" || sibling.kind === "Window") &&
+            sibling.children.length > 0
+          ) {
+            // Self-contained Transform/Window (e.g. Union with source children)
+          } else {
+            continue
           }
+          const startSchema = resolveNodeSchema(sibling, nodeIndex)
+          if (!startSchema) continue
+          // Propagate through intermediate transforms after the starting node
+          let schema: ResolvedColumn[] | null = startSchema
+          for (let j = i + 1; j < sinkIndex; j++) {
+            const transform = parent.children[j]
+            if (
+              (transform.kind === "Transform" || transform.kind === "Window") &&
+              schema
+            ) {
+              schema = resolveTransformSchema(transform, schema)
+            }
+          }
+          if (schema) result.set(node.id, schema)
+          break
         }
       }
       return

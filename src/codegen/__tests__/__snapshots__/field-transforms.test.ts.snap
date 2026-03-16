@@ -50,7 +50,7 @@ CREATE TABLE \`output\` (
   \`price\` DOUBLE,
   \`internal_id\` STRING,
   \`debug_flag\` BOOLEAN,
-  \`total\` STRING,
+  \`total\` DOUBLE,
   \`processed_at\` STRING
 ) WITH (
   'connector' = 'kafka',
@@ -469,7 +469,7 @@ CREATE TABLE \`output\` (
   \`product_name\` STRING,
   \`price\` DOUBLE,
   \`internal_id\` STRING,
-  \`discounted\` STRING
+  \`discounted\` DOUBLE
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'output',
@@ -544,7 +544,7 @@ CREATE TABLE \`output\` (
   \`product_name\` STRING,
   \`price\` DOUBLE,
   \`internal_id\` STRING,
-  \`discounted\` STRING
+  \`discounted\` DOUBLE
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'output',

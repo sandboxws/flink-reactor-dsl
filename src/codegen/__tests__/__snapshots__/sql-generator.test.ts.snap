@@ -204,7 +204,9 @@ CREATE TABLE \`orders\` (
 CREATE TABLE \`hourly_totals\` (
   \`user_id\` STRING,
   \`total_amount\` BIGINT,
-  \`order_count\` BIGINT
+  \`order_count\` BIGINT,
+  \`window_start\` TIMESTAMP(3),
+  \`window_end\` TIMESTAMP(3)
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'hourly-totals',
@@ -274,7 +276,8 @@ CREATE TABLE \`deduped_events\` (
   \`user_id\` STRING,
   \`event_type\` STRING,
   \`event_time\` TIMESTAMP(3),
-  \`payload\` STRING
+  \`payload\` STRING,
+  \`rownum\` BIGINT
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'deduped-events',
@@ -344,7 +347,8 @@ CREATE TABLE \`top_orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
-  \`event_time\` TIMESTAMP(3)
+  \`event_time\` TIMESTAMP(3),
+  \`rownum\` BIGINT
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'top-orders',
@@ -1352,7 +1356,8 @@ CREATE TABLE \`deduped_events\` (
   \`user_id\` STRING,
   \`event_type\` STRING,
   \`event_time\` TIMESTAMP(3),
-  \`payload\` STRING
+  \`payload\` STRING,
+  \`rownum\` BIGINT
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'deduped-events',
@@ -1424,7 +1429,8 @@ CREATE TABLE \`deduped_events\` (
   \`user_id\` STRING,
   \`event_type\` STRING,
   \`event_time\` TIMESTAMP(3),
-  \`payload\` STRING
+  \`payload\` STRING,
+  \`rownum\` BIGINT
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'deduped-events',
@@ -1635,7 +1641,8 @@ CREATE TABLE \`top_orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
-  \`event_time\` TIMESTAMP(3)
+  \`event_time\` TIMESTAMP(3),
+  \`rownum\` BIGINT
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'top-orders',
@@ -1706,7 +1713,8 @@ CREATE TABLE \`top_orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
-  \`event_time\` TIMESTAMP(3)
+  \`event_time\` TIMESTAMP(3),
+  \`rownum\` BIGINT
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'top-orders',

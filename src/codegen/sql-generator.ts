@@ -1063,8 +1063,18 @@ function generateSinkDdl(node: ConstructNode, metadata?: SinkMetadata): string {
     metadata.primaryKey &&
     metadata.primaryKey.length > 0
 
-  if (node.component === "JdbcSink" && props.upsertMode && props.keyFields) {
-    const cols = (props.keyFields as readonly string[]).map(q).join(", ")
+  // JdbcSink needs PK for upsert: explicit keyFields or auto-propagated from retract mode
+  const jdbcNeedsPk =
+    node.component === "JdbcSink" &&
+    ((props.upsertMode && props.keyFields) ||
+      (metadata?.changelogMode === "retract" &&
+        metadata.primaryKey &&
+        metadata.primaryKey.length > 0))
+
+  if (jdbcNeedsPk) {
+    const cols = props.keyFields
+      ? (props.keyFields as readonly string[]).map(q).join(", ")
+      : (metadata?.primaryKey ?? []).map(q).join(", ")
     if (columnDefs) {
       parts.push(
         `CREATE TABLE ${q(tableName)} (`,
@@ -1286,23 +1296,37 @@ function resolveSinkMetadata(
         let primaryKey: readonly string[] | undefined
         for (let i = sinkIndex - 1; i >= 0; i--) {
           const sibling = parent.children[i]
+          // Start from Sources, or from Transforms/Windows with their own children
+          // (e.g. Union with source children). Skip childless Transforms.
           if (sibling.kind === "Source") {
-            schema = resolveNodeSchema(sibling, nodeIndex)
+            // Sources always resolve
+          } else if (
+            (sibling.kind === "Transform" || sibling.kind === "Window") &&
+            sibling.children.length > 0
+          ) {
+            // Self-contained Transform/Window
+          } else {
+            continue
+          }
+          const startSchema = resolveNodeSchema(sibling, nodeIndex)
+          if (!startSchema) continue
+          schema = startSchema
+          if (sibling.kind === "Source") {
             changelogMode = resolveSourceChangelogMode(sibling)
             primaryKey = resolveSourcePrimaryKey(sibling)
-            // Propagate through intermediate transforms
-            const transforms: ConstructNode[] = []
-            for (let j = i + 1; j < sinkIndex; j++) {
-              const transform = parent.children[j]
-              if (transform.kind === "Transform") {
-                transforms.push(transform)
-                if (schema) schema = resolveTransformSchema(transform, schema)
-              }
-            }
-            changelogMode = propagateChangelogMode(transforms, changelogMode)
-            primaryKey = propagatePrimaryKey(transforms, primaryKey)
-            break
           }
+          // Propagate through intermediate transforms
+          const transforms: ConstructNode[] = []
+          for (let j = i + 1; j < sinkIndex; j++) {
+            const transform = parent.children[j]
+            if (transform.kind === "Transform" || transform.kind === "Window") {
+              transforms.push(transform)
+              if (schema) schema = resolveTransformSchema(transform, schema)
+            }
+          }
+          changelogMode = propagateChangelogMode(transforms, changelogMode)
+          primaryKey = propagatePrimaryKey(transforms, primaryKey)
+          break
         }
         if (schema) result.set(node.id, { schema, changelogMode, primaryKey })
       }
@@ -1421,7 +1445,11 @@ function buildSiblingChainQuery(
   const chain: ConstructNode[] = []
   for (let i = 0; i < sinkIndex; i++) {
     const sibling = parent.children[i]
-    if (sibling.kind === "Source" || sibling.kind === "Transform") {
+    if (
+      sibling.kind === "Source" ||
+      sibling.kind === "Transform" ||
+      sibling.kind === "Window"
+    ) {
       chain.push(sibling)
     }
   }
@@ -1451,19 +1479,6 @@ function buildSiblingChainQuery(
     const prevSql = currentUpstream.sql
     const fragBeforeIter = _fragments?.length ?? 0
 
-    // Only inject VirtualRef if the transform has no children (forward-reading pattern)
-    if (transform.children.length > 0) {
-      // Transform already has children (reverse-nesting) — just build it normally
-      currentUpstream = {
-        sql: buildQuery(transform, nodeIndex, pluginSql),
-        sourceRef: transform.id,
-        isSimple: false,
-      }
-      chainSchema = resolveNodeSchema(transform, nodeIndex)
-      continue
-    }
-
-    const savedChildren = transform.children
     const rawRef = currentUpstream.sourceRef.replace(/^`|`$/g, "")
 
     // Attach _schema to VirtualRef so schema-aware transforms can resolve upstream columns
@@ -1487,9 +1502,38 @@ function buildSiblingChainQuery(
           children: [],
         }
 
-    ;(transform as { children: ConstructNode[] }).children = [virtualSource]
+    // For Window nodes with children (e.g. TumbleWindow wrapping Aggregate),
+    // add VirtualRef as a direct child of the Window alongside the Aggregate.
+    // buildWindowQuery looks for a non-Aggregate child as `sourceChild`.
+    const injectionTarget = transform
+    let injectionMode: "replace" | "append" = "replace"
+    if (transform.kind === "Window" && transform.children.length > 0) {
+      injectionMode = "append"
+    } else if (transform.children.length > 0) {
+      // Non-Window transform already has children (reverse-nesting) — just build it normally
+      currentUpstream = {
+        sql: buildQuery(transform, nodeIndex, pluginSql),
+        sourceRef: transform.id,
+        isSimple: false,
+      }
+      chainSchema = resolveNodeSchema(transform, nodeIndex)
+      continue
+    }
+
+    const savedChildren = injectionTarget.children
+    if (injectionMode === "append") {
+      // Add VirtualRef alongside existing children (e.g. Window's Aggregate)
+      ;(injectionTarget as { children: ConstructNode[] }).children = [
+        ...savedChildren,
+        virtualSource,
+      ]
+    } else {
+      ;(injectionTarget as { children: ConstructNode[] }).children = [
+        virtualSource,
+      ]
+    }
     const sql = buildQuery(transform, nodeIndex, pluginSql)
-    ;(transform as { children: ConstructNode[] }).children = savedChildren
+    ;(injectionTarget as { children: ConstructNode[] }).children = savedChildren
 
     // Shift fragments from previous iterations to account for embedding.
     // When the previous SQL is wrapped inside the new query (e.g. as a subquery),
@@ -2074,11 +2118,12 @@ function buildFlatMapQuery(
   const upstream = getUpstream(node, nodeIndex, pluginSql)
   const ref = upstream.sourceRef
 
-  const selectPart = `SELECT ${q(ref)}.*, ${aliases}`
+  // sourceRef is already backtick-quoted for simple refs — use directly
+  const selectPart = `SELECT ${ref}.*, ${aliases}`
   const fromPart = upstream.isSimple
     ? ref
     : `(\n${upstream.sql}\n) AS ${q(ref)}`
-  const crossJoinPart = `CROSS JOIN UNNEST(${q(ref)}.${q(unnestField)}) AS T(${aliases})`
+  const crossJoinPart = `CROSS JOIN UNNEST(${ref}.${q(unnestField)}) AS T(${aliases})`
   const result = `${selectPart} FROM ${fromPart} ${crossJoinPart}`
 
   if (!upstream.isSimple) {
@@ -2652,9 +2697,13 @@ function buildWindowQuery(
 
   const groupCols = [...groupBy.map(q), "window_start", "window_end"].join(", ")
 
+  const groupBySet = new Set(groupBy)
   const projections = [
     ...groupBy.map(q),
-    ...Object.entries(select).map(([alias, expr]) => `${expr} AS ${q(alias)}`),
+    // Skip select entries that duplicate a groupBy column
+    ...Object.entries(select)
+      .filter(([alias]) => !groupBySet.has(alias))
+      .map(([alias, expr]) => `${expr} AS ${q(alias)}`),
     "window_start",
     "window_end",
   ].join(", ")
