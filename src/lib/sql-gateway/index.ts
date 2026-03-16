@@ -1,5 +1,9 @@
 export type { SqlGatewayClientOptions } from "./client.js"
-export { SqlGatewayClient, SqlGatewayClientError } from "./client.js"
+export {
+  SqlGatewayClient,
+  SqlGatewayClientError,
+  StatementExecutionError,
+} from "./client.js"
 export { SqlGatewayCompatClient } from "./client-compat.js"
 // ── Effect-based exports ────────────────────────────────────────────
 export * as EffectClient from "./effect-client.js"
@@ -30,5 +34,6 @@ export type {
   SessionConfig,
   SessionHandle,
   SqlGatewayError,
+  StatementErrorDetail,
   StatementStatus,
 } from "./types.js"

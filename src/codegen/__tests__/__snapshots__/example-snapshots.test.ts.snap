@@ -1,0 +1,3326 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Example SQL Snapshots > 01-simple-source-sink 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : simple-source-sink
+-- parallelism : 4
+-- ====================================================================
+
+SET 'pipeline.name' = 'simple-source-sink';
+
+SET 'parallelism.default' = '4';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : user_events
+-- type        : kafka
+-- topic       : user_events
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`user_events\` (
+  \`event_id\` STRING,
+  \`user_id\` STRING,
+  \`event_type\` STRING,
+  \`payload\` STRING,
+  \`event_time\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'user_events',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : user_events_processed
+-- type        : kafka
+-- topic       : user_events_processed
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`user_events_processed\` (
+  \`event_id\` STRING,
+  \`user_id\` STRING,
+  \`event_type\` STRING,
+  \`payload\` STRING,
+  \`event_time\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'user_events_processed',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : user_events
+-- output      : user_events_processed
+-- ====================================================================
+
+INSERT INTO \`user_events_processed\`
+SELECT * FROM \`user_events\`;
+"
+`;
+
+exports[`Example SQL Snapshots > 02-filter-project 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : filter-project
+-- parallelism : 8
+-- ====================================================================
+
+SET 'pipeline.name' = 'filter-project';
+
+SET 'parallelism.default' = '8';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`orders\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`product_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`order_time\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : print
+-- type        : print
+-- purpose     : debug / development sink
+-- ====================================================================
+
+CREATE TABLE \`print\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`order_time\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'print'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- transforms  : Filter → Map
+-- input       : orders
+-- output      : print
+-- ====================================================================
+
+INSERT INTO \`print\`
+SELECT order_id AS \`order_id\`, user_id AS \`user_id\`, amount AS \`amount\`, order_time AS \`order_time\` FROM (
+SELECT * FROM \`orders\` WHERE amount > 100
+);
+"
+`;
+
+exports[`Example SQL Snapshots > 03-group-aggregate 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : user-totals
+-- parallelism : 8
+-- ====================================================================
+
+SET 'pipeline.name' = 'user-totals';
+
+SET 'parallelism.default' = '8';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : transactions
+-- type        : kafka
+-- topic       : transactions
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`transactions\` (
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`transaction_time\` TIMESTAMP(3),
+  \`category\` STRING,
+  WATERMARK FOR \`transaction_time\` AS transaction_time - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'transactions',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : user_totals
+-- type        : jdbc
+-- table       : user_totals
+-- url         : jdbc:postgresql://db:5432/analytics
+-- ====================================================================
+
+CREATE TABLE \`user_totals\` (
+  \`user_id\` STRING,
+  \`total_amount\` DECIMAL(10, 2),
+  \`txn_count\` BIGINT,
+  PRIMARY KEY (\`user_id\`) NOT ENFORCED
+) WITH (
+  'connector' = 'jdbc',
+  'url' = 'jdbc:postgresql://db:5432/analytics',
+  'table-name' = 'user_totals'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Aggregate_1
+-- type        : Aggregate
+-- input       : transactions
+-- output      : user_totals
+-- group-by    : user_id
+-- ====================================================================
+
+INSERT INTO \`user_totals\`
+SELECT \`user_id\`, SUM(amount) AS \`total_amount\`, COUNT(*) AS \`txn_count\` FROM \`transactions\` GROUP BY \`user_id\`;
+"
+`;
+
+exports[`Example SQL Snapshots > 04-tumble-window 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : active-users-per-minute
+-- parallelism : 12
+-- ====================================================================
+
+SET 'pipeline.name' = 'active-users-per-minute';
+
+SET 'parallelism.default' = '12';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : clickstream
+-- type        : kafka
+-- topic       : clickstream
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`clickstream\` (
+  \`user_id\` STRING,
+  \`page_url\` STRING,
+  \`session_id\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS event_time - INTERVAL '10' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'clickstream',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : active_users_per_minute
+-- type        : kafka
+-- topic       : active_users_per_minute
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`active_users_per_minute\` (
+  \`user_id\` STRING,
+  \`page_views\` BIGINT,
+  \`unique_pages\` BIGINT,
+  \`window_start\` TIMESTAMP(3),
+  \`window_end\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'active_users_per_minute',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Filter_3
+-- type        : Filter
+-- input       : unknown
+-- output      : active_users_per_minute
+-- rule        : page_views > 5
+-- ====================================================================
+
+INSERT INTO \`active_users_per_minute\`
+SELECT * FROM (
+SELECT \`user_id\`, COUNT(*) AS \`page_views\`, COUNT(DISTINCT page_url) AS \`unique_pages\`, window_start, window_end FROM TABLE(
+  TUMBLE(TABLE \`clickstream\`, DESCRIPTOR(\`event_time\`), INTERVAL '1' MINUTE)
+) GROUP BY \`user_id\`, window_start, window_end
+) WHERE page_views > 5;
+"
+`;
+
+exports[`Example SQL Snapshots > 05-hop-window 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : sensor-metrics
+-- parallelism : 16
+-- ====================================================================
+
+SET 'pipeline.name' = 'sensor-metrics';
+
+SET 'parallelism.default' = '16';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : sensor_readings
+-- type        : kafka
+-- topic       : sensor_readings
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`sensor_readings\` (
+  \`sensor_id\` STRING,
+  \`temperature\` DOUBLE,
+  \`humidity\` DOUBLE,
+  \`reading_time\` TIMESTAMP(3),
+  WATERMARK FOR \`reading_time\` AS reading_time - INTERVAL '30' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'sensor_readings',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : sensor_metrics
+-- type        : jdbc
+-- table       : sensor_metrics
+-- url         : jdbc:postgresql://db:5432/iot
+-- ====================================================================
+
+CREATE TABLE \`sensor_metrics\` (
+  \`sensor_id\` STRING,
+  \`avg_temp\` DOUBLE,
+  \`max_temp\` STRING,
+  \`min_temp\` STRING,
+  \`avg_humidity\` DOUBLE,
+  \`window_start\` TIMESTAMP(3),
+  \`window_end\` TIMESTAMP(3),
+  \`temp_variance\` BIGINT
+) WITH (
+  'connector' = 'jdbc',
+  'url' = 'jdbc:postgresql://db:5432/iot',
+  'table-name' = 'sensor_metrics'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Map_3
+-- type        : Map
+-- input       : unknown
+-- output      : sensor_metrics
+-- ====================================================================
+
+INSERT INTO \`sensor_metrics\`
+SELECT sensor_id AS \`sensor_id\`, avg_temp AS \`avg_temp\`, max_temp AS \`max_temp\`, min_temp AS \`min_temp\`, avg_humidity AS \`avg_humidity\`, window_start AS \`window_start\`, window_end AS \`window_end\`, max_temp - min_temp AS \`temp_variance\` FROM (
+SELECT \`sensor_id\`, AVG(temperature) AS \`avg_temp\`, MAX(temperature) AS \`max_temp\`, MIN(temperature) AS \`min_temp\`, AVG(humidity) AS \`avg_humidity\`, window_start, window_end FROM TABLE(
+  HOP(TABLE \`sensor_readings\`, DESCRIPTOR(\`reading_time\`), INTERVAL '1' MINUTE, INTERVAL '5' MINUTE)
+) GROUP BY \`sensor_id\`, window_start, window_end
+);
+"
+`;
+
+exports[`Example SQL Snapshots > 06-interval-join 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : order-fulfillment
+-- parallelism : 8
+-- ====================================================================
+
+SET 'pipeline.name' = 'order-fulfillment';
+
+SET 'parallelism.default' = '8';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`orders\` (
+  \`order_id\` STRING,
+  \`user_id\` STRING,
+  \`product_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`order_time\` TIMESTAMP(3),
+  WATERMARK FOR \`order_time\` AS order_time - INTERVAL '10' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : shipments
+-- type        : kafka
+-- topic       : shipments
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`shipments\` (
+  \`shipment_id\` STRING,
+  \`order_id\` STRING,
+  \`carrier\` STRING,
+  \`ship_time\` TIMESTAMP(3),
+  WATERMARK FOR \`ship_time\` AS ship_time - INTERVAL '10' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'shipments',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : order_fulfillment
+-- type        : kafka
+-- topic       : order_fulfillment
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`order_fulfillment\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'order_fulfillment',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Map_3
+-- type        : Map
+-- input       : unknown
+-- output      : order_fulfillment
+-- ====================================================================
+
+INSERT INTO \`order_fulfillment\`
+SELECT order_id AS \`order_id\`, user_id AS \`user_id\`, amount AS \`amount\`, carrier AS \`carrier\`, ship_time - order_time AS \`fulfillment_time\` FROM (
+SELECT * FROM unknown
+);
+"
+`;
+
+exports[`Example SQL Snapshots > 07-lookup-join 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : premium-user-enrichment
+-- parallelism : 16
+-- ====================================================================
+
+SET 'pipeline.name' = 'premium-user-enrichment';
+
+SET 'parallelism.default' = '16';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : user_actions
+-- type        : kafka
+-- topic       : user_actions
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`user_actions\` (
+  \`action_id\` STRING,
+  \`user_id\` STRING,
+  \`action_type\` STRING,
+  \`action_time\` TIMESTAMP(3),
+  \`metadata\` STRING
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'user_actions',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : premium_user_actions
+-- type        : kafka
+-- topic       : premium_user_actions
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`premium_user_actions\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'premium_user_actions',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Filter_2
+-- type        : Filter
+-- input       : unknown
+-- output      : premium_user_actions
+-- rule        : user_tier IN ('premium', 'enterprise')
+-- ====================================================================
+
+INSERT INTO \`premium_user_actions\`
+SELECT * FROM (
+SELECT * FROM unknown
+) WHERE user_tier IN ('premium', 'enterprise');
+"
+`;
+
+exports[`Example SQL Snapshots > 08-multi-stream-join 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : user-funnel
+-- parallelism : 8
+-- ====================================================================
+
+SET 'pipeline.name' = 'user-funnel';
+
+SET 'parallelism.default' = '8';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : page_views
+-- type        : kafka
+-- topic       : page_views
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`page_views\` (
+  \`session_id\` STRING,
+  \`user_id\` STRING,
+  \`page_url\` STRING,
+  \`view_time\` TIMESTAMP(3),
+  WATERMARK FOR \`view_time\` AS view_time - INTERVAL '30' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'page_views',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : clicks
+-- type        : kafka
+-- topic       : clicks
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`clicks\` (
+  \`click_id\` STRING,
+  \`session_id\` STRING,
+  \`element_id\` STRING,
+  \`click_time\` TIMESTAMP(3),
+  WATERMARK FOR \`click_time\` AS click_time - INTERVAL '30' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'clicks',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : conversions
+-- type        : kafka
+-- topic       : conversions
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`conversions\` (
+  \`conversion_id\` STRING,
+  \`session_id\` STRING,
+  \`product_id\` STRING,
+  \`revenue\` DECIMAL(10, 2),
+  \`conversion_time\` TIMESTAMP(3),
+  WATERMARK FOR \`conversion_time\` AS conversion_time - INTERVAL '30' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'conversions',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : user_funnel_metrics
+-- type        : jdbc
+-- table       : user_funnel_metrics
+-- url         : jdbc:postgresql://db:5432/analytics
+-- ====================================================================
+
+CREATE TABLE \`user_funnel_metrics\` WITH (
+  'connector' = 'jdbc',
+  'url' = 'jdbc:postgresql://db:5432/analytics',
+  'table-name' = 'user_funnel_metrics'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Aggregate_5
+-- type        : Aggregate
+-- input       : unknown
+-- output      : user_funnel_metrics
+-- group-by    : user_id
+-- ====================================================================
+
+INSERT INTO \`user_funnel_metrics\`
+SELECT \`user_id\`, COUNT(*) AS \`total_views\`, COUNT(click_id) AS \`total_clicks\`, COUNT(conversion_id) AS \`total_conversions\`, SUM(revenue) AS \`total_revenue\` FROM (
+SELECT * FROM unknown
+) GROUP BY \`user_id\`;
+"
+`;
+
+exports[`Example SQL Snapshots > 11-dedup-window 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : hourly-user-events
+-- parallelism : 16
+-- ====================================================================
+
+SET 'pipeline.name' = 'hourly-user-events';
+
+SET 'parallelism.default' = '16';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : raw_events
+-- type        : kafka
+-- topic       : raw_events
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`raw_events\` (
+  \`event_id\` STRING,
+  \`user_id\` STRING,
+  \`event_type\` STRING,
+  \`event_data\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS event_time - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'raw_events',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : hourly_user_events
+-- type        : kafka
+-- topic       : hourly_user_events
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`hourly_user_events\` (
+  \`user_id\` STRING,
+  \`event_type\` STRING,
+  \`event_count\` BIGINT,
+  \`window_start\` TIMESTAMP(3),
+  \`window_end\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'hourly_user_events',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Deduplicate_1
+-- type        : Deduplicate
+-- input       : raw_events
+-- output      : hourly_user_events
+-- ====================================================================
+
+INSERT INTO \`hourly_user_events\`
+SELECT \`user_id\`, \`event_type\`, COUNT(*) AS \`event_count\`, window_start, window_end FROM TABLE(
+  TUMBLE(TABLE (
+SELECT *, ROW_NUMBER() OVER (PARTITION BY \`event_id\` ORDER BY \`event_time\` ASC) AS rownum
+FROM \`raw_events\`
+QUALIFY rownum = 1
+), DESCRIPTOR(\`event_time\`), INTERVAL '1' HOUR)
+) GROUP BY \`user_id\`, \`event_type\`, window_start, window_end;
+"
+`;
+
+exports[`Example SQL Snapshots > 12-session-window 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : user-sessions
+-- parallelism : 12
+-- ====================================================================
+
+SET 'pipeline.name' = 'user-sessions';
+
+SET 'parallelism.default' = '12';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : user_activity
+-- type        : kafka
+-- topic       : user_activity
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`user_activity\` (
+  \`user_id\` STRING,
+  \`activity_type\` STRING,
+  \`page_url\` STRING,
+  \`activity_time\` TIMESTAMP(3),
+  \`device_info\` STRING,
+  WATERMARK FOR \`activity_time\` AS activity_time - INTERVAL '1' MINUTE
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'user_activity',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : user_sessions
+-- type        : jdbc
+-- table       : user_sessions
+-- url         : jdbc:postgresql://db:5432/analytics
+-- ====================================================================
+
+CREATE TABLE \`user_sessions\` (
+  \`user_id\` STRING,
+  \`total_activities\` BIGINT,
+  \`unique_pages\` BIGINT,
+  \`session_start\` STRING,
+  \`session_end\` STRING,
+  \`session_duration\` BIGINT,
+  \`activity_sequence\` STRING
+) WITH (
+  'connector' = 'jdbc',
+  'url' = 'jdbc:postgresql://db:5432/analytics',
+  'table-name' = 'user_sessions'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Map_3
+-- type        : Map
+-- input       : unknown
+-- output      : user_sessions
+-- ====================================================================
+
+INSERT INTO \`user_sessions\`
+SELECT user_id AS \`user_id\`, total_activities AS \`total_activities\`, unique_pages AS \`unique_pages\`, session_start AS \`session_start\`, session_end AS \`session_end\`, session_end - session_start AS \`session_duration\`, activity_sequence AS \`activity_sequence\` FROM (
+SELECT \`user_id\`, COUNT(*) AS \`total_activities\`, COUNT(DISTINCT page_url) AS \`unique_pages\`, MIN(activity_time) AS \`session_start\`, MAX(activity_time) AS \`session_end\`, LISTAGG(activity_type) AS \`activity_sequence\`, window_start, window_end FROM TABLE(
+  SESSION(TABLE \`user_activity\`, DESCRIPTOR(\`activity_time\`), INTERVAL '30' MINUTE)
+) GROUP BY \`user_id\`, window_start, window_end
+);
+"
+`;
+
+exports[`Example SQL Snapshots > 13-simple-etl 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : error-log-etl
+-- ====================================================================
+
+SET 'pipeline.name' = 'error-log-etl';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : raw_logs
+-- type        : kafka
+-- topic       : raw_logs
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`raw_logs\` (
+  \`log_id\` STRING,
+  \`timestamp\` TIMESTAMP(3),
+  \`level\` STRING,
+  \`message\` STRING,
+  \`service_name\` STRING
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'raw_logs',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : elasticsearch_7
+-- type        : elasticsearch-7
+-- hosts       : http://elasticsearch:9200
+-- index       : error_logs
+-- ====================================================================
+
+CREATE TABLE \`elasticsearch_7\` (
+  \`log_id\` STRING,
+  \`timestamp\` TIMESTAMP(3),
+  \`level\` STRING,
+  \`message\` STRING,
+  \`service_name\` STRING
+) WITH (
+  'connector' = 'elasticsearch-7',
+  'hosts' = 'http://elasticsearch:9200',
+  'index' = 'error_logs'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Filter_1
+-- type        : Filter
+-- input       : raw_logs
+-- output      : elasticsearch_7
+-- rule        : level IN ('ERROR', 'WARN')
+-- ====================================================================
+
+INSERT INTO \`elasticsearch_7\`
+SELECT * FROM \`raw_logs\` WHERE level IN ('ERROR', 'WARN');
+"
+`;
+
+exports[`Example SQL Snapshots > 14-ohlcv-window 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : ohlcv-1min
+-- ====================================================================
+
+SET 'pipeline.name' = 'ohlcv-1min';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : trades
+-- type        : kafka
+-- topic       : trades
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`trades\` (
+  \`symbol\` STRING,
+  \`price\` DECIMAL(12, 4),
+  \`volume\` BIGINT,
+  \`trade_time\` TIMESTAMP(3),
+  WATERMARK FOR \`trade_time\` AS trade_time - INTERVAL '10' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'trades',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : ohlcv_1min
+-- type        : kafka
+-- topic       : ohlcv_1min
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`ohlcv_1min\` (
+  \`symbol\` STRING,
+  \`open_price\` STRING,
+  \`high_price\` STRING,
+  \`low_price\` STRING,
+  \`close_price\` STRING,
+  \`total_volume\` BIGINT,
+  \`window_start\` TIMESTAMP(3),
+  \`window_end\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'ohlcv_1min',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : unknown
+-- output      : ohlcv_1min
+-- ====================================================================
+
+INSERT INTO \`ohlcv_1min\`
+SELECT \`symbol\`, FIRST_VALUE(price) AS \`open_price\`, MAX(price) AS \`high_price\`, MIN(price) AS \`low_price\`, LAST_VALUE(price) AS \`close_price\`, SUM(volume) AS \`total_volume\`, window_start, window_end FROM TABLE(
+  TUMBLE(TABLE \`trades\`, DESCRIPTOR(\`trade_time\`), INTERVAL '1' MINUTE)
+) GROUP BY \`symbol\`, window_start, window_end;
+"
+`;
+
+exports[`Example SQL Snapshots > 15-cep-fraud-detection 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : fraud-detection
+-- parallelism : 16
+-- ====================================================================
+
+SET 'pipeline.name' = 'fraud-detection';
+
+SET 'parallelism.default' = '16';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : card_transactions
+-- type        : kafka
+-- topic       : card_transactions
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`card_transactions\` (
+  \`transaction_id\` STRING,
+  \`card_id\` STRING,
+  \`merchant_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`location\` STRING,
+  \`transaction_time\` TIMESTAMP(3),
+  WATERMARK FOR \`transaction_time\` AS transaction_time - INTERVAL '30' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'card_transactions',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : fraud_alerts
+-- type        : kafka
+-- topic       : fraud_alerts
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`fraud_alerts\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'fraud_alerts',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Map_2
+-- type        : Map
+-- input       : unknown
+-- output      : fraud_alerts
+-- ====================================================================
+
+INSERT INTO \`fraud_alerts\`
+SELECT card_id AS \`card_id\`, first_txn AS \`first_txn\`, last_txn AS \`last_txn\`, total_amount AS \`total_amount\`, txn_count AS \`txn_count\`, 'RAPID_GEO_CHANGE' AS \`fraud_type\` FROM (
+SELECT * FROM unknown
+);
+"
+`;
+
+exports[`Example SQL Snapshots > 16-temporal-join 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : forex-conversion
+-- parallelism : 8
+-- ====================================================================
+
+SET 'pipeline.name' = 'forex-conversion';
+
+SET 'parallelism.default' = '8';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : forex_orders
+-- type        : kafka
+-- topic       : forex_orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`forex_orders\` (
+  \`order_id\` STRING,
+  \`currency_pair\` STRING,
+  \`amount\` DECIMAL(12, 2),
+  \`order_time\` TIMESTAMP(3),
+  WATERMARK FOR \`order_time\` AS order_time - INTERVAL '1' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'forex_orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : currency_rates
+-- type        : kafka
+-- topic       : currency_rates
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`currency_rates\` (
+  \`currency_pair\` STRING,
+  \`exchange_rate\` DECIMAL(12, 6),
+  \`rate_time\` TIMESTAMP(3),
+  WATERMARK FOR \`rate_time\` AS rate_time - INTERVAL '1' SECOND,
+  PRIMARY KEY (\`currency_pair\`) NOT ENFORCED
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'currency_rates',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : converted_orders
+-- type        : kafka
+-- topic       : converted_orders
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`converted_orders\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'converted_orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Map_3
+-- type        : Map
+-- input       : unknown
+-- output      : converted_orders
+-- ====================================================================
+
+INSERT INTO \`converted_orders\`
+SELECT order_id AS \`order_id\`, currency_pair AS \`currency_pair\`, amount AS \`amount\`, order_time AS \`order_time\`, exchange_rate AS \`exchange_rate\`, amount * exchange_rate AS \`converted_amount\` FROM (
+SELECT * FROM unknown
+);
+"
+`;
+
+exports[`Example SQL Snapshots > 18-broadcast-join 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : blacklist-filter
+-- parallelism : 32
+-- ====================================================================
+
+SET 'pipeline.name' = 'blacklist-filter';
+
+SET 'parallelism.default' = '32';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : user_events
+-- type        : kafka
+-- topic       : user_events
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`user_events\` (
+  \`event_id\` STRING,
+  \`user_id\` STRING,
+  \`event_type\` STRING,
+  \`product_id\` STRING,
+  \`event_time\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'user_events',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : blacklist
+-- type        : jdbc
+-- table       : blacklist
+-- url         : jdbc:postgresql://db:5432/moderation
+-- ====================================================================
+
+CREATE TABLE \`blacklist\` (
+  \`user_id\` STRING,
+  \`reason\` STRING,
+  \`blocked_until\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'jdbc',
+  'url' = 'jdbc:postgresql://db:5432/moderation',
+  'table-name' = 'blacklist'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : valid_events
+-- type        : kafka
+-- topic       : valid_events
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`valid_events\` WITH (
+  'connector' = 'kafka',
+  'topic' = 'valid_events',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : unknown
+-- output      : valid_events
+-- ====================================================================
+
+INSERT INTO \`valid_events\`
+SELECT * FROM unknown;
+"
+`;
+
+exports[`Example SQL Snapshots > 19-union-aggregate 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : platform-hourly-metrics
+-- parallelism : 8
+-- ====================================================================
+
+SET 'pipeline.name' = 'platform-hourly-metrics';
+
+SET 'parallelism.default' = '8';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : mobile_events
+-- type        : kafka
+-- topic       : mobile_events
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`mobile_events\` (
+  \`event_id\` STRING,
+  \`user_id\` STRING,
+  \`event_type\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS event_time - INTERVAL '30' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'mobile_events',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : web_events
+-- type        : kafka
+-- topic       : web_events
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`web_events\` (
+  \`event_id\` STRING,
+  \`user_id\` STRING,
+  \`event_type\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS event_time - INTERVAL '30' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'web_events',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : iot_events
+-- type        : kafka
+-- topic       : iot_events
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`iot_events\` (
+  \`event_id\` STRING,
+  \`device_id\` STRING,
+  \`event_type\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS event_time - INTERVAL '30' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'iot_events',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : platform_hourly_metrics
+-- type        : jdbc
+-- table       : platform_hourly_metrics
+-- url         : jdbc:postgresql://db:5432/analytics
+-- ====================================================================
+
+CREATE TABLE \`platform_hourly_metrics\` (
+  \`platform\` STRING,
+  \`event_type\` STRING,
+  \`event_count\` BIGINT,
+  \`unique_users\` BIGINT,
+  \`window_start\` TIMESTAMP(3),
+  \`window_end\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'jdbc',
+  'url' = 'jdbc:postgresql://db:5432/analytics',
+  'table-name' = 'platform_hourly_metrics'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Union_6
+-- type        : Union
+-- input       : mobile_events
+-- output      : platform_hourly_metrics
+-- ====================================================================
+
+INSERT INTO \`platform_hourly_metrics\`
+SELECT \`platform\`, \`event_type\`, COUNT(*) AS \`event_count\`, COUNT(DISTINCT user_id) AS \`unique_users\`, window_start, window_end FROM TABLE(
+  TUMBLE(TABLE (
+SELECT * FROM \`mobile_events\`
+UNION ALL
+SELECT * FROM \`web_events\`
+UNION ALL
+SELECT * FROM \`iot_events\`
+), DESCRIPTOR(\`event_time\`), INTERVAL '1' HOUR)
+) GROUP BY \`platform\`, \`event_type\`, window_start, window_end;
+"
+`;
+
+exports[`Example SQL Snapshots > 20-realtime-dashboard 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : dashboard-top-categories
+-- parallelism : 16
+-- ====================================================================
+
+SET 'pipeline.name' = 'dashboard-top-categories';
+
+SET 'parallelism.default' = '16';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : sales_transactions
+-- type        : kafka
+-- topic       : sales_transactions
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`sales_transactions\` (
+  \`transaction_id\` STRING,
+  \`store_id\` STRING,
+  \`product_id\` STRING,
+  \`quantity\` INT,
+  \`unit_price\` DECIMAL(10, 2),
+  \`transaction_time\` TIMESTAMP(3),
+  WATERMARK FOR \`transaction_time\` AS transaction_time - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'sales_transactions',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : dashboard_top_categories_per_region
+-- type        : kafka
+-- topic       : dashboard_top_categories_per_region
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`dashboard_top_categories_per_region\` (
+  \`region\` STRING,
+  \`category\` STRING,
+  \`revenue\` STRING,
+  \`units_sold\` BIGINT,
+  \`transaction_count\` BIGINT,
+  \`window_start\` TIMESTAMP(3),
+  \`window_end\` TIMESTAMP(3),
+  \`rownum\` BIGINT
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'dashboard_top_categories_per_region',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- transforms  : Aggregate → TopN
+-- input       : unknown
+-- output      : dashboard_top_categories_per_region
+-- ====================================================================
+
+INSERT INTO \`dashboard_top_categories_per_region\`
+SELECT *, ROW_NUMBER() OVER (PARTITION BY \`window_start\`, \`region\` ORDER BY \`revenue\` DESC) AS rownum
+FROM (
+SELECT \`region\`, \`category\`, SUM(quantity * unit_price) AS \`revenue\`, SUM(quantity) AS \`units_sold\`, COUNT(*) AS \`transaction_count\`, window_start, window_end FROM TABLE(
+  TUMBLE(TABLE (
+SELECT \`region\`, \`category\`, SUM(quantity * unit_price) AS \`revenue\`, SUM(quantity) AS \`units_sold\`, COUNT(*) AS \`transaction_count\` FROM (
+SELECT * FROM unknown
+) GROUP BY \`region\`, \`category\`
+), DESCRIPTOR(\`transaction_time\`), INTERVAL '1' MINUTE)
+) GROUP BY \`region\`, \`category\`, window_start, window_end
+)
+QUALIFY rownum <= 5;
+"
+`;
+
+exports[`Example SQL Snapshots > 21-branching-multi-sink 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : order-routing
+-- parallelism : 16
+-- ====================================================================
+
+SET 'pipeline.name' = 'order-routing';
+
+SET 'parallelism.default' = '16';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : raw_orders
+-- type        : kafka
+-- topic       : raw_orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`raw_orders\` (
+  \`order_id\` STRING,
+  \`customer_id\` STRING,
+  \`product_id\` STRING,
+  \`quantity\` INT,
+  \`unit_price\` DECIMAL(10, 2),
+  \`order_time\` TIMESTAMP(3),
+  \`region\` STRING,
+  \`order_status\` STRING,
+  WATERMARK FOR \`order_time\` AS order_time - INTERVAL '10' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'raw_orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : high_value_orders
+-- type        : kafka
+-- topic       : high_value_orders
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`high_value_orders\` (
+  \`order_id\` STRING,
+  \`customer_id\` STRING,
+  \`product_id\` STRING,
+  \`total_amount\` STRING,
+  \`order_time\` STRING,
+  \`region\` STRING,
+  \`order_status\` STRING
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'high_value_orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : failed_orders_alerts
+-- type        : kafka
+-- topic       : failed_orders_alerts
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`failed_orders_alerts\` (
+  \`order_id\` STRING,
+  \`customer_id\` STRING,
+  \`product_id\` STRING,
+  \`total_amount\` STRING,
+  \`order_time\` STRING,
+  \`region\` STRING,
+  \`order_status\` STRING
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'failed_orders_alerts',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : regional_metrics_per_minute
+-- type        : jdbc
+-- table       : regional_metrics_per_minute
+-- url         : jdbc:postgresql://db:5432/analytics
+-- ====================================================================
+
+CREATE TABLE \`regional_metrics_per_minute\` (
+  \`region\` STRING,
+  \`revenue\` STRING,
+  \`order_count\` BIGINT,
+  \`window_start\` TIMESTAMP(3),
+  \`window_end\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'jdbc',
+  'url' = 'jdbc:postgresql://db:5432/analytics',
+  'table-name' = 'regional_metrics_per_minute'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : unknown
+-- output      : high_value_orders
+-- ====================================================================
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : unknown
+-- output      : failed_orders_alerts
+-- ====================================================================
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : unknown
+-- output      : regional_metrics_per_minute
+-- ====================================================================
+
+EXECUTE STATEMENT SET BEGIN
+INSERT INTO \`high_value_orders\`
+SELECT * FROM (
+SELECT order_id AS \`order_id\`, customer_id AS \`customer_id\`, product_id AS \`product_id\`, quantity * unit_price AS \`total_amount\`, order_time AS \`order_time\`, region AS \`region\`, order_status AS \`order_status\` FROM (
+SELECT * FROM unknown
+)
+)
+WHERE total_amount >= 1000;
+INSERT INTO \`failed_orders_alerts\`
+SELECT * FROM (
+SELECT order_id AS \`order_id\`, customer_id AS \`customer_id\`, product_id AS \`product_id\`, quantity * unit_price AS \`total_amount\`, order_time AS \`order_time\`, region AS \`region\`, order_status AS \`order_status\` FROM (
+SELECT * FROM unknown
+)
+)
+WHERE order_status = 'FAILED';
+INSERT INTO \`regional_metrics_per_minute\`
+SELECT * FROM TABLE(
+  TUMBLE(TABLE (
+SELECT order_id AS \`order_id\`, customer_id AS \`customer_id\`, product_id AS \`product_id\`, quantity * unit_price AS \`total_amount\`, order_time AS \`order_time\`, region AS \`region\`, order_status AS \`order_status\` FROM (
+SELECT * FROM unknown
+)
+), DESCRIPTOR(\`order_time\`), INTERVAL '1' MINUTE)
+);
+END;
+"
+`;
+
+exports[`Example SQL Snapshots > 22-enrichment-archive 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : enrichment-archive
+-- parallelism : 12
+-- ====================================================================
+
+SET 'pipeline.name' = 'enrichment-archive';
+
+SET 'parallelism.default' = '12';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : user_events
+-- type        : kafka
+-- topic       : user_events
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`user_events\` (
+  \`event_id\` STRING,
+  \`user_id\` STRING,
+  \`event_type\` STRING,
+  \`event_data\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  \`processed_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS event_time - INTERVAL '30' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'user_events',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : user_events_2
+-- type        : filesystem
+-- path        : s3://data-lake/raw/user_events
+-- format      : parquet
+-- ====================================================================
+
+CREATE TABLE \`user_events_2\` (
+  \`event_id\` STRING,
+  \`user_id\` STRING,
+  \`event_type\` STRING,
+  \`event_data\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  \`processed_time\` TIMESTAMP(3)
+) PARTITIONED BY (DATE(event_time)) WITH (
+  'connector' = 'filesystem',
+  'path' = 's3://data-lake/raw/user_events',
+  'format' = 'parquet'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : enriched_user_events
+-- type        : kafka
+-- topic       : enriched_user_events
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`enriched_user_events\` (
+  \`event_id\` STRING,
+  \`user_id\` STRING,
+  \`event_type\` STRING,
+  \`event_data\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  \`processed_time\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'enriched_user_events',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : premium_user_conversions
+-- type        : kafka
+-- topic       : premium_user_conversions
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`premium_user_conversions\` (
+  \`event_id\` STRING,
+  \`user_id\` STRING,
+  \`event_type\` STRING,
+  \`event_data\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  \`processed_time\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'premium_user_conversions',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : user_events
+-- output      : user_events_2
+-- ====================================================================
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : user_events
+-- output      : enriched_user_events
+-- ====================================================================
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Filter_6
+-- type        : Filter
+-- input       : user_events
+-- output      : premium_user_conversions
+-- rule        : user_tier = 'premium' AND event_type IN ('purchase', 'subscription')
+-- ====================================================================
+
+EXECUTE STATEMENT SET BEGIN
+INSERT INTO \`user_events_2\`
+SELECT * FROM \`user_events\`;
+INSERT INTO \`enriched_user_events\`
+SELECT * FROM \`user_events\` LEFT JOIN \`user_profiles\` FOR SYSTEM_TIME AS OF \`user_events\`.proc_time ON user_id;
+INSERT INTO \`premium_user_conversions\`
+SELECT * FROM (
+SELECT * FROM \`user_events\` LEFT JOIN \`user_profiles\` FOR SYSTEM_TIME AS OF \`user_events\`.proc_time ON user_id
+) WHERE user_tier = 'premium' AND event_type IN ('purchase', 'subscription');
+END;
+"
+`;
+
+exports[`Example SQL Snapshots > 23-batch-etl 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : sales-batch-etl
+-- parallelism : 32
+-- mode        : batch
+-- ====================================================================
+
+SET 'pipeline.name' = 'sales-batch-etl';
+
+SET 'execution.runtime-mode' = 'batch';
+
+SET 'parallelism.default' = '32';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : filesystem
+-- type        : filesystem
+-- format      : parquet
+-- path        : s3://data-warehouse/sales/2024/
+-- ====================================================================
+
+CREATE TABLE \`filesystem\` (
+  \`sale_id\` STRING,
+  \`store_id\` STRING,
+  \`product_id\` STRING,
+  \`customer_id\` STRING,
+  \`quantity\` INT,
+  \`amount\` DECIMAL(10, 2),
+  \`sale_date\` DATE,
+  \`sale_timestamp\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'filesystem',
+  'format' = 'parquet',
+  'path' = 's3://data-warehouse/sales/2024/'
+);
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : products
+-- type        : jdbc
+-- table       : products
+-- url         : jdbc:postgresql://db:5432/catalog
+-- ====================================================================
+
+CREATE TABLE \`products\` (
+  \`product_id\` STRING,
+  \`product_name\` STRING,
+  \`category\` STRING,
+  \`subcategory\` STRING,
+  \`brand\` STRING
+) WITH (
+  'connector' = 'jdbc',
+  'url' = 'jdbc:postgresql://db:5432/catalog',
+  'table-name' = 'products'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : daily_category_sales
+-- type        : filesystem
+-- path        : s3://data-warehouse/aggregates/daily_category_sales/
+-- format      : parquet
+-- ====================================================================
+
+CREATE TABLE \`daily_category_sales\` PARTITIONED BY (sale_date) WITH (
+  'connector' = 'filesystem',
+  'path' = 's3://data-warehouse/aggregates/daily_category_sales/',
+  'format' = 'parquet'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : daily_brand_performance
+-- type        : jdbc
+-- table       : daily_brand_performance
+-- url         : jdbc:postgresql://db:5432/analytics
+-- ====================================================================
+
+CREATE TABLE \`daily_brand_performance\` WITH (
+  'connector' = 'jdbc',
+  'url' = 'jdbc:postgresql://db:5432/analytics',
+  'table-name' = 'daily_brand_performance'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Aggregate_3
+-- type        : Aggregate
+-- input       : unknown
+-- output      : daily_category_sales
+-- group-by    : category, subcategory, sale_date
+-- ====================================================================
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Aggregate_6
+-- type        : Aggregate
+-- input       : unknown
+-- output      : daily_brand_performance
+-- group-by    : brand, sale_date
+-- ====================================================================
+
+EXECUTE STATEMENT SET BEGIN
+INSERT INTO \`daily_category_sales\`
+SELECT \`category\`, \`subcategory\`, \`sale_date\`, SUM(amount) AS \`total_revenue\`, SUM(quantity) AS \`total_units\`, COUNT(DISTINCT customer_id) AS \`unique_customers\` FROM (
+SELECT * FROM unknown
+) GROUP BY \`category\`, \`subcategory\`, \`sale_date\`;
+INSERT INTO \`daily_brand_performance\`
+SELECT \`brand\`, \`sale_date\`, SUM(amount) AS \`brand_revenue\`, COUNT(*) AS \`transaction_count\` FROM (
+SELECT * FROM unknown
+) GROUP BY \`brand\`, \`sale_date\`;
+END;
+"
+`;
+
+exports[`Example SQL Snapshots > 24-lambda-architecture 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : clickstream-lambda
+-- parallelism : 24
+-- ====================================================================
+
+SET 'pipeline.name' = 'clickstream-lambda';
+
+SET 'parallelism.default' = '24';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : clickstream
+-- type        : kafka
+-- topic       : clickstream
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`clickstream\` (
+  \`session_id\` STRING,
+  \`user_id\` STRING,
+  \`page_url\` STRING,
+  \`referrer\` STRING,
+  \`event_type\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  \`user_agent\` STRING,
+  \`ip_address\` STRING,
+  WATERMARK FOR \`event_time\` AS event_time - INTERVAL '10' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'clickstream',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : raw
+-- type        : filesystem
+-- path        : s3://data-lake/clickstream/raw/
+-- format      : parquet
+-- ====================================================================
+
+CREATE TABLE \`raw\` (
+  \`session_id\` STRING,
+  \`user_id\` STRING,
+  \`page_url\` STRING,
+  \`referrer\` STRING,
+  \`event_type\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  \`user_agent\` STRING,
+  \`ip_address\` STRING
+) PARTITIONED BY (DATE(event_time), HOUR(event_time)) WITH (
+  'connector' = 'filesystem',
+  'path' = 's3://data-lake/clickstream/raw/',
+  'format' = 'parquet'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : realtime_page_metrics
+-- type        : kafka
+-- topic       : realtime_page_metrics
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`realtime_page_metrics\` (
+  \`page_url\` STRING,
+  \`view_count\` BIGINT,
+  \`unique_visitors\` BIGINT,
+  \`window_start\` TIMESTAMP(3),
+  \`window_end\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'realtime_page_metrics',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : user_activity_summary
+-- type        : jdbc
+-- table       : user_activity_summary
+-- url         : jdbc:postgresql://db:5432/analytics
+-- ====================================================================
+
+CREATE TABLE \`user_activity_summary\` (
+  \`user_id\` STRING,
+  \`total_events\` BIGINT,
+  \`session_count\` BIGINT,
+  \`last_seen\` TIMESTAMP(3),
+  PRIMARY KEY (\`user_id\`) NOT ENFORCED
+) WITH (
+  'connector' = 'jdbc',
+  'url' = 'jdbc:postgresql://db:5432/analytics',
+  'table-name' = 'user_activity_summary'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : error_events_alerts
+-- type        : kafka
+-- topic       : error_events_alerts
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`error_events_alerts\` (
+  \`session_id\` STRING,
+  \`user_id\` STRING,
+  \`page_url\` STRING,
+  \`referrer\` STRING,
+  \`event_type\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  \`user_agent\` STRING,
+  \`ip_address\` STRING
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'error_events_alerts',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : clickstream
+-- output      : raw
+-- ====================================================================
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : unknown
+-- output      : realtime_page_metrics
+-- ====================================================================
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Aggregate_7
+-- type        : Aggregate
+-- input       : clickstream
+-- output      : user_activity_summary
+-- group-by    : user_id
+-- ====================================================================
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : clickstream
+-- output      : error_events_alerts
+-- ====================================================================
+
+EXECUTE STATEMENT SET BEGIN
+INSERT INTO \`raw\`
+SELECT * FROM \`clickstream\`;
+INSERT INTO \`realtime_page_metrics\`
+SELECT * FROM TABLE(
+  TUMBLE(TABLE \`clickstream\`, DESCRIPTOR(\`event_time\`), INTERVAL '1' MINUTE)
+);
+INSERT INTO \`user_activity_summary\`
+SELECT \`user_id\`, COUNT(*) AS \`total_events\`, COUNT(DISTINCT session_id) AS \`session_count\`, MAX(event_time) AS \`last_seen\` FROM \`clickstream\` GROUP BY \`user_id\`;
+INSERT INTO \`error_events_alerts\`
+SELECT * FROM \`clickstream\`
+WHERE event_type IN ('error', 'exception');
+END;
+"
+`;
+
+exports[`Example SQL Snapshots > 25-batch-reporting 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : monthly-financial-report
+-- parallelism : 64
+-- mode        : batch
+-- ====================================================================
+
+SET 'pipeline.name' = 'monthly-financial-report';
+
+SET 'execution.runtime-mode' = 'batch';
+
+SET 'parallelism.default' = '64';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : filesystem
+-- type        : filesystem
+-- format      : parquet
+-- path        : s3://data-warehouse/transactions/year=2024/month=01/
+-- ====================================================================
+
+CREATE TABLE \`filesystem\` (
+  \`transaction_id\` STRING,
+  \`account_id\` STRING,
+  \`merchant_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`currency\` STRING,
+  \`transaction_type\` STRING,
+  \`transaction_date\` DATE,
+  \`is_fraud\` BOOLEAN
+) WITH (
+  'connector' = 'filesystem',
+  'format' = 'parquet',
+  'path' = 's3://data-warehouse/transactions/year=2024/month=01/'
+);
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : filesystem_2
+-- type        : filesystem
+-- format      : parquet
+-- path        : s3://data-warehouse/merchants/
+-- ====================================================================
+
+CREATE TABLE \`filesystem_2\` (
+  \`merchant_id\` STRING,
+  \`merchant_name\` STRING,
+  \`merchant_category\` STRING,
+  \`merchant_country\` STRING
+) WITH (
+  'connector' = 'filesystem',
+  'format' = 'parquet',
+  'path' = 's3://data-warehouse/merchants/'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : category_summary
+-- type        : filesystem
+-- path        : s3://reports/monthly/category_summary/
+-- format      : parquet
+-- ====================================================================
+
+CREATE TABLE \`category_summary\` WITH (
+  'connector' = 'filesystem',
+  'path' = 's3://reports/monthly/category_summary/',
+  'format' = 'parquet'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : monthly_country_report
+-- type        : jdbc
+-- table       : monthly_country_report
+-- url         : jdbc:postgresql://db:5432/reporting
+-- ====================================================================
+
+CREATE TABLE \`monthly_country_report\` WITH (
+  'connector' = 'jdbc',
+  'url' = 'jdbc:postgresql://db:5432/reporting',
+  'table-name' = 'monthly_country_report'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : january_2024
+-- type        : filesystem
+-- path        : s3://reports/fraud/january_2024/
+-- format      : csv
+-- ====================================================================
+
+CREATE TABLE \`january_2024\` WITH (
+  'connector' = 'filesystem',
+  'path' = 's3://reports/fraud/january_2024/',
+  'format' = 'csv'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Aggregate_3
+-- type        : Aggregate
+-- input       : unknown
+-- output      : category_summary
+-- group-by    : merchant_category, transaction_date
+-- ====================================================================
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Aggregate_6
+-- type        : Aggregate
+-- input       : unknown
+-- output      : monthly_country_report
+-- group-by    : merchant_country, transaction_type
+-- ====================================================================
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : unknown
+-- output      : january_2024
+-- ====================================================================
+
+EXECUTE STATEMENT SET BEGIN
+INSERT INTO \`category_summary\`
+SELECT \`merchant_category\`, \`transaction_date\`, SUM(amount) AS \`total_volume\`, COUNT(*) AS \`txn_count\`, SUM(CASE WHEN is_fraud THEN 1 ELSE 0 END) AS \`fraud_count\` FROM (
+SELECT * FROM unknown
+) GROUP BY \`merchant_category\`, \`transaction_date\`;
+INSERT INTO \`monthly_country_report\`
+SELECT \`merchant_country\`, \`transaction_type\`, SUM(amount) AS \`country_volume\`, AVG(amount) AS \`avg_txn_amount\`, COUNT(DISTINCT account_id) AS \`unique_accounts\` FROM (
+SELECT * FROM unknown
+) GROUP BY \`merchant_country\`, \`transaction_type\`;
+INSERT INTO \`january_2024\`
+SELECT * FROM (
+SELECT * FROM unknown
+)
+WHERE is_fraud = true;
+END;
+"
+`;
+
+exports[`Example SQL Snapshots > 26-cdc-sync 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : cdc-product-sync
+-- parallelism : 8
+-- ====================================================================
+
+SET 'pipeline.name' = 'cdc-product-sync';
+
+SET 'parallelism.default' = '8';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : mysql_inventory_products
+-- type        : kafka
+-- topic       : mysql.inventory.products
+-- format      : debezium-json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`mysql_inventory_products\` (
+  \`product_id\` BIGINT,
+  \`product_name\` STRING,
+  \`category\` STRING,
+  \`price\` DECIMAL(10, 2),
+  \`stock_quantity\` INT,
+  \`updated_at\` TIMESTAMP(3),
+  PRIMARY KEY (\`product_id\`) NOT ENFORCED
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'mysql.inventory.products',
+  'format' = 'debezium-json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : products_replica
+-- type        : jdbc
+-- table       : products_replica
+-- url         : jdbc:postgresql://db:5432/replica
+-- ====================================================================
+
+CREATE TABLE \`products_replica\` (
+  \`product_id\` BIGINT,
+  \`product_name\` STRING,
+  \`category\` STRING,
+  \`price\` DECIMAL(10, 2),
+  \`stock_quantity\` INT,
+  \`updated_at\` TIMESTAMP(3),
+  PRIMARY KEY (\`product_id\`) NOT ENFORCED
+) WITH (
+  'connector' = 'jdbc',
+  'url' = 'jdbc:postgresql://db:5432/replica',
+  'table-name' = 'products_replica'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : products_changelog_archive
+-- type        : kafka
+-- topic       : products_changelog_archive
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`products_changelog_archive\` (
+  \`product_id\` BIGINT,
+  \`product_name\` STRING,
+  \`category\` STRING,
+  \`price\` DECIMAL(10, 2),
+  \`stock_quantity\` INT,
+  \`updated_at\` TIMESTAMP(3),
+  PRIMARY KEY (\`product_id\`) NOT ENFORCED
+) WITH (
+  'connector' = 'upsert-kafka',
+  'topic' = 'products_changelog_archive',
+  'key.format' = 'json',
+  'value.format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : low_stock_alerts
+-- type        : kafka
+-- topic       : low_stock_alerts
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`low_stock_alerts\` (
+  \`product_id\` BIGINT,
+  \`product_name\` STRING,
+  \`category\` STRING,
+  \`price\` DECIMAL(10, 2),
+  \`stock_quantity\` INT,
+  \`updated_at\` TIMESTAMP(3),
+  PRIMARY KEY (\`product_id\`) NOT ENFORCED
+) WITH (
+  'connector' = 'upsert-kafka',
+  'topic' = 'low_stock_alerts',
+  'key.format' = 'json',
+  'value.format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : category_stats
+-- type        : jdbc
+-- table       : category_stats
+-- url         : jdbc:postgresql://db:5432/analytics
+-- ====================================================================
+
+CREATE TABLE \`category_stats\` (
+  \`category\` STRING,
+  \`product_count\` BIGINT,
+  \`avg_price\` DECIMAL(10, 2),
+  \`last_update\` TIMESTAMP(3),
+  PRIMARY KEY (\`category\`) NOT ENFORCED
+) WITH (
+  'connector' = 'jdbc',
+  'url' = 'jdbc:postgresql://db:5432/analytics',
+  'table-name' = 'category_stats'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : mysql_inventory_products
+-- output      : products_replica
+-- ====================================================================
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : mysql_inventory_products
+-- output      : products_changelog_archive
+-- ====================================================================
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : mysql_inventory_products
+-- output      : low_stock_alerts
+-- ====================================================================
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Aggregate_7
+-- type        : Aggregate
+-- input       : mysql_inventory_products
+-- output      : category_stats
+-- group-by    : category
+-- ====================================================================
+
+EXECUTE STATEMENT SET BEGIN
+INSERT INTO \`products_replica\`
+SELECT * FROM \`mysql_inventory_products\`;
+INSERT INTO \`products_changelog_archive\`
+SELECT * FROM \`mysql_inventory_products\`;
+INSERT INTO \`low_stock_alerts\`
+SELECT * FROM \`mysql_inventory_products\`
+WHERE stock_quantity < 10;
+INSERT INTO \`category_stats\`
+SELECT \`category\`, COUNT(*) AS \`product_count\`, AVG(price) AS \`avg_price\`, MAX(updated_at) AS \`last_update\` FROM \`mysql_inventory_products\` GROUP BY \`category\`;
+END;
+"
+`;
+
+exports[`Example SQL Snapshots > 27-ml-feature-pipeline 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : ml-feature-pipeline
+-- parallelism : 32
+-- mode        : batch
+-- ====================================================================
+
+SET 'pipeline.name' = 'ml-feature-pipeline';
+
+SET 'execution.runtime-mode' = 'batch';
+
+SET 'parallelism.default' = '32';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : filesystem
+-- type        : filesystem
+-- format      : parquet
+-- path        : s3://ml-data/user_interactions/
+-- ====================================================================
+
+CREATE TABLE \`filesystem\` (
+  \`user_id\` STRING,
+  \`item_id\` STRING,
+  \`interaction_type\` STRING,
+  \`interaction_time\` TIMESTAMP(3),
+  \`duration_seconds\` DOUBLE
+) WITH (
+  'connector' = 'filesystem',
+  'format' = 'parquet',
+  'path' = 's3://ml-data/user_interactions/'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : user_engagement_features
+-- type        : filesystem
+-- path        : s3://ml-features/user_engagement_features/
+-- format      : parquet
+-- ====================================================================
+
+CREATE TABLE \`user_engagement_features\` (
+  \`user_id\` STRING,
+  \`total_interactions\` BIGINT,
+  \`unique_items\` BIGINT,
+  \`total_duration\` DOUBLE,
+  \`avg_duration\` DOUBLE
+) WITH (
+  'connector' = 'filesystem',
+  'path' = 's3://ml-features/user_engagement_features/',
+  'format' = 'parquet'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : item_popularity_features
+-- type        : filesystem
+-- path        : s3://ml-features/item_popularity_features/
+-- format      : parquet
+-- ====================================================================
+
+CREATE TABLE \`item_popularity_features\` (
+  \`item_id\` STRING,
+  \`view_count\` BIGINT,
+  \`unique_viewers\` BIGINT,
+  \`purchase_count\` BOOLEAN,
+  \`conversion_rate\` BIGINT
+) WITH (
+  'connector' = 'filesystem',
+  'path' = 's3://ml-features/item_popularity_features/',
+  'format' = 'parquet'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : user_item_pairs
+-- type        : filesystem
+-- path        : s3://ml-features/user_item_pairs/
+-- format      : parquet
+-- ====================================================================
+
+CREATE TABLE \`user_item_pairs\` (
+  \`user_id\` STRING,
+  \`item_id\` STRING,
+  \`interaction_count\` BIGINT,
+  \`last_interaction\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'filesystem',
+  'path' = 's3://ml-features/user_item_pairs/',
+  'format' = 'parquet'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Aggregate_1
+-- type        : Aggregate
+-- input       : filesystem
+-- output      : user_engagement_features
+-- group-by    : user_id
+-- ====================================================================
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- transforms  : Aggregate → Map
+-- input       : filesystem
+-- output      : item_popularity_features
+-- ====================================================================
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Aggregate_8
+-- type        : Aggregate
+-- input       : filesystem
+-- output      : user_item_pairs
+-- group-by    : user_id, item_id
+-- ====================================================================
+
+EXECUTE STATEMENT SET BEGIN
+INSERT INTO \`user_engagement_features\`
+SELECT \`user_id\`, COUNT(*) AS \`total_interactions\`, COUNT(DISTINCT item_id) AS \`unique_items\`, SUM(duration_seconds) AS \`total_duration\`, AVG(duration_seconds) AS \`avg_duration\` FROM \`filesystem\` GROUP BY \`user_id\`;
+INSERT INTO \`item_popularity_features\`
+SELECT item_id AS \`item_id\`, view_count AS \`view_count\`, unique_viewers AS \`unique_viewers\`, purchase_count AS \`purchase_count\`, CAST(purchase_count AS DOUBLE) / CAST(view_count AS DOUBLE) AS \`conversion_rate\` FROM (
+SELECT \`item_id\`, COUNT(*) AS \`view_count\`, COUNT(DISTINCT user_id) AS \`unique_viewers\`, SUM(CASE WHEN interaction_type = 'purchase' THEN 1 ELSE 0 END) AS \`purchase_count\` FROM \`filesystem\` GROUP BY \`item_id\`
+);
+INSERT INTO \`user_item_pairs\`
+SELECT \`user_id\`, \`item_id\`, COUNT(*) AS \`interaction_count\`, MAX(interaction_time) AS \`last_interaction\` FROM \`filesystem\` GROUP BY \`user_id\`, \`item_id\`;
+END;
+"
+`;
+
+exports[`Example SQL Snapshots > 28-branching-iot 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : iot-sensor-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'iot-sensor-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : iot_sensor_data
+-- type        : kafka
+-- topic       : iot_sensor_data
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`iot_sensor_data\` (
+  \`device_id\` STRING,
+  \`sensor_type\` STRING,
+  \`reading_value\` DOUBLE,
+  \`reading_time\` TIMESTAMP(3),
+  \`location_id\` STRING,
+  WATERMARK FOR \`reading_time\` AS reading_time - INTERVAL '30' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'iot_sensor_data',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : high_temp_alerts
+-- type        : kafka
+-- topic       : high_temp_alerts
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`high_temp_alerts\` (
+  \`device_id\` STRING,
+  \`sensor_type\` STRING,
+  \`reading_value\` DOUBLE,
+  \`reading_time\` TIMESTAMP(3),
+  \`location_id\` STRING
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'high_temp_alerts',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : sensor_metrics_5min
+-- type        : jdbc
+-- table       : sensor_metrics_5min
+-- url         : jdbc:postgresql://db:5432/iot
+-- ====================================================================
+
+CREATE TABLE \`sensor_metrics_5min\` (
+  \`device_id\` STRING,
+  \`sensor_type\` STRING,
+  \`avg_value\` DOUBLE,
+  \`min_value\` DOUBLE,
+  \`max_value\` DOUBLE,
+  \`window_start\` TIMESTAMP(3),
+  \`window_end\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'jdbc',
+  'url' = 'jdbc:postgresql://db:5432/iot',
+  'table-name' = 'sensor_metrics_5min'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : raw
+-- type        : filesystem
+-- path        : s3://iot-archive/raw/
+-- format      : parquet
+-- ====================================================================
+
+CREATE TABLE \`raw\` (
+  \`device_id\` STRING,
+  \`sensor_type\` STRING,
+  \`reading_value\` DOUBLE,
+  \`reading_time\` TIMESTAMP(3),
+  \`location_id\` STRING
+) PARTITIONED BY (DATE(reading_time)) WITH (
+  'connector' = 'filesystem',
+  'path' = 's3://iot-archive/raw/',
+  'format' = 'parquet'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : iot_sensor_data
+-- output      : high_temp_alerts
+-- ====================================================================
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : unknown
+-- output      : sensor_metrics_5min
+-- ====================================================================
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : iot_sensor_data
+-- output      : raw
+-- ====================================================================
+
+EXECUTE STATEMENT SET BEGIN
+INSERT INTO \`high_temp_alerts\`
+SELECT * FROM \`iot_sensor_data\`
+WHERE sensor_type = 'temperature' AND reading_value > 100;
+INSERT INTO \`sensor_metrics_5min\`
+SELECT * FROM TABLE(
+  TUMBLE(TABLE \`iot_sensor_data\`, DESCRIPTOR(\`reading_time\`), INTERVAL '5' MINUTE)
+);
+INSERT INTO \`raw\`
+SELECT * FROM \`iot_sensor_data\`;
+END;
+"
+`;
+
+exports[`Example SQL Snapshots > 30-flatmap-unnest 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : unnest-line-items
+-- parallelism : 4
+-- ====================================================================
+
+SET 'pipeline.name' = 'unnest-line-items';
+
+SET 'parallelism.default' = '4';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`orders\` (
+  \`order_id\` STRING,
+  \`customer_id\` STRING,
+  \`line_items\` ARRAY<STRING>,
+  \`order_time\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : order_line_items
+-- type        : kafka
+-- topic       : order_line_items
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`order_line_items\` (
+  \`order_id\` STRING,
+  \`customer_id\` STRING,
+  \`line_items\` ARRAY<STRING>,
+  \`order_time\` TIMESTAMP(3),
+  \`product_id\` STRING,
+  \`quantity\` INT,
+  \`price\` DECIMAL(10, 2)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'order_line_items',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : FlatMap_1
+-- type        : FlatMap
+-- input       : orders
+-- output      : order_line_items
+-- ====================================================================
+
+INSERT INTO \`order_line_items\`
+SELECT \`orders\`.*, \`product_id\`, \`quantity\`, \`price\` FROM \`orders\` CROSS JOIN UNNEST(\`orders\`.\`line_items\`) AS T(\`product_id\`, \`quantity\`, \`price\`);
+"
+`;
+
+exports[`Example SQL Snapshots > 31-top-n-ranking 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : top-products-by-category
+-- parallelism : 8
+-- ====================================================================
+
+SET 'pipeline.name' = 'top-products-by-category';
+
+SET 'parallelism.default' = '8';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : sales
+-- type        : kafka
+-- topic       : sales
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`sales\` (
+  \`product_id\` STRING,
+  \`category\` STRING,
+  \`revenue\` DECIMAL(10, 2),
+  \`sale_time\` TIMESTAMP(3),
+  WATERMARK FOR \`sale_time\` AS sale_time - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'sales',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : top_products
+-- type        : kafka
+-- topic       : top_products
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`top_products\` (
+  \`category\` STRING,
+  \`product_id\` STRING,
+  \`total_revenue\` DECIMAL(10, 2),
+  \`rownum\` BIGINT,
+  PRIMARY KEY (\`category\`, \`product_id\`) NOT ENFORCED
+) WITH (
+  'connector' = 'upsert-kafka',
+  'topic' = 'top_products',
+  'key.format' = 'json',
+  'value.format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- transforms  : Aggregate → TopN
+-- input       : sales
+-- output      : top_products
+-- ====================================================================
+
+INSERT INTO \`top_products\`
+SELECT *, ROW_NUMBER() OVER (PARTITION BY \`category\` ORDER BY \`total_revenue\` DESC) AS rownum
+FROM (
+SELECT \`category\`, \`product_id\`, SUM(revenue) AS \`total_revenue\` FROM \`sales\` GROUP BY \`category\`, \`product_id\`
+)
+QUALIFY rownum <= 3;
+"
+`;
+
+exports[`Example SQL Snapshots > 32-union-streams 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : merged-regional-events
+-- parallelism : 8
+-- ====================================================================
+
+SET 'pipeline.name' = 'merged-regional-events';
+
+SET 'parallelism.default' = '8';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : events_us
+-- type        : kafka
+-- topic       : events_us
+-- format      : json
+-- bootstrap   : kafka-us:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`events_us\` (
+  \`event_id\` STRING,
+  \`user_id\` STRING,
+  \`event_type\` STRING,
+  \`region\` STRING,
+  \`event_time\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'events_us',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka-us:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : events_eu
+-- type        : kafka
+-- topic       : events_eu
+-- format      : json
+-- bootstrap   : kafka-eu:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`events_eu\` (
+  \`event_id\` STRING,
+  \`user_id\` STRING,
+  \`event_type\` STRING,
+  \`region\` STRING,
+  \`event_time\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'events_eu',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka-eu:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : events_global
+-- type        : kafka
+-- topic       : events_global
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`events_global\` (
+  \`event_id\` STRING,
+  \`user_id\` STRING,
+  \`event_type\` STRING,
+  \`region\` STRING,
+  \`event_time\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'events_global',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka-us:9092'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Union_2
+-- type        : Union
+-- input       : events_us
+-- output      : events_global
+-- ====================================================================
+
+INSERT INTO \`events_global\`
+SELECT * FROM \`events_us\`
+UNION ALL
+SELECT * FROM \`events_eu\`;
+"
+`;
+
+exports[`Example SQL Snapshots > 33-rename-fields 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : standardize-columns
+-- parallelism : 4
+-- ====================================================================
+
+SET 'pipeline.name' = 'standardize-columns';
+
+SET 'parallelism.default' = '4';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : legacy_events
+-- type        : kafka
+-- topic       : legacy_events
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`legacy_events\` (
+  \`usr_id\` STRING,
+  \`evt_type\` STRING,
+  \`ts\` TIMESTAMP(3),
+  \`payload\` STRING
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'legacy_events',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : standardized_events
+-- type        : kafka
+-- topic       : standardized_events
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`standardized_events\` (
+  \`user_id\` STRING,
+  \`event_type\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  \`payload\` STRING
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'standardized_events',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Rename_1
+-- type        : Rename
+-- input       : legacy_events
+-- output      : standardized_events
+-- ====================================================================
+
+INSERT INTO \`standardized_events\`
+SELECT \`usr_id\` AS \`user_id\`, \`evt_type\` AS \`event_type\`, \`ts\` AS \`event_time\`, \`payload\` FROM \`legacy_events\`;
+"
+`;
+
+exports[`Example SQL Snapshots > 34-drop-fields 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : strip-internal-fields
+-- parallelism : 4
+-- ====================================================================
+
+SET 'pipeline.name' = 'strip-internal-fields';
+
+SET 'parallelism.default' = '4';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : internal_events
+-- type        : kafka
+-- topic       : internal_events
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`internal_events\` (
+  \`event_id\` STRING,
+  \`user_id\` STRING,
+  \`event_type\` STRING,
+  \`internal_trace_id\` STRING,
+  \`debug_flags\` STRING,
+  \`raw_payload\` STRING,
+  \`event_time\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'internal_events',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : public_events
+-- type        : kafka
+-- topic       : public_events
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`public_events\` (
+  \`event_id\` STRING,
+  \`user_id\` STRING,
+  \`event_type\` STRING,
+  \`event_time\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'public_events',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Drop_1
+-- type        : Drop
+-- input       : internal_events
+-- output      : public_events
+-- ====================================================================
+
+INSERT INTO \`public_events\`
+SELECT \`event_id\`, \`user_id\`, \`event_type\`, \`event_time\` FROM \`internal_events\`;
+"
+`;
+
+exports[`Example SQL Snapshots > 35-cast-types 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : cast-sensor-readings
+-- parallelism : 4
+-- ====================================================================
+
+SET 'pipeline.name' = 'cast-sensor-readings';
+
+SET 'parallelism.default' = '4';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : raw_sensor_data
+-- type        : kafka
+-- topic       : raw_sensor_data
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`raw_sensor_data\` (
+  \`sensor_id\` STRING,
+  \`temperature\` STRING,
+  \`humidity\` STRING,
+  \`reading_time\` STRING
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'raw_sensor_data',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : typed_sensor_data
+-- type        : kafka
+-- topic       : typed_sensor_data
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`typed_sensor_data\` (
+  \`sensor_id\` STRING,
+  \`temperature\` DOUBLE,
+  \`humidity\` DOUBLE,
+  \`reading_time\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'typed_sensor_data',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Cast_1
+-- type        : Cast
+-- input       : raw_sensor_data
+-- output      : typed_sensor_data
+-- ====================================================================
+
+INSERT INTO \`typed_sensor_data\`
+SELECT \`sensor_id\`, TRY_CAST(\`temperature\` AS DOUBLE) AS \`temperature\`, TRY_CAST(\`humidity\` AS DOUBLE) AS \`humidity\`, TRY_CAST(\`reading_time\` AS TIMESTAMP(3)) AS \`reading_time\` FROM \`raw_sensor_data\`;
+"
+`;
+
+exports[`Example SQL Snapshots > 36-coalesce-defaults 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : fill-profile-defaults
+-- parallelism : 4
+-- ====================================================================
+
+SET 'pipeline.name' = 'fill-profile-defaults';
+
+SET 'parallelism.default' = '4';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : user_profiles
+-- type        : kafka
+-- topic       : user_profiles
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`user_profiles\` (
+  \`user_id\` STRING,
+  \`display_name\` STRING,
+  \`locale\` STRING,
+  \`timezone\` STRING,
+  \`updated_at\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'user_profiles',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : enriched_profiles
+-- type        : kafka
+-- topic       : enriched_profiles
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`enriched_profiles\` (
+  \`user_id\` STRING,
+  \`display_name\` STRING,
+  \`locale\` STRING,
+  \`timezone\` STRING,
+  \`updated_at\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'enriched_profiles',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Coalesce_1
+-- type        : Coalesce
+-- input       : user_profiles
+-- output      : enriched_profiles
+-- ====================================================================
+
+INSERT INTO \`enriched_profiles\`
+SELECT \`user_id\`, COALESCE(\`display_name\`, user_id) AS \`display_name\`, COALESCE(\`locale\`, 'en-US') AS \`locale\`, COALESCE(\`timezone\`, 'UTC') AS \`timezone\`, \`updated_at\` FROM \`user_profiles\`;
+"
+`;
+
+exports[`Example SQL Snapshots > 37-add-computed-field 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : enrich-orders
+-- parallelism : 8
+-- ====================================================================
+
+SET 'pipeline.name' = 'enrich-orders';
+
+SET 'parallelism.default' = '8';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`orders\` (
+  \`order_id\` STRING,
+  \`product_id\` STRING,
+  \`quantity\` INT,
+  \`unit_price\` DECIMAL(10, 2),
+  \`order_time\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : enriched_orders
+-- type        : kafka
+-- topic       : enriched_orders
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`enriched_orders\` (
+  \`order_id\` STRING,
+  \`product_id\` STRING,
+  \`quantity\` INT,
+  \`unit_price\` DECIMAL(10, 2),
+  \`order_time\` TIMESTAMP(3),
+  \`total_price\` DECIMAL(10, 2),
+  \`is_high_value\` BOOLEAN
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'enriched_orders',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : AddField_1
+-- type        : AddField
+-- input       : orders
+-- output      : enriched_orders
+-- ====================================================================
+
+INSERT INTO \`enriched_orders\`
+SELECT *, quantity * unit_price AS \`total_price\`, quantity * unit_price > 500 AS \`is_high_value\` FROM \`orders\`;
+"
+`;
+
+exports[`Example SQL Snapshots > 38-dedup-aggregate 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : hourly-user-events
+-- parallelism : 16
+-- ====================================================================
+
+SET 'pipeline.name' = 'hourly-user-events';
+
+SET 'parallelism.default' = '16';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : raw_events
+-- type        : kafka
+-- topic       : raw_events
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`raw_events\` (
+  \`event_id\` STRING,
+  \`user_id\` STRING,
+  \`event_type\` STRING,
+  \`event_data\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS event_time - INTERVAL '5' SECOND
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'raw_events',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : hourly_user_events
+-- type        : kafka
+-- topic       : hourly_user_events
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`hourly_user_events\` (
+  \`user_id\` STRING,
+  \`event_type\` STRING,
+  \`event_count\` BIGINT,
+  \`window_start\` TIMESTAMP(3),
+  \`window_end\` TIMESTAMP(3)
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'hourly_user_events',
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Deduplicate_1
+-- type        : Deduplicate
+-- input       : raw_events
+-- output      : hourly_user_events
+-- ====================================================================
+
+INSERT INTO \`hourly_user_events\`
+SELECT \`user_id\`, \`event_type\`, COUNT(*) AS \`event_count\`, window_start, window_end FROM TABLE(
+  TUMBLE(TABLE (
+SELECT *, ROW_NUMBER() OVER (PARTITION BY \`event_id\` ORDER BY \`event_time\` ASC) AS rownum
+FROM \`raw_events\`
+QUALIFY rownum = 1
+), DESCRIPTOR(\`event_time\`), INTERVAL '1' HOUR)
+) GROUP BY \`user_id\`, \`event_type\`, window_start, window_end;
+"
+`;

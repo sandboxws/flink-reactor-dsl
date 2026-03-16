@@ -46,7 +46,8 @@ CREATE TABLE \`orders\` (
 CREATE TABLE \`filtered_agg\` WITH (
   'connector' = 'kafka',
   'topic' = 'filtered-agg',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -110,7 +111,8 @@ CREATE TABLE \`orders\` (
 CREATE TABLE \`high_spenders\` WITH (
   'connector' = 'kafka',
   'topic' = 'high-spenders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -173,7 +175,8 @@ CREATE TABLE \`orders\` (
 CREATE TABLE \`user_totals\` WITH (
   'connector' = 'kafka',
   'topic' = 'user-totals',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -240,7 +243,8 @@ CREATE TABLE \`orders\` (
 CREATE TABLE \`multi_window_output\` WITH (
   'connector' = 'kafka',
   'topic' = 'multi-window-output',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -302,7 +306,8 @@ CREATE TABLE \`orders\` (
 CREATE TABLE \`ranked_orders\` WITH (
   'connector' = 'kafka',
   'topic' = 'ranked-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -363,7 +368,8 @@ CREATE TABLE \`orders\` (
 CREATE TABLE \`windowed_orders\` WITH (
   'connector' = 'kafka',
   'topic' = 'windowed-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================

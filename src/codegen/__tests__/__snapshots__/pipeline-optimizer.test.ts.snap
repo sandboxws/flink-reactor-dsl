@@ -55,7 +55,8 @@ CREATE TABLE \`live_branch\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'live-branch',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -77,7 +78,8 @@ CREATE TABLE \`default_branch\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'default-branch',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -164,7 +166,8 @@ CREATE TABLE \`user_totals\` (
   'connector' = 'upsert-kafka',
   'topic' = 'user-totals',
   'key.format' = 'json',
-  'value.format' = 'json'
+  'value.format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -260,7 +263,8 @@ CREATE TABLE \`enriched\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'enriched',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -330,7 +334,8 @@ CREATE TABLE \`high_value\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'high-value',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -352,7 +357,8 @@ CREATE TABLE \`other\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'other',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -439,7 +445,8 @@ CREATE TABLE \`user_totals\` (
   'connector' = 'upsert-kafka',
   'topic' = 'user-totals',
   'key.format' = 'json',
-  'value.format' = 'json'
+  'value.format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -535,7 +542,8 @@ CREATE TABLE \`enriched_orders\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'enriched-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -601,7 +609,8 @@ CREATE TABLE \`slim_orders\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'slim-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -677,7 +686,8 @@ CREATE TABLE \`totals\` (
   'connector' = 'upsert-kafka',
   'topic' = 'totals',
   'key.format' = 'json',
-  'value.format' = 'json'
+  'value.format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================

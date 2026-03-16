@@ -51,7 +51,8 @@ CREATE TABLE \`large_orders\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'large-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -143,7 +144,8 @@ CREATE TABLE \`enriched_orders\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'enriched-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -210,7 +212,8 @@ CREATE TABLE \`hourly_totals\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'hourly-totals',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -281,7 +284,8 @@ CREATE TABLE \`deduped_events\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'deduped-events',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -352,7 +356,8 @@ CREATE TABLE \`top_orders\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'top-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -425,7 +430,8 @@ CREATE TABLE \`errors_2\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'errors',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -446,7 +452,8 @@ CREATE TABLE \`all_events_2\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'all-events',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -642,7 +649,8 @@ CREATE TABLE \`enriched_orders\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'enriched-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -732,7 +740,8 @@ CREATE TABLE \`order_shipments\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'order-shipments',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -820,7 +829,8 @@ CREATE TABLE \`active_orders\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'active-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -911,7 +921,8 @@ CREATE TABLE \`enriched_orders\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'enriched-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -1000,7 +1011,8 @@ CREATE TABLE \`enriched_orders\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'enriched-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -1075,7 +1087,8 @@ CREATE TABLE \`hashed_events\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'hashed-events',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -1143,7 +1156,8 @@ CREATE TABLE \`fraud_alerts\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'fraud-alerts',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -1231,7 +1245,8 @@ CREATE TABLE \`enriched_orders\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'enriched-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -1292,7 +1307,8 @@ CREATE TABLE \`entities\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'entities',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -1361,7 +1377,8 @@ CREATE TABLE \`deduped_events\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'deduped-events',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -1434,7 +1451,8 @@ CREATE TABLE \`deduped_events\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'deduped-events',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -1507,7 +1525,8 @@ CREATE TABLE \`output\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'output',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -1577,7 +1596,8 @@ CREATE TABLE \`output\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'output',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -1646,7 +1666,8 @@ CREATE TABLE \`top_orders\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'top-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -1718,7 +1739,8 @@ CREATE TABLE \`top_orders\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'top-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -1787,7 +1809,8 @@ CREATE TABLE \`errors\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'errors',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -1806,7 +1829,8 @@ CREATE TABLE \`warnings\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'warnings',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -1825,7 +1849,8 @@ CREATE TABLE \`other\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'other',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -2018,7 +2043,8 @@ CREATE TABLE \`orders\` (
 CREATE TABLE \`processed_orders\` WITH (
   'connector' = 'kafka',
   'topic' = 'processed-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -2033,7 +2059,8 @@ CREATE TABLE \`processed_orders\` WITH (
 CREATE TABLE \`order_errors\` WITH (
   'connector' = 'kafka',
   'topic' = 'order-errors',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -2106,7 +2133,8 @@ CREATE TABLE \`events\` (
 CREATE TABLE \`good_events\` WITH (
   'connector' = 'kafka',
   'topic' = 'good-events',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -2121,7 +2149,8 @@ CREATE TABLE \`good_events\` WITH (
 CREATE TABLE \`bad_events\` WITH (
   'connector' = 'kafka',
   'topic' = 'bad-events',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -2192,7 +2221,8 @@ CREATE TABLE \`raw_orders\` (
 CREATE TABLE \`valid_orders\` WITH (
   'connector' = 'kafka',
   'topic' = 'valid-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -2207,7 +2237,8 @@ CREATE TABLE \`valid_orders\` WITH (
 CREATE TABLE \`invalid_orders\` WITH (
   'connector' = 'kafka',
   'topic' = 'invalid-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -2301,7 +2332,8 @@ CREATE TABLE \`events\` (
 CREATE TABLE \`validated\` WITH (
   'connector' = 'kafka',
   'topic' = 'validated',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -2316,7 +2348,8 @@ CREATE TABLE \`validated\` WITH (
 CREATE TABLE \`rejected\` WITH (
   'connector' = 'kafka',
   'topic' = 'rejected',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -2400,7 +2433,8 @@ CREATE TABLE \`orders\` (
 CREATE TABLE \`high_value\` WITH (
   'connector' = 'kafka',
   'topic' = 'high-value',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -2415,7 +2449,8 @@ CREATE TABLE \`high_value\` WITH (
 CREATE TABLE \`all_orders\` WITH (
   'connector' = 'kafka',
   'topic' = 'all-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================

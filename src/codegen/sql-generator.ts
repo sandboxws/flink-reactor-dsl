@@ -301,6 +301,13 @@ export function generateSql(
   // 4. CREATE TABLE (sinks) — resolve schemas then generate DDL
   const sinks = ctx.getNodesByKind("Sink")
   const sinkMeta = resolveSinkMetadata(currentTree, nodeIndex)
+
+  // Resolve pipeline-level bootstrapServers from any KafkaSource so
+  // KafkaSinks that omit it still produce self-contained DDL.
+  const pipelineBootstrap = sources
+    .filter((s) => s.component === "KafkaSource" && s.props.bootstrapServers)
+    .map((s) => s.props.bootstrapServers as string)[0]
+
   for (const sink of sinks) {
     const pluginGen = pluginDdl?.get(sink.component)
     const resolved = sinkMeta.get(sink.id)
@@ -320,7 +327,7 @@ export function generateSql(
       const ddl = pluginGen(sink)
       if (ddl) emit(ddl, sink)
     } else {
-      emit(generateSinkDdl(sink, resolved), sink)
+      emit(generateSinkDdl(sink, resolved, pipelineBootstrap), sink)
     }
   }
 
@@ -1040,7 +1047,11 @@ function generateSourceWithClause(node: ConstructNode): string {
 
 // ── CREATE TABLE DDL (Sinks) ────────────────────────────────────────
 
-function generateSinkDdl(node: ConstructNode, metadata?: SinkMetadata): string {
+function generateSinkDdl(
+  node: ConstructNode,
+  metadata?: SinkMetadata,
+  pipelineBootstrap?: string,
+): string {
   const props = node.props
   const tableName = node.id
 
@@ -1048,7 +1059,7 @@ function generateSinkDdl(node: ConstructNode, metadata?: SinkMetadata): string {
     return `-- ${node.component} ${q(String(props.catalogName))}.${q(String(props.database))}.${q(String(props.table))} (catalog-managed)`
   }
 
-  const withClause = generateSinkWithClause(node, metadata)
+  const withClause = generateSinkWithClause(node, metadata, pipelineBootstrap)
   const parts: string[] = []
 
   // Build column definitions from resolved schema
@@ -1126,6 +1137,7 @@ function generateSinkDdl(node: ConstructNode, metadata?: SinkMetadata): string {
 function generateSinkWithClause(
   node: ConstructNode,
   metadata?: SinkMetadata,
+  pipelineBootstrap?: string,
 ): string {
   const props = node.props
   const withProps: Record<string, string> = {}
@@ -1149,9 +1161,10 @@ function generateSinkWithClause(
         withProps.topic = props.topic as string
         withProps.format = (props.format as string) ?? "json"
       }
-      if (props.bootstrapServers) {
-        withProps["properties.bootstrap.servers"] =
-          props.bootstrapServers as string
+      // Explicit prop takes priority; fall back to pipeline-level bootstrap
+      const bootstrap = (props.bootstrapServers as string) ?? pipelineBootstrap
+      if (bootstrap) {
+        withProps["properties.bootstrap.servers"] = bootstrap
       }
       break
     }

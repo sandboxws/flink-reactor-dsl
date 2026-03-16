@@ -44,6 +44,8 @@
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:snapshots": "vitest run src/codegen/__tests__/example-snapshots.test.ts",
+    "test:explain": "vitest run src/lib/sql-gateway/__tests__/explain-integration.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",

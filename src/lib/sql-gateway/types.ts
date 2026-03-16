@@ -46,6 +46,20 @@ export interface SqlGatewayError {
   errors: string[]
 }
 
+// ─── Statement Error Detail ─────────────────────────────────────────────────
+
+/** Structured detail for a statement that failed during execution */
+export interface StatementErrorDetail {
+  /** The SQL statement that was submitted */
+  statement: string
+  /** Primary error message from Flink (first line / summary) */
+  message: string
+  /** Full error text including root causes and stack traces */
+  fullMessage: string
+  /** Extracted root cause message, if parseable from the error chain */
+  rootCause: string | null
+}
+
 // ─── Raw REST API Response Types ────────────────────────────────────────────
 // These match the actual JSON shapes returned by the SQL Gateway v1 REST API.
 

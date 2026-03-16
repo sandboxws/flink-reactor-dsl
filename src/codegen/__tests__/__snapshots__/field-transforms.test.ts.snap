@@ -55,7 +55,8 @@ CREATE TABLE \`output\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'output',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -125,7 +126,8 @@ CREATE TABLE \`output\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'output',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -195,7 +197,8 @@ CREATE TABLE \`output\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'output',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -265,7 +268,8 @@ CREATE TABLE \`output\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'output',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -333,7 +337,8 @@ CREATE TABLE \`output\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'output',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -403,7 +408,8 @@ CREATE TABLE \`output\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'output',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -473,7 +479,8 @@ CREATE TABLE \`output\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'output',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -548,7 +555,8 @@ CREATE TABLE \`output\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'output',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -621,7 +629,8 @@ CREATE TABLE \`output\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'output',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -691,7 +700,8 @@ CREATE TABLE \`output\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'output',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
