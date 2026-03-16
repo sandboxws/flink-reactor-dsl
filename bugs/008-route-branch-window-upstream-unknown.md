@@ -1,4 +1,4 @@
-# BUG-008: Window inside Route branch generates SELECT * FROM unknown
+# BUG-008: Window inside Route branch generates SELECT * FROM unknown [FIXED]
 
 ## Affected Examples
 - `21-branching-multi-sink` — Route.Default branch with TumbleWindow

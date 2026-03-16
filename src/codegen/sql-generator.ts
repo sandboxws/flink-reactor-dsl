@@ -16,7 +16,6 @@ import { optimizePipeline } from "./pipeline-optimizer.js"
 import {
   collectTransformChain,
   findDeepestSource,
-  findRouteUpstreamNode,
   indexTree,
   type ResolvedColumn,
   resolveNodeSchema,
@@ -1451,23 +1450,61 @@ function resolveSinkMetadata(
     }
 
     if (node.component === "Route") {
-      // Find upstream source for the Route
-      const routeUpstreamNode = findRouteUpstreamNode(node, parent)
-      const routeSchema = routeUpstreamNode
-        ? resolveNodeSchema(routeUpstreamNode, nodeIndex)
-        : null
-      const upstreamSource =
-        routeUpstreamNode?.kind === "Source"
-          ? routeUpstreamNode
-          : routeUpstreamNode
-            ? findDeepestSource(routeUpstreamNode)
-            : null
-      const baseChangelogMode = upstreamSource
-        ? resolveSourceChangelogMode(upstreamSource)
-        : ("append-only" as ChangelogMode)
-      const basePk = upstreamSource
-        ? resolveSourcePrimaryKey(upstreamSource)
-        : undefined
+      // Resolve upstream schema for the Route using the same backward walk
+      // as sink resolution — find the Source and propagate through transforms.
+      let routeSchema: ResolvedColumn[] | null = null
+      let baseChangelogMode: ChangelogMode = "append-only"
+      let basePk: readonly string[] | undefined
+      if (parent) {
+        const routeIndex = parent.children.indexOf(node)
+        for (let i = routeIndex - 1; i >= 0; i--) {
+          const sibling = parent.children[i]
+          if (sibling.kind === "Source") {
+            // Source — resolve directly
+          } else if (
+            (sibling.kind === "Transform" ||
+              sibling.kind === "Window" ||
+              sibling.kind === "Join" ||
+              sibling.kind === "CEP") &&
+            sibling.children.length > 0 &&
+            findDeepestSource(sibling) !== null
+          ) {
+            // Self-contained node
+          } else {
+            continue
+          }
+          const startSchema = resolveNodeSchema(sibling, nodeIndex)
+          if (!startSchema) continue
+          routeSchema = startSchema
+          if (sibling.kind === "Source") {
+            baseChangelogMode = resolveSourceChangelogMode(sibling)
+            basePk = resolveSourcePrimaryKey(sibling)
+          } else if (sibling.kind === "Join") {
+            const joinType = sibling.props.type as string | undefined
+            if (joinType === "anti" || joinType === "semi") {
+              baseChangelogMode = "retract"
+            }
+            const leftSource = findDeepestSource(sibling)
+            if (leftSource) basePk = resolveSourcePrimaryKey(leftSource)
+          }
+          // Propagate through intermediate transforms between start and Route
+          const transforms: ConstructNode[] = []
+          for (let j = i + 1; j < routeIndex; j++) {
+            const transform = parent.children[j]
+            if (transform.kind === "Transform" || transform.kind === "Window") {
+              transforms.push(transform)
+              if (routeSchema)
+                routeSchema = resolveTransformSchema(transform, routeSchema)
+            }
+          }
+          baseChangelogMode = propagateChangelogMode(
+            transforms,
+            baseChangelogMode,
+          )
+          basePk = propagatePrimaryKey(transforms, basePk)
+          break
+        }
+      }
 
       // Resolve metadata for each sink in each branch
       const branches = node.children.filter(
@@ -1801,24 +1838,23 @@ function resolveRouteUpstream(
     return up
   }
 
-  // Pattern 2: upstream is a preceding sibling in parent (JSX forward-reading)
+  // Pattern 2: upstream is a preceding sibling chain in parent (JSX forward-reading)
+  // Build the full chain (e.g. Source → Map) rather than just the nearest sibling.
   if (parent) {
     const routeIndex = parent.children.indexOf(routeNode)
-    for (let i = routeIndex - 1; i >= 0; i--) {
-      const sibling = parent.children[i]
-      if (
-        sibling.kind === "Source" ||
-        sibling.kind === "Transform" ||
-        sibling.kind === "Join" ||
-        sibling.kind === "CEP"
-      ) {
-        const up = getUpstream(
-          { children: [sibling] } as ConstructNode,
-          nodeIndex,
-          pluginSql,
-        )
-        return up
+    const chainSql = buildSiblingChainQuery(
+      parent,
+      routeIndex,
+      nodeIndex,
+      pluginSql,
+    )
+    if (chainSql !== "SELECT * FROM unknown") {
+      // Check if the chain is a simple table reference
+      const simpleMatch = chainSql.match(/^SELECT \* FROM (`[^`]+`)$/)
+      if (simpleMatch) {
+        return { sql: chainSql, sourceRef: simpleMatch[1], isSimple: true }
       }
+      return { sql: chainSql, sourceRef: "unknown", isSimple: false }
     }
   }
 
@@ -1928,7 +1964,16 @@ function buildBranchQuery(
           children: [],
         }
 
-    ;(transform as { children: ConstructNode[] }).children = [virtualSource]
+    // For Window nodes with children (e.g. Aggregate), append VirtualRef
+    // alongside existing children instead of replacing them.
+    if (transform.kind === "Window" && savedChildren.length > 0) {
+      ;(transform as { children: ConstructNode[] }).children = [
+        ...savedChildren,
+        virtualSource,
+      ]
+    } else {
+      ;(transform as { children: ConstructNode[] }).children = [virtualSource]
+    }
     const sql = buildQuery(transform, nodeIndex, pluginSql)
     ;(transform as { children: ConstructNode[] }).children = savedChildren
 

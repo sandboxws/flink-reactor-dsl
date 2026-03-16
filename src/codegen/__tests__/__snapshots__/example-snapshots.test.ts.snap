@@ -1539,8 +1539,8 @@ CREATE TABLE \`high_value_orders\` (
   \`order_id\` STRING,
   \`customer_id\` STRING,
   \`product_id\` STRING,
-  \`total_amount\` STRING,
-  \`order_time\` STRING,
+  \`total_amount\` DECIMAL(10, 2),
+  \`order_time\` TIMESTAMP(3),
   \`region\` STRING,
   \`order_status\` STRING
 ) WITH (
@@ -1563,8 +1563,8 @@ CREATE TABLE \`failed_orders_alerts\` (
   \`order_id\` STRING,
   \`customer_id\` STRING,
   \`product_id\` STRING,
-  \`total_amount\` STRING,
-  \`order_time\` STRING,
+  \`total_amount\` DECIMAL(10, 2),
+  \`order_time\` TIMESTAMP(3),
   \`region\` STRING,
   \`order_status\` STRING
 ) WITH (
@@ -1585,7 +1585,7 @@ CREATE TABLE \`failed_orders_alerts\` (
 
 CREATE TABLE \`regional_metrics_per_minute\` (
   \`region\` STRING,
-  \`revenue\` STRING,
+  \`revenue\` DECIMAL(10, 2),
   \`order_count\` BIGINT,
   \`window_start\` TIMESTAMP(3),
   \`window_end\` TIMESTAMP(3)
@@ -1598,48 +1598,42 @@ CREATE TABLE \`regional_metrics_per_minute\` (
 -- ====================================================================
 -- TRANSFORMATION
 -- --------------------------------------------------------------------
--- input       : unknown
+-- input       : raw_orders
 -- output      : high_value_orders
 -- ====================================================================
 
 -- ====================================================================
 -- TRANSFORMATION
 -- --------------------------------------------------------------------
--- input       : unknown
+-- input       : raw_orders
 -- output      : failed_orders_alerts
 -- ====================================================================
 
 -- ====================================================================
 -- TRANSFORMATION
 -- --------------------------------------------------------------------
--- input       : unknown
+-- input       : raw_orders
 -- output      : regional_metrics_per_minute
 -- ====================================================================
 
 EXECUTE STATEMENT SET BEGIN
 INSERT INTO \`high_value_orders\`
 SELECT * FROM (
-SELECT order_id AS \`order_id\`, customer_id AS \`customer_id\`, product_id AS \`product_id\`, quantity * unit_price AS \`total_amount\`, order_time AS \`order_time\`, region AS \`region\`, order_status AS \`order_status\` FROM (
-SELECT * FROM unknown
-)
+SELECT order_id AS \`order_id\`, customer_id AS \`customer_id\`, product_id AS \`product_id\`, quantity * unit_price AS \`total_amount\`, order_time AS \`order_time\`, region AS \`region\`, order_status AS \`order_status\` FROM \`raw_orders\`
 )
 WHERE total_amount >= 1000;
 INSERT INTO \`failed_orders_alerts\`
 SELECT * FROM (
-SELECT order_id AS \`order_id\`, customer_id AS \`customer_id\`, product_id AS \`product_id\`, quantity * unit_price AS \`total_amount\`, order_time AS \`order_time\`, region AS \`region\`, order_status AS \`order_status\` FROM (
-SELECT * FROM unknown
-)
+SELECT order_id AS \`order_id\`, customer_id AS \`customer_id\`, product_id AS \`product_id\`, quantity * unit_price AS \`total_amount\`, order_time AS \`order_time\`, region AS \`region\`, order_status AS \`order_status\` FROM \`raw_orders\`
 )
 WHERE order_status = 'FAILED';
 INSERT INTO \`regional_metrics_per_minute\`
 WITH \`_windowed_input\` AS (
-SELECT order_id AS \`order_id\`, customer_id AS \`customer_id\`, product_id AS \`product_id\`, quantity * unit_price AS \`total_amount\`, order_time AS \`order_time\`, region AS \`region\`, order_status AS \`order_status\` FROM (
-SELECT * FROM unknown
+SELECT order_id AS \`order_id\`, customer_id AS \`customer_id\`, product_id AS \`product_id\`, quantity * unit_price AS \`total_amount\`, order_time AS \`order_time\`, region AS \`region\`, order_status AS \`order_status\` FROM \`raw_orders\`
 )
-)
-SELECT * FROM TABLE(
+SELECT \`region\`, SUM(total_amount) AS \`revenue\`, COUNT(*) AS \`order_count\`, window_start, window_end FROM TABLE(
   TUMBLE(TABLE \`_windowed_input\`, DESCRIPTOR(\`order_time\`), INTERVAL '1' MINUTE)
-);
+) GROUP BY \`region\`, window_start, window_end;
 END;
 "
 `;
@@ -2099,9 +2093,9 @@ SELECT *, CAST(\`event_time\` AS DATE) AS \`dt\`, HOUR(CAST(\`event_time\` AS TI
 SELECT * FROM \`clickstream\`
 );
 INSERT INTO \`realtime_page_metrics\`
-SELECT * FROM TABLE(
+SELECT \`page_url\`, COUNT(*) AS \`view_count\`, COUNT(DISTINCT user_id) AS \`unique_visitors\`, window_start, window_end FROM TABLE(
   TUMBLE(TABLE \`clickstream\`, DESCRIPTOR(\`event_time\`), INTERVAL '1' MINUTE)
-);
+) GROUP BY \`page_url\`, window_start, window_end;
 INSERT INTO \`user_activity_summary\`
 SELECT \`user_id\`, COUNT(*) AS \`total_events\`, COUNT(DISTINCT session_id) AS \`session_count\`, MAX(event_time) AS \`last_seen\` FROM \`clickstream\` GROUP BY \`user_id\`;
 INSERT INTO \`error_events_alerts\`
@@ -2727,9 +2721,9 @@ INSERT INTO \`high_temp_alerts\`
 SELECT * FROM \`iot_sensor_data\`
 WHERE sensor_type = 'temperature' AND reading_value > 100;
 INSERT INTO \`sensor_metrics_5min\`
-SELECT * FROM TABLE(
+SELECT \`device_id\`, \`sensor_type\`, AVG(reading_value) AS \`avg_value\`, MIN(reading_value) AS \`min_value\`, MAX(reading_value) AS \`max_value\`, window_start, window_end FROM TABLE(
   TUMBLE(TABLE \`iot_sensor_data\`, DESCRIPTOR(\`reading_time\`), INTERVAL '5' MINUTE)
-);
+) GROUP BY \`device_id\`, \`sensor_type\`, window_start, window_end;
 INSERT INTO \`raw\`
 SELECT *, CAST(\`reading_time\` AS DATE) AS \`dt\` FROM (
 SELECT * FROM \`iot_sensor_data\`

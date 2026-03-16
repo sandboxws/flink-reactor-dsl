@@ -1802,11 +1802,7 @@ CREATE TABLE \`logs\` (
 -- format      : json
 -- ====================================================================
 
-CREATE TABLE \`errors\` (
-  \`message\` STRING,
-  \`level\` STRING,
-  \`timestamp\` TIMESTAMP(3)
-) WITH (
+CREATE TABLE \`errors\` WITH (
   'connector' = 'kafka',
   'topic' = 'errors',
   'format' = 'json',
@@ -1822,11 +1818,7 @@ CREATE TABLE \`errors\` (
 -- format      : json
 -- ====================================================================
 
-CREATE TABLE \`warnings\` (
-  \`message\` STRING,
-  \`level\` STRING,
-  \`timestamp\` TIMESTAMP(3)
-) WITH (
+CREATE TABLE \`warnings\` WITH (
   'connector' = 'kafka',
   'topic' = 'warnings',
   'format' = 'json',
@@ -1842,11 +1834,7 @@ CREATE TABLE \`warnings\` (
 -- format      : json
 -- ====================================================================
 
-CREATE TABLE \`other\` (
-  \`message\` STRING,
-  \`level\` STRING,
-  \`timestamp\` TIMESTAMP(3)
-) WITH (
+CREATE TABLE \`other\` WITH (
   'connector' = 'kafka',
   'topic' = 'other',
   'format' = 'json',
