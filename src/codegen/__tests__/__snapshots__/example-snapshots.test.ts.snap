@@ -1032,8 +1032,8 @@ CREATE TABLE \`fraud_alerts\` (
   \`card_id\` STRING,
   \`first_txn\` STRING,
   \`last_txn\` STRING,
-  \`total_amount\` STRING,
-  \`txn_count\` STRING,
+  \`total_amount\` DECIMAL(10, 2),
+  \`txn_count\` BIGINT,
   \`fraud_type\` STRING
 ) WITH (
   'connector' = 'kafka',
@@ -1059,7 +1059,6 @@ MATCH_RECOGNIZE (
   PARTITION BY \`card_id\`
   ORDER BY \`transaction_time\`
   MEASURES
-    A.card_id AS \`card_id\`,
     A.transaction_id AS \`first_txn\`,
     C.transaction_id AS \`last_txn\`,
     A.amount + SUM(B.amount) + C.amount AS \`total_amount\`,
@@ -2265,6 +2264,8 @@ CREATE TABLE \`january_2024\` (
 -- ====================================================================
 -- TRANSFORMATION
 -- --------------------------------------------------------------------
+-- step        : Map_9
+-- type        : Map
 -- input       : filesystem
 -- output      : january_2024
 -- ====================================================================
@@ -2279,10 +2280,12 @@ SELECT \`merchant_country\`, \`transaction_type\`, SUM(amount) AS \`country_volu
 SELECT /*+ BROADCAST(\`filesystem_2\`) */ * FROM \`filesystem\` INNER JOIN \`filesystem_2\` ON \`filesystem\`.merchant_id = \`filesystem_2\`.merchant_id
 ) GROUP BY \`merchant_country\`, \`transaction_type\`;
 INSERT INTO \`january_2024\`
+SELECT transaction_id AS \`transaction_id\`, account_id AS \`account_id\`, merchant_id AS \`merchant_id\`, amount AS \`amount\`, currency AS \`currency\`, transaction_type AS \`transaction_type\`, transaction_date AS \`transaction_date\`, is_fraud AS \`is_fraud\`, merchant_name AS \`merchant_name\`, merchant_category AS \`merchant_category\`, merchant_country AS \`merchant_country\` FROM (
 SELECT * FROM (
 SELECT /*+ BROADCAST(\`filesystem_2\`) */ * FROM \`filesystem\` INNER JOIN \`filesystem_2\` ON \`filesystem\`.merchant_id = \`filesystem_2\`.merchant_id
 )
-WHERE is_fraud = true;
+WHERE is_fraud = true
+);
 END;
 "
 `;

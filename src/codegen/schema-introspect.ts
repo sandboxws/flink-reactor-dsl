@@ -340,6 +340,40 @@ export function resolveNodeSchema(
         ? resolveNodeSchema(node.children[0], nodeIndex)
         : null
 
+    // MatchRecognize — output schema from PARTITION BY + MEASURES
+    case "MatchRecognize": {
+      const measures = node.props.measures as Record<string, string> | undefined
+      const partitionBy = node.props.partitionBy as
+        | readonly string[]
+        | undefined
+      if (!measures) return null
+      // Resolve the input source schema for type inference
+      const inputSchema = node.children[0]
+        ? resolveNodeSchema(node.children[0], nodeIndex)
+        : null
+      const sourceFields = new Map(
+        inputSchema?.map((c) => [c.name, c.type]) ?? [],
+      )
+      const columns: ResolvedColumn[] = []
+      // PARTITION BY columns are automatically included in output
+      if (partitionBy) {
+        for (const col of partitionBy) {
+          columns.push({ name: col, type: sourceFields.get(col) ?? "STRING" })
+        }
+      }
+      // MEASURES define the remaining output columns
+      for (const [name, expr] of Object.entries(measures)) {
+        // Strip pattern variable prefixes (A., B., C.) so inferExpressionType
+        // can look up base column names in the source schema
+        const stripped = expr.replace(/\b[A-Z]\./g, "")
+        columns.push({
+          name,
+          type: inferExpressionType(stripped, sourceFields),
+        })
+      }
+      return columns
+    }
+
     // VirtualRef — internal node used by sibling/branch chaining
     case "VirtualRef": {
       // Schema carried from the previous transform in a sibling chain

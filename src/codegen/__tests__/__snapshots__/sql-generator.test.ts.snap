@@ -1157,9 +1157,9 @@ CREATE TABLE \`transactions\` (
 
 CREATE TABLE \`fraud_alerts\` (
   \`user_id\` STRING,
-  \`amount\` DECIMAL(10, 2),
-  \`event_type\` STRING,
-  \`event_time\` TIMESTAMP(3)
+  \`start_time\` TIMESTAMP(3),
+  \`end_time\` TIMESTAMP(3),
+  \`total_amount\` DECIMAL(10, 2)
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'fraud-alerts',

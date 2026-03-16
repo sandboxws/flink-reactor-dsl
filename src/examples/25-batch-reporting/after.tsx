@@ -3,7 +3,7 @@ import { Pipeline } from "@/components/pipeline"
 import { Route } from "@/components/route"
 import { FileSystemSink, JdbcSink } from "@/components/sinks"
 import { GenericSource } from "@/components/sources"
-import { Aggregate } from "@/components/transforms"
+import { Aggregate, Map } from "@/components/transforms"
 import { createElement } from "@/core/jsx-runtime"
 import { Field, Schema } from "@/core/schema"
 
@@ -98,6 +98,21 @@ export default (
 
       {/* Report 3: Fraud extract */}
       <Route.Branch condition="is_fraud = true">
+        <Map
+          select={{
+            transaction_id: "transaction_id",
+            account_id: "account_id",
+            merchant_id: "merchant_id",
+            amount: "amount",
+            currency: "currency",
+            transaction_type: "transaction_type",
+            transaction_date: "transaction_date",
+            is_fraud: "is_fraud",
+            merchant_name: "merchant_name",
+            merchant_category: "merchant_category",
+            merchant_country: "merchant_country",
+          }}
+        />
         <FileSystemSink path="/tmp/reports/fraud/january_2024/" format="csv" />
       </Route.Branch>
     </Route>
