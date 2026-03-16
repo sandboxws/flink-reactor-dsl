@@ -1309,15 +1309,20 @@ function resolveSinkMetadata(
         let primaryKey: readonly string[] | undefined
         for (let i = sinkIndex - 1; i >= 0; i--) {
           const sibling = parent.children[i]
-          // Start from Sources, or from Transforms/Windows with their own children
-          // (e.g. Union with source children). Skip childless Transforms.
+          // Start from Sources, or from self-contained nodes that embed their
+          // own source data (e.g. Union with source children, LookupJoin).
+          // Window nodes with only Aggregate children are NOT self-contained —
+          // they need upstream data and are applied as intermediate transforms.
           if (sibling.kind === "Source") {
             // Sources always resolve
           } else if (
-            (sibling.kind === "Transform" || sibling.kind === "Window") &&
-            sibling.children.length > 0
+            (sibling.kind === "Transform" ||
+              sibling.kind === "Window" ||
+              sibling.kind === "Join") &&
+            sibling.children.length > 0 &&
+            findDeepestSource(sibling) !== null
           ) {
-            // Self-contained Transform/Window
+            // Self-contained node (has its own source data)
           } else {
             continue
           }

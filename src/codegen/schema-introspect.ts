@@ -55,10 +55,12 @@ export function inferExpressionType(
     return "DOUBLE"
   }
 
-  // MIN/MAX(col) — same type as source
-  const minMaxMatch = trimmed.match(/^(?:MIN|MAX)\s*\(\s*`?(\w+)`?\s*\)/i)
-  if (minMaxMatch) {
-    return upstreamFields.get(minMaxMatch[1]) ?? "STRING"
+  // MIN/MAX/FIRST_VALUE/LAST_VALUE(col) — same type as source
+  const preserveTypeMatch = trimmed.match(
+    /^(?:MIN|MAX|FIRST_VALUE|LAST_VALUE)\s*\(\s*`?(\w+)`?\s*\)/i,
+  )
+  if (preserveTypeMatch) {
+    return upstreamFields.get(preserveTypeMatch[1]) ?? "STRING"
   }
 
   // Comparison operators — result is BOOLEAN
@@ -643,16 +645,20 @@ function resolveSinkSchemas(
         const sinkIndex = parent.children.indexOf(node)
         for (let i = sinkIndex - 1; i >= 0; i--) {
           const sibling = parent.children[i]
-          // Start from Sources, or from Transforms/Windows that have their own children
-          // (e.g. Union with source children). Skip childless Transforms — they need
-          // upstream data and should only be applied as intermediate transformations.
+          // Start from Sources, or from self-contained nodes that embed their
+          // own source data (e.g. Union with source children, LookupJoin).
+          // Window nodes with only Aggregate children are NOT self-contained —
+          // they need upstream data and are applied as intermediate transforms.
           if (sibling.kind === "Source") {
             // Sources always resolve
           } else if (
-            (sibling.kind === "Transform" || sibling.kind === "Window") &&
-            sibling.children.length > 0
+            (sibling.kind === "Transform" ||
+              sibling.kind === "Window" ||
+              sibling.kind === "Join") &&
+            sibling.children.length > 0 &&
+            findDeepestSource(sibling) !== null
           ) {
-            // Self-contained Transform/Window (e.g. Union with source children)
+            // Self-contained node (has its own source data)
           } else {
             continue
           }

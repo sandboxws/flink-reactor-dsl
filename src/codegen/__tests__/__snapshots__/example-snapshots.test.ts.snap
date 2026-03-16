@@ -339,12 +339,12 @@ CREATE TABLE \`sensor_readings\` (
 CREATE TABLE \`sensor_metrics\` (
   \`sensor_id\` STRING,
   \`avg_temp\` DOUBLE,
-  \`max_temp\` STRING,
-  \`min_temp\` STRING,
+  \`max_temp\` DOUBLE,
+  \`min_temp\` DOUBLE,
   \`avg_humidity\` DOUBLE,
   \`window_start\` TIMESTAMP(3),
   \`window_end\` TIMESTAMP(3),
-  \`temp_variance\` BIGINT
+  \`temp_variance\` DOUBLE
 ) WITH (
   'connector' = 'jdbc',
   'url' = 'jdbc:postgresql://db:5432/iot',
@@ -441,7 +441,13 @@ CREATE TABLE \`shipments\` (
 -- format      : json
 -- ====================================================================
 
-CREATE TABLE \`order_fulfillment\` WITH (
+CREATE TABLE \`order_fulfillment\` (
+  \`order_id\` STRING,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`carrier\` STRING,
+  \`fulfillment_time\` BIGINT
+) WITH (
   'connector' = 'kafka',
   'topic' = 'order_fulfillment',
   'format' = 'json',
@@ -510,7 +516,13 @@ CREATE TABLE \`user_actions\` (
 -- format      : json
 -- ====================================================================
 
-CREATE TABLE \`premium_user_actions\` WITH (
+CREATE TABLE \`premium_user_actions\` (
+  \`action_id\` STRING,
+  \`user_id\` STRING,
+  \`action_type\` STRING,
+  \`action_time\` TIMESTAMP(3),
+  \`metadata\` STRING
+) WITH (
   'connector' = 'kafka',
   'topic' = 'premium_user_actions',
   'format' = 'json',
@@ -631,7 +643,14 @@ CREATE TABLE \`conversions\` (
 -- url         : jdbc:postgresql://db:5432/analytics
 -- ====================================================================
 
-CREATE TABLE \`user_funnel_metrics\` WITH (
+CREATE TABLE \`user_funnel_metrics\` (
+  \`user_id\` STRING,
+  \`total_views\` BIGINT,
+  \`total_clicks\` BIGINT,
+  \`total_conversions\` BIGINT,
+  \`total_revenue\` BIGINT,
+  PRIMARY KEY (\`user_id\`) NOT ENFORCED
+) WITH (
   'connector' = 'jdbc',
   'url' = 'jdbc:postgresql://db:5432/analytics',
   'table-name' = 'user_funnel_metrics'
@@ -785,8 +804,8 @@ CREATE TABLE \`user_sessions\` (
   \`user_id\` STRING,
   \`total_activities\` BIGINT,
   \`unique_pages\` BIGINT,
-  \`session_start\` STRING,
-  \`session_end\` STRING,
+  \`session_start\` TIMESTAMP(3),
+  \`session_end\` TIMESTAMP(3),
   \`session_duration\` BIGINT,
   \`activity_sequence\` STRING
 ) WITH (
@@ -928,10 +947,10 @@ CREATE TABLE \`trades\` (
 
 CREATE TABLE \`ohlcv_1min\` (
   \`symbol\` STRING,
-  \`open_price\` STRING,
-  \`high_price\` STRING,
-  \`low_price\` STRING,
-  \`close_price\` STRING,
+  \`open_price\` DECIMAL(12, 4),
+  \`high_price\` DECIMAL(12, 4),
+  \`low_price\` DECIMAL(12, 4),
+  \`close_price\` DECIMAL(12, 4),
   \`total_volume\` BIGINT,
   \`window_start\` TIMESTAMP(3),
   \`window_end\` TIMESTAMP(3)
@@ -1098,7 +1117,14 @@ CREATE TABLE \`currency_rates\` (
 -- format      : json
 -- ====================================================================
 
-CREATE TABLE \`converted_orders\` WITH (
+CREATE TABLE \`converted_orders\` (
+  \`order_id\` STRING,
+  \`currency_pair\` STRING,
+  \`amount\` DECIMAL(12, 2),
+  \`order_time\` TIMESTAMP(3),
+  \`exchange_rate\` STRING,
+  \`converted_amount\` DECIMAL(12, 2)
+) WITH (
   'connector' = 'kafka',
   'topic' = 'converted_orders',
   'format' = 'json',
@@ -1186,7 +1212,13 @@ CREATE TABLE \`blacklist\` (
 -- format      : json
 -- ====================================================================
 
-CREATE TABLE \`valid_events\` WITH (
+CREATE TABLE \`valid_events\` (
+  \`event_id\` STRING,
+  \`user_id\` STRING,
+  \`event_type\` STRING,
+  \`product_id\` STRING,
+  \`event_time\` TIMESTAMP(3)
+) WITH (
   'connector' = 'kafka',
   'topic' = 'valid_events',
   'format' = 'json',
@@ -1387,7 +1419,7 @@ CREATE TABLE \`sales_transactions\` (
 CREATE TABLE \`dashboard_top_categories_per_region\` (
   \`region\` STRING,
   \`category\` STRING,
-  \`revenue\` STRING,
+  \`revenue\` DECIMAL(10, 2),
   \`units_sold\` BIGINT,
   \`transaction_count\` BIGINT,
   \`window_start\` TIMESTAMP(3),

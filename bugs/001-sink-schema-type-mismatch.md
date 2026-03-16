@@ -1,4 +1,4 @@
-# BUG-001: Sink schema type mismatch — STRING instead of correct aggregate types
+# BUG-001: Sink schema type mismatch — STRING instead of correct aggregate types [FIXED]
 
 ## Affected Examples
 - `05-hop-window` — `max_temp` and `min_temp` resolved as STRING instead of DOUBLE
