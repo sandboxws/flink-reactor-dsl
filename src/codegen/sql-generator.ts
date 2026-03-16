@@ -2137,10 +2137,29 @@ function buildQuery(
       if (node.props._sql) return node.props._sql as string
       return `SELECT * FROM ${q(node.id)}`
 
-    // Sources — terminal nodes
+    // Sources — terminal unless they have child transforms
     case "KafkaSource":
     case "JdbcSource":
     case "GenericSource":
+      if (node.children.length > 0) {
+        // Source wraps child transforms (e.g. <KafkaSource><Map/></KafkaSource>)
+        // Build query by chaining children on top of the source reference.
+        let result = `SELECT * FROM ${q(node.id)}`
+        for (const child of node.children) {
+          const virtualSource: ConstructNode = {
+            id: node.id,
+            kind: "Source",
+            component: "VirtualRef",
+            props: {},
+            children: [],
+          }
+          const saved = child.children
+          ;(child as { children: ConstructNode[] }).children = [virtualSource]
+          result = buildQuery(child, nodeIndex, pluginSql)
+          ;(child as { children: ConstructNode[] }).children = saved
+        }
+        return result
+      }
       return `SELECT * FROM ${q(node.id)}`
     case "CatalogSource":
       return `SELECT * FROM ${q(String(node.props.catalogName))}.${q(String(node.props.database))}.${q(String(node.props.table))}`

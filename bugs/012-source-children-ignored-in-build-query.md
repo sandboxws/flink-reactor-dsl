@@ -1,4 +1,4 @@
-# BUG-012: Source nodes with child transforms — children ignored in buildQuery
+# BUG-012: Source nodes with child transforms — children ignored in buildQuery [FIXED]
 
 ## Affected Examples
 - `19-union-aggregate` — Union children are `<KafkaSource><Map/></KafkaSource>`

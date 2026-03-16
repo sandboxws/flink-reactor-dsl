@@ -1383,19 +1383,18 @@ CREATE TABLE \`platform_hourly_metrics\` (
 -- ====================================================================
 -- TRANSFORMATION
 -- --------------------------------------------------------------------
--- step        : Union_6
--- type        : Union
+-- transforms  : Map → Map → Map → Union
 -- input       : mobile_events
 -- output      : platform_hourly_metrics
 -- ====================================================================
 
 INSERT INTO \`platform_hourly_metrics\`
 WITH \`_windowed_input\` AS (
-SELECT * FROM \`mobile_events\`
+SELECT event_id AS \`event_id\`, user_id AS \`user_id\`, event_type AS \`event_type\`, event_time AS \`event_time\`, 'mobile' AS \`platform\` FROM \`mobile_events\`
 UNION ALL
-SELECT * FROM \`web_events\`
+SELECT event_id AS \`event_id\`, user_id AS \`user_id\`, event_type AS \`event_type\`, event_time AS \`event_time\`, 'web' AS \`platform\` FROM \`web_events\`
 UNION ALL
-SELECT * FROM \`iot_events\`
+SELECT event_id AS \`event_id\`, device_id AS \`user_id\`, event_type AS \`event_type\`, event_time AS \`event_time\`, 'iot' AS \`platform\` FROM \`iot_events\`
 )
 SELECT \`platform\`, \`event_type\`, COUNT(*) AS \`event_count\`, COUNT(DISTINCT user_id) AS \`unique_users\`, window_start, window_end FROM TABLE(
   TUMBLE(TABLE \`_windowed_input\`, DESCRIPTOR(\`event_time\`), INTERVAL '1' HOUR)
