@@ -1006,20 +1006,42 @@ function generateSourceWithClause(node: ConstructNode): string {
   const withProps: Record<string, string> = {}
 
   switch (node.component) {
-    case "KafkaSource":
-      withProps.connector = "kafka"
-      withProps.topic = props.topic as string
-      withProps.format = (props.format as string) ?? "json"
+    case "KafkaSource": {
+      const schema = props.schema as SchemaDefinition | undefined
+      const hasPk =
+        (schema?.primaryKey?.columns?.length ?? 0) > 0 ||
+        ((props.primaryKey as readonly string[] | undefined)?.length ?? 0) > 0
+      const rawFormat = (props.format as string) ?? "json"
+      // Changelog formats (debezium-json, canal-json) support PK on regular kafka connector.
+      // Plain formats (json, avro, csv) need upsert-kafka for PK support.
+      const isChangelogFormat =
+        rawFormat === "debezium-json" ||
+        rawFormat === "canal-json" ||
+        rawFormat === "debezium-avro" ||
+        rawFormat === "maxwell-json"
+      if (hasPk && !isChangelogFormat) {
+        withProps.connector = "upsert-kafka"
+        withProps.topic = props.topic as string
+        withProps["key.format"] = "json"
+        withProps["value.format"] = rawFormat
+      } else {
+        withProps.connector = "kafka"
+        withProps.topic = props.topic as string
+        withProps.format = rawFormat
+      }
       if (props.bootstrapServers) {
         withProps["properties.bootstrap.servers"] =
           props.bootstrapServers as string
       }
-      withProps["scan.startup.mode"] =
-        (props.startupMode as string) ?? "earliest-offset"
+      if (!hasPk) {
+        withProps["scan.startup.mode"] =
+          (props.startupMode as string) ?? "earliest-offset"
+      }
       if (props.consumerGroup) {
         withProps["properties.group.id"] = props.consumerGroup as string
       }
       break
+    }
     case "JdbcSource":
       withProps.connector = "jdbc"
       withProps.url = props.url as string

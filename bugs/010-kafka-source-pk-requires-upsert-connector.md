@@ -1,4 +1,4 @@
-# BUG-010: KafkaSource with PRIMARY KEY generates invalid DDL (needs upsert-kafka connector)
+# BUG-010: KafkaSource with PRIMARY KEY generates invalid DDL (needs upsert-kafka connector) [FIXED]
 
 ## Affected Examples
 - `16-temporal-join` — CurrencyRateSchema has `primaryKey: { columns: ["currency_pair"] }`

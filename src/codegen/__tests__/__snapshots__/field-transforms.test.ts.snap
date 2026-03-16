@@ -28,11 +28,11 @@ CREATE TABLE \`products\` (
   \`debug_flag\` BOOLEAN,
   PRIMARY KEY (\`id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'products',
-  'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092',
-  'scan.startup.mode' = 'earliest-offset'
+  'key.format' = 'json',
+  'value.format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -101,11 +101,11 @@ CREATE TABLE \`products\` (
   \`debug_flag\` BOOLEAN,
   PRIMARY KEY (\`id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'products',
-  'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092',
-  'scan.startup.mode' = 'earliest-offset'
+  'key.format' = 'json',
+  'value.format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -172,11 +172,11 @@ CREATE TABLE \`products\` (
   \`debug_flag\` BOOLEAN,
   PRIMARY KEY (\`id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'products',
-  'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092',
-  'scan.startup.mode' = 'earliest-offset'
+  'key.format' = 'json',
+  'value.format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -243,11 +243,11 @@ CREATE TABLE \`products\` (
   \`debug_flag\` BOOLEAN,
   PRIMARY KEY (\`id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'products',
-  'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092',
-  'scan.startup.mode' = 'earliest-offset'
+  'key.format' = 'json',
+  'value.format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -314,11 +314,11 @@ CREATE TABLE \`products\` (
   \`debug_flag\` BOOLEAN,
   PRIMARY KEY (\`id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'products',
-  'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092',
-  'scan.startup.mode' = 'earliest-offset'
+  'key.format' = 'json',
+  'value.format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -383,11 +383,11 @@ CREATE TABLE \`products\` (
   \`debug_flag\` BOOLEAN,
   PRIMARY KEY (\`id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'products',
-  'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092',
-  'scan.startup.mode' = 'earliest-offset'
+  'key.format' = 'json',
+  'value.format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -454,11 +454,11 @@ CREATE TABLE \`products\` (
   \`debug_flag\` BOOLEAN,
   PRIMARY KEY (\`id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'products',
-  'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092',
-  'scan.startup.mode' = 'earliest-offset'
+  'key.format' = 'json',
+  'value.format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -530,11 +530,11 @@ CREATE TABLE \`products\` (
   \`debug_flag\` BOOLEAN,
   PRIMARY KEY (\`id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'products',
-  'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092',
-  'scan.startup.mode' = 'earliest-offset'
+  'key.format' = 'json',
+  'value.format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -606,11 +606,11 @@ CREATE TABLE \`products\` (
   \`debug_flag\` BOOLEAN,
   PRIMARY KEY (\`id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'products',
-  'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092',
-  'scan.startup.mode' = 'earliest-offset'
+  'key.format' = 'json',
+  'value.format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -675,11 +675,11 @@ CREATE TABLE \`products\` (
   \`debug_flag\` BOOLEAN,
   PRIMARY KEY (\`id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'products',
-  'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092',
-  'scan.startup.mode' = 'earliest-offset'
+  'key.format' = 'json',
+  'value.format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================

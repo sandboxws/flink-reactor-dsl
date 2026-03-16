@@ -1130,11 +1130,11 @@ CREATE TABLE \`currency_rates\` (
   WATERMARK FOR \`rate_time\` AS rate_time - INTERVAL '1' SECOND,
   PRIMARY KEY (\`currency_pair\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'currency_rates',
-  'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092',
-  'scan.startup.mode' = 'earliest-offset'
+  'key.format' = 'json',
+  'value.format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -2317,8 +2317,7 @@ CREATE TABLE \`mysql_inventory_products\` (
   'connector' = 'kafka',
   'topic' = 'mysql.inventory.products',
   'format' = 'debezium-json',
-  'properties.bootstrap.servers' = 'kafka:9092',
-  'scan.startup.mode' = 'earliest-offset'
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
