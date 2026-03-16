@@ -1324,6 +1324,10 @@ function resolveSinkMetadata(
       if (t.component === "Aggregate" && !hasWindow) {
         mode = "retract"
       }
+      // Session windows produce retract (sessions can merge on late events)
+      if (t.component === "SessionWindow") {
+        mode = "retract"
+      }
     }
     return mode
   }
@@ -1332,6 +1336,7 @@ function resolveSinkMetadata(
    * Propagate primary key through a transform chain.
    * - Filter/Map/Deduplicate/TopN: PK preserved from upstream
    * - Aggregate: PK becomes the groupBy columns
+   * - Window with Aggregate child: PK becomes the groupBy columns
    */
   function propagatePrimaryKey(
     transforms: readonly ConstructNode[],
@@ -1341,6 +1346,12 @@ function resolveSinkMetadata(
     for (const t of transforms) {
       if (t.component === "Aggregate") {
         pk = t.props.groupBy as readonly string[]
+      } else if (t.kind === "Window") {
+        // Extract PK from Aggregate child inside the window
+        const aggChild = t.children?.find((c) => c.component === "Aggregate")
+        if (aggChild) {
+          pk = aggChild.props.groupBy as readonly string[]
+        }
       } else if (t.component === "Rename" && pk) {
         const columns = t.props.columns as Record<string, string>
         pk = pk.map((col) => columns[col] ?? col)

@@ -47,7 +47,7 @@ export default (
         unique_pages: "unique_pages",
         session_start: "session_start",
         session_end: "session_end",
-        session_duration: "session_end - session_start",
+        session_duration: "TIMESTAMPDIFF(SECOND, session_start, session_end)",
         activity_sequence: "activity_sequence",
       }}
     />

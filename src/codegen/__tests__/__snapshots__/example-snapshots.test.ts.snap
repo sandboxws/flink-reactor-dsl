@@ -807,8 +807,9 @@ CREATE TABLE \`user_sessions\` (
   \`unique_pages\` BIGINT,
   \`session_start\` TIMESTAMP(3),
   \`session_end\` TIMESTAMP(3),
-  \`session_duration\` BIGINT,
-  \`activity_sequence\` STRING
+  \`session_duration\` INT,
+  \`activity_sequence\` STRING,
+  PRIMARY KEY (\`user_id\`) NOT ENFORCED
 ) WITH (
   'connector' = 'jdbc',
   'url' = 'jdbc:postgresql://db:5432/analytics',
@@ -825,7 +826,7 @@ CREATE TABLE \`user_sessions\` (
 -- ====================================================================
 
 INSERT INTO \`user_sessions\`
-SELECT user_id AS \`user_id\`, total_activities AS \`total_activities\`, unique_pages AS \`unique_pages\`, session_start AS \`session_start\`, session_end AS \`session_end\`, session_end - session_start AS \`session_duration\`, activity_sequence AS \`activity_sequence\` FROM (
+SELECT user_id AS \`user_id\`, total_activities AS \`total_activities\`, unique_pages AS \`unique_pages\`, session_start AS \`session_start\`, session_end AS \`session_end\`, TIMESTAMPDIFF(SECOND, session_start, session_end) AS \`session_duration\`, activity_sequence AS \`activity_sequence\` FROM (
 SELECT \`user_id\`, COUNT(*) AS \`total_activities\`, COUNT(DISTINCT page_url) AS \`unique_pages\`, MIN(activity_time) AS \`session_start\`, MAX(activity_time) AS \`session_end\`, LISTAGG(activity_type) AS \`activity_sequence\`, window_start, window_end FROM TABLE(
   SESSION(TABLE \`user_activity\`, DESCRIPTOR(\`activity_time\`), INTERVAL '30' MINUTE)
 ) GROUP BY \`user_id\`, window_start, window_end

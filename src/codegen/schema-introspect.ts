@@ -63,6 +63,11 @@ export function inferExpressionType(
     return upstreamFields.get(preserveTypeMatch[1]) ?? "STRING"
   }
 
+  // TIMESTAMPDIFF — always returns INT
+  if (/^TIMESTAMPDIFF\s*\(/i.test(trimmed)) {
+    return "INT"
+  }
+
   // Comparison operators — result is BOOLEAN
   if (
     /[><=!]/.test(trimmed) ||

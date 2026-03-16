@@ -1,4 +1,4 @@
-# BUG-006: Session window — TIMESTAMP subtraction used for duration computation
+# BUG-006: Session window — TIMESTAMP subtraction used for duration computation [FIXED]
 
 ## Affected Examples
 - `12-session-window`
