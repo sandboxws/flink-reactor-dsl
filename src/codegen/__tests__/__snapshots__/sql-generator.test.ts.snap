@@ -140,7 +140,9 @@ CREATE TABLE \`enriched_orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
-  \`event_time\` TIMESTAMP(3)
+  \`event_time\` TIMESTAMP(3),
+  \`name\` STRING,
+  \`email\` STRING
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'enriched-orders',
@@ -736,7 +738,9 @@ CREATE TABLE \`order_shipments\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
-  \`event_time\` TIMESTAMP(3)
+  \`event_time\` TIMESTAMP(3),
+  \`shipped_time\` TIMESTAMP(3),
+  \`carrier\` STRING
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'order-shipments',
@@ -917,7 +921,10 @@ CREATE TABLE \`enriched_orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
-  \`event_time\` TIMESTAMP(3)
+  \`event_time\` TIMESTAMP(3),
+  \`product_id\` STRING,
+  \`product_name\` STRING,
+  \`category\` STRING
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'enriched-orders',

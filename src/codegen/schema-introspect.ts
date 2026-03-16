@@ -298,6 +298,48 @@ export function resolveNodeSchema(
       return columns
     }
 
+    // Joins — merge both sides' schemas, deduplicating columns that
+    // appear on both sides (e.g. join key columns).
+    case "Join":
+    case "IntervalJoin": {
+      const joinType = node.props.type as string | undefined
+      const leftSchema = node.children[0]
+        ? resolveNodeSchema(node.children[0], nodeIndex)
+        : null
+      // Anti/semi joins only produce left-side columns
+      if (joinType === "anti" || joinType === "semi") return leftSchema
+      const rightSchema = node.children[1]
+        ? resolveNodeSchema(node.children[1], nodeIndex)
+        : null
+      if (!leftSchema) return rightSchema
+      if (!rightSchema) return leftSchema
+      const leftNames = new Set(leftSchema.map((c) => c.name))
+      return [
+        ...leftSchema,
+        ...rightSchema.filter((c) => !leftNames.has(c.name)),
+      ]
+    }
+    case "TemporalJoin": {
+      const streamSchema = node.children[0]
+        ? resolveNodeSchema(node.children[0], nodeIndex)
+        : null
+      const temporalSchema = node.children[1]
+        ? resolveNodeSchema(node.children[1], nodeIndex)
+        : null
+      if (!streamSchema) return temporalSchema
+      if (!temporalSchema) return streamSchema
+      const streamNames = new Set(streamSchema.map((c) => c.name))
+      return [
+        ...streamSchema,
+        ...temporalSchema.filter((c) => !streamNames.has(c.name)),
+      ]
+    }
+    // LookupJoin — only input schema (lookup table is external)
+    case "LookupJoin":
+      return node.children[0]
+        ? resolveNodeSchema(node.children[0], nodeIndex)
+        : null
+
     // VirtualRef — internal node used by sibling/branch chaining
     case "VirtualRef": {
       // Schema carried from the previous transform in a sibling chain

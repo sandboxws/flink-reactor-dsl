@@ -259,7 +259,9 @@ CREATE TABLE \`enriched\` (
   \`amount\` DECIMAL(10, 2),
   \`product_id\` STRING,
   \`category\` STRING,
-  \`event_time\` TIMESTAMP(3)
+  \`event_time\` TIMESTAMP(3),
+  \`name\` STRING,
+  \`email\` STRING
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'enriched',
@@ -538,7 +540,9 @@ CREATE TABLE \`enriched_orders\` (
   \`amount\` DECIMAL(10, 2),
   \`product_id\` STRING,
   \`category\` STRING,
-  \`event_time\` TIMESTAMP(3)
+  \`event_time\` TIMESTAMP(3),
+  \`name\` STRING,
+  \`email\` STRING
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'enriched-orders',

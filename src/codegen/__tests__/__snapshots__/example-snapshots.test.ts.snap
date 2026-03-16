@@ -648,7 +648,7 @@ CREATE TABLE \`user_funnel_metrics\` (
   \`total_views\` BIGINT,
   \`total_clicks\` BIGINT,
   \`total_conversions\` BIGINT,
-  \`total_revenue\` BIGINT,
+  \`total_revenue\` DECIMAL(10, 2),
   PRIMARY KEY (\`user_id\`) NOT ENFORCED
 ) WITH (
   'connector' = 'jdbc',
@@ -1151,7 +1151,7 @@ CREATE TABLE \`converted_orders\` (
   \`currency_pair\` STRING,
   \`amount\` DECIMAL(12, 2),
   \`order_time\` TIMESTAMP(3),
-  \`exchange_rate\` STRING,
+  \`exchange_rate\` DECIMAL(12, 6),
   \`converted_amount\` DECIMAL(12, 2)
 ) WITH (
   'connector' = 'kafka',
@@ -2232,7 +2232,10 @@ CREATE TABLE \`january_2024\` (
   \`currency\` STRING,
   \`transaction_type\` STRING,
   \`transaction_date\` DATE,
-  \`is_fraud\` BOOLEAN
+  \`is_fraud\` BOOLEAN,
+  \`merchant_name\` STRING,
+  \`merchant_category\` STRING,
+  \`merchant_country\` STRING
 ) WITH (
   'connector' = 'filesystem',
   'path' = '/tmp/reports/fraud/january_2024/',
