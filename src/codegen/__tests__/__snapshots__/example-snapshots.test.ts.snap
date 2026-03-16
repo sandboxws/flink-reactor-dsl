@@ -459,13 +459,13 @@ CREATE TABLE \`order_fulfillment\` (
 -- --------------------------------------------------------------------
 -- step        : Map_3
 -- type        : Map
--- input       : unknown
+-- input       : orders
 -- output      : order_fulfillment
 -- ====================================================================
 
 INSERT INTO \`order_fulfillment\`
 SELECT order_id AS \`order_id\`, user_id AS \`user_id\`, amount AS \`amount\`, carrier AS \`carrier\`, ship_time - order_time AS \`fulfillment_time\` FROM (
-SELECT * FROM unknown
+SELECT * FROM \`orders\` JOIN \`shipments\` ON order_id = order_id AND \`orders\`.order_time BETWEEN \`shipments\`.order_time AND \`shipments\`.order_time + INTERVAL '7' DAY
 );
 "
 `;
@@ -534,14 +534,14 @@ CREATE TABLE \`premium_user_actions\` (
 -- --------------------------------------------------------------------
 -- step        : Filter_2
 -- type        : Filter
--- input       : unknown
+-- input       : user_actions
 -- output      : premium_user_actions
 -- rule        : user_tier IN ('premium', 'enterprise')
 -- ====================================================================
 
 INSERT INTO \`premium_user_actions\`
 SELECT * FROM (
-SELECT * FROM unknown
+SELECT * FROM \`user_actions\` LEFT JOIN \`user_profiles\` FOR SYSTEM_TIME AS OF \`user_actions\`.proc_time ON user_id
 ) WHERE user_tier IN ('premium', 'enterprise');
 "
 `;
@@ -661,14 +661,14 @@ CREATE TABLE \`user_funnel_metrics\` (
 -- --------------------------------------------------------------------
 -- step        : Aggregate_5
 -- type        : Aggregate
--- input       : unknown
+-- input       : IntervalJoin_3
 -- output      : user_funnel_metrics
 -- group-by    : user_id
 -- ====================================================================
 
 INSERT INTO \`user_funnel_metrics\`
 SELECT \`user_id\`, COUNT(*) AS \`total_views\`, COUNT(click_id) AS \`total_clicks\`, COUNT(conversion_id) AS \`total_conversions\`, SUM(revenue) AS \`total_revenue\` FROM (
-SELECT * FROM unknown
+SELECT * FROM \`IntervalJoin_3\` LEFT JOIN \`conversions\` ON session_id = session_id AND \`IntervalJoin_3\`.view_time BETWEEN \`conversions\`.view_time AND \`conversions\`.view_time + INTERVAL '1' HOUR
 ) GROUP BY \`user_id\`;
 "
 `;
@@ -1136,13 +1136,13 @@ CREATE TABLE \`converted_orders\` (
 -- --------------------------------------------------------------------
 -- step        : Map_3
 -- type        : Map
--- input       : unknown
+-- input       : forex_orders
 -- output      : converted_orders
 -- ====================================================================
 
 INSERT INTO \`converted_orders\`
 SELECT order_id AS \`order_id\`, currency_pair AS \`currency_pair\`, amount AS \`amount\`, order_time AS \`order_time\`, exchange_rate AS \`exchange_rate\`, amount * exchange_rate AS \`converted_amount\` FROM (
-SELECT * FROM unknown
+SELECT * FROM \`forex_orders\` LEFT JOIN \`currency_rates\` FOR SYSTEM_TIME AS OF \`forex_orders\`.\`order_time\` ON currency_pair = currency_pair
 );
 "
 `;
@@ -1228,12 +1228,14 @@ CREATE TABLE \`valid_events\` (
 -- ====================================================================
 -- TRANSFORMATION
 -- --------------------------------------------------------------------
--- input       : unknown
+-- input       : user_events
 -- output      : valid_events
 -- ====================================================================
 
 INSERT INTO \`valid_events\`
-SELECT * FROM unknown;
+SELECT \`user_events\`.* FROM \`user_events\` WHERE NOT EXISTS (
+  SELECT 1 FROM \`blacklist\` WHERE user_id = user_id
+);
 "
 `;
 
@@ -1435,9 +1437,11 @@ CREATE TABLE \`dashboard_top_categories_per_region\` (
 -- ====================================================================
 -- TRANSFORMATION
 -- --------------------------------------------------------------------
--- transforms  : Aggregate → TopN
--- input       : unknown
+-- step        : TopN_5
+-- type        : TopN
+-- input       : LookupJoin_1
 -- output      : dashboard_top_categories_per_region
+-- top-n       : 5
 -- ====================================================================
 
 INSERT INTO \`dashboard_top_categories_per_region\`
@@ -1445,9 +1449,7 @@ SELECT *, ROW_NUMBER() OVER (PARTITION BY \`window_start\`, \`region\` ORDER BY 
 FROM (
 SELECT \`region\`, \`category\`, SUM(quantity * unit_price) AS \`revenue\`, SUM(quantity) AS \`units_sold\`, COUNT(*) AS \`transaction_count\`, window_start, window_end FROM TABLE(
   TUMBLE(TABLE (
-SELECT \`region\`, \`category\`, SUM(quantity * unit_price) AS \`revenue\`, SUM(quantity) AS \`units_sold\`, COUNT(*) AS \`transaction_count\` FROM (
-SELECT * FROM unknown
-) GROUP BY \`region\`, \`category\`
+SELECT * FROM \`LookupJoin_1\` LEFT JOIN \`dim_stores\` FOR SYSTEM_TIME AS OF \`LookupJoin_1\`.proc_time ON store_id
 ), DESCRIPTOR(\`transaction_time\`), INTERVAL '1' MINUTE)
 ) GROUP BY \`region\`, \`category\`, window_start, window_end
 )
@@ -1852,7 +1854,7 @@ CREATE TABLE \`daily_brand_performance\` WITH (
 -- --------------------------------------------------------------------
 -- step        : Aggregate_3
 -- type        : Aggregate
--- input       : unknown
+-- input       : filesystem
 -- output      : daily_category_sales
 -- group-by    : category, subcategory, sale_date
 -- ====================================================================
@@ -1862,7 +1864,7 @@ CREATE TABLE \`daily_brand_performance\` WITH (
 -- --------------------------------------------------------------------
 -- step        : Aggregate_6
 -- type        : Aggregate
--- input       : unknown
+-- input       : filesystem
 -- output      : daily_brand_performance
 -- group-by    : brand, sale_date
 -- ====================================================================
@@ -1870,11 +1872,11 @@ CREATE TABLE \`daily_brand_performance\` WITH (
 EXECUTE STATEMENT SET BEGIN
 INSERT INTO \`daily_category_sales\`
 SELECT \`category\`, \`subcategory\`, \`sale_date\`, SUM(amount) AS \`total_revenue\`, SUM(quantity) AS \`total_units\`, COUNT(DISTINCT customer_id) AS \`unique_customers\` FROM (
-SELECT * FROM unknown
+SELECT /*+ BROADCAST(\`products\`) */ * FROM \`filesystem\` INNER JOIN \`products\` ON product_id = product_id
 ) GROUP BY \`category\`, \`subcategory\`, \`sale_date\`;
 INSERT INTO \`daily_brand_performance\`
 SELECT \`brand\`, \`sale_date\`, SUM(amount) AS \`brand_revenue\`, COUNT(*) AS \`transaction_count\` FROM (
-SELECT * FROM unknown
+SELECT /*+ BROADCAST(\`products\`) */ * FROM \`filesystem\` INNER JOIN \`products\` ON product_id = product_id
 ) GROUP BY \`brand\`, \`sale_date\`;
 END;
 "
@@ -2169,7 +2171,7 @@ CREATE TABLE \`january_2024\` WITH (
 -- --------------------------------------------------------------------
 -- step        : Aggregate_3
 -- type        : Aggregate
--- input       : unknown
+-- input       : filesystem
 -- output      : category_summary
 -- group-by    : merchant_category, transaction_date
 -- ====================================================================
@@ -2179,7 +2181,7 @@ CREATE TABLE \`january_2024\` WITH (
 -- --------------------------------------------------------------------
 -- step        : Aggregate_6
 -- type        : Aggregate
--- input       : unknown
+-- input       : filesystem
 -- output      : monthly_country_report
 -- group-by    : merchant_country, transaction_type
 -- ====================================================================
@@ -2187,22 +2189,22 @@ CREATE TABLE \`january_2024\` WITH (
 -- ====================================================================
 -- TRANSFORMATION
 -- --------------------------------------------------------------------
--- input       : unknown
+-- input       : filesystem
 -- output      : january_2024
 -- ====================================================================
 
 EXECUTE STATEMENT SET BEGIN
 INSERT INTO \`category_summary\`
 SELECT \`merchant_category\`, \`transaction_date\`, SUM(amount) AS \`total_volume\`, COUNT(*) AS \`txn_count\`, SUM(CASE WHEN is_fraud THEN 1 ELSE 0 END) AS \`fraud_count\` FROM (
-SELECT * FROM unknown
+SELECT /*+ BROADCAST(\`filesystem_2\`) */ * FROM \`filesystem\` INNER JOIN \`filesystem_2\` ON merchant_id = merchant_id
 ) GROUP BY \`merchant_category\`, \`transaction_date\`;
 INSERT INTO \`monthly_country_report\`
 SELECT \`merchant_country\`, \`transaction_type\`, SUM(amount) AS \`country_volume\`, AVG(amount) AS \`avg_txn_amount\`, COUNT(DISTINCT account_id) AS \`unique_accounts\` FROM (
-SELECT * FROM unknown
+SELECT /*+ BROADCAST(\`filesystem_2\`) */ * FROM \`filesystem\` INNER JOIN \`filesystem_2\` ON merchant_id = merchant_id
 ) GROUP BY \`merchant_country\`, \`transaction_type\`;
 INSERT INTO \`january_2024\`
 SELECT * FROM (
-SELECT * FROM unknown
+SELECT /*+ BROADCAST(\`filesystem_2\`) */ * FROM \`filesystem\` INNER JOIN \`filesystem_2\` ON merchant_id = merchant_id
 )
 WHERE is_fraud = true;
 END;

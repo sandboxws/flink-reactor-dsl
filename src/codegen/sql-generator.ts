@@ -1466,7 +1466,8 @@ function buildSiblingChainQuery(
     if (
       sibling.kind === "Source" ||
       sibling.kind === "Transform" ||
-      sibling.kind === "Window"
+      sibling.kind === "Window" ||
+      sibling.kind === "Join"
     ) {
       chain.push(sibling)
     }
@@ -1687,7 +1688,11 @@ function resolveRouteUpstream(
     const routeIndex = parent.children.indexOf(routeNode)
     for (let i = routeIndex - 1; i >= 0; i--) {
       const sibling = parent.children[i]
-      if (sibling.kind === "Source" || sibling.kind === "Transform") {
+      if (
+        sibling.kind === "Source" ||
+        sibling.kind === "Transform" ||
+        sibling.kind === "Join"
+      ) {
         const up = getUpstream(
           { children: [sibling] } as ConstructNode,
           nodeIndex,

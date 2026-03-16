@@ -1,4 +1,4 @@
-# BUG-002: Joins generate `SELECT * FROM unknown` instead of actual join SQL
+# BUG-002: Joins generate `SELECT * FROM unknown` instead of actual join SQL [FIXED]
 
 ## Affected Examples
 - `06-interval-join` — IntervalJoin
