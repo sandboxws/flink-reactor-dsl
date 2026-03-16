@@ -13,6 +13,7 @@ const EventSchema = Schema({
     product_id: Field.STRING(),
     event_time: Field.TIMESTAMP(3),
   },
+  primaryKey: { columns: ["event_id"] },
 })
 
 const BlacklistSchema = Schema({

@@ -1,4 +1,4 @@
-# BUG-011: Anti-join produces retract but KafkaSink has no PK for upsert mode
+# BUG-011: Anti-join produces retract but KafkaSink has no PK for upsert mode [FIXED]
 
 ## Affected Examples
 - `18-broadcast-join`

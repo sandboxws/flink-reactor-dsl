@@ -1204,13 +1204,14 @@ CREATE TABLE \`user_events\` (
   \`user_id\` STRING,
   \`event_type\` STRING,
   \`product_id\` STRING,
-  \`event_time\` TIMESTAMP(3)
+  \`event_time\` TIMESTAMP(3),
+  PRIMARY KEY (\`event_id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'user_events',
-  'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092',
-  'scan.startup.mode' = 'earliest-offset'
+  'key.format' = 'json',
+  'value.format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
 -- ====================================================================
@@ -1246,11 +1247,13 @@ CREATE TABLE \`valid_events\` (
   \`user_id\` STRING,
   \`event_type\` STRING,
   \`product_id\` STRING,
-  \`event_time\` TIMESTAMP(3)
+  \`event_time\` TIMESTAMP(3),
+  PRIMARY KEY (\`event_id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'valid_events',
-  'format' = 'json',
+  'key.format' = 'json',
+  'value.format' = 'json',
   'properties.bootstrap.servers' = 'kafka:9092'
 );
 
