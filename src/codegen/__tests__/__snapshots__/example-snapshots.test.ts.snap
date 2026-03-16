@@ -1025,7 +1025,14 @@ CREATE TABLE \`card_transactions\` (
 -- format      : json
 -- ====================================================================
 
-CREATE TABLE \`fraud_alerts\` WITH (
+CREATE TABLE \`fraud_alerts\` (
+  \`card_id\` STRING,
+  \`first_txn\` STRING,
+  \`last_txn\` STRING,
+  \`total_amount\` STRING,
+  \`txn_count\` STRING,
+  \`fraud_type\` STRING
+) WITH (
   'connector' = 'kafka',
   'topic' = 'fraud_alerts',
   'format' = 'json',
@@ -1037,13 +1044,30 @@ CREATE TABLE \`fraud_alerts\` WITH (
 -- --------------------------------------------------------------------
 -- step        : Map_2
 -- type        : Map
--- input       : unknown
+-- input       : card_transactions
 -- output      : fraud_alerts
 -- ====================================================================
 
 INSERT INTO \`fraud_alerts\`
 SELECT card_id AS \`card_id\`, first_txn AS \`first_txn\`, last_txn AS \`last_txn\`, total_amount AS \`total_amount\`, txn_count AS \`txn_count\`, 'RAPID_GEO_CHANGE' AS \`fraud_type\` FROM (
-SELECT * FROM unknown
+SELECT *
+FROM \`card_transactions\`
+MATCH_RECOGNIZE (
+  PARTITION BY \`card_id\`
+  ORDER BY \`transaction_time\`
+  MEASURES
+    A.card_id AS \`card_id\`,
+    A.transaction_id AS \`first_txn\`,
+    C.transaction_id AS \`last_txn\`,
+    A.amount + SUM(B.amount) + C.amount AS \`total_amount\`,
+    COUNT(B.transaction_id) + 2 AS \`txn_count\`
+  AFTER MATCH SKIP TO NEXT ROW
+  PATTERN (A B+ C)
+  DEFINE
+    A AS A.amount > 1000,
+    B AS B.location <> A.location,
+    C AS C.amount > 500 AND C.location <> B.location
+)
 );
 "
 `;

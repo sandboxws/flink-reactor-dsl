@@ -47,7 +47,7 @@ export default (
         first_txn: "A.transaction_id",
         last_txn: "C.transaction_id",
         total_amount: "A.amount + SUM(B.amount) + C.amount",
-        txn_count: "COUNT(B.*) + 2",
+        txn_count: "COUNT(B.transaction_id) + 2",
       }}
     />
     <Map

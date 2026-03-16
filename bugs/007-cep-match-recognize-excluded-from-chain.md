@@ -1,4 +1,4 @@
-# BUG-007: MatchRecognize excluded from sibling chain — generates SELECT * FROM unknown
+# BUG-007: MatchRecognize excluded from sibling chain — generates SELECT * FROM unknown [FIXED]
 
 ## Affected Examples
 - `15-cep-fraud-detection`

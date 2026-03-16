@@ -488,7 +488,8 @@ export function findRouteUpstreamNode(
       if (
         sibling.kind === "Source" ||
         sibling.kind === "Transform" ||
-        sibling.kind === "Join"
+        sibling.kind === "Join" ||
+        sibling.kind === "CEP"
       ) {
         return sibling
       }
@@ -663,7 +664,8 @@ function resolveSinkSchemas(
           } else if (
             (sibling.kind === "Transform" ||
               sibling.kind === "Window" ||
-              sibling.kind === "Join") &&
+              sibling.kind === "Join" ||
+              sibling.kind === "CEP") &&
             sibling.children.length > 0 &&
             findDeepestSource(sibling) !== null
           ) {

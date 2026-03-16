@@ -1405,7 +1405,8 @@ function resolveSinkMetadata(
           } else if (
             (sibling.kind === "Transform" ||
               sibling.kind === "Window" ||
-              sibling.kind === "Join") &&
+              sibling.kind === "Join" ||
+              sibling.kind === "CEP") &&
             sibling.children.length > 0 &&
             findDeepestSource(sibling) !== null
           ) {
@@ -1565,7 +1566,8 @@ function buildSiblingChainQuery(
       sibling.kind === "Source" ||
       sibling.kind === "Transform" ||
       sibling.kind === "Window" ||
-      sibling.kind === "Join"
+      sibling.kind === "Join" ||
+      sibling.kind === "CEP"
     ) {
       chain.push(sibling)
     }
@@ -1807,7 +1809,8 @@ function resolveRouteUpstream(
       if (
         sibling.kind === "Source" ||
         sibling.kind === "Transform" ||
-        sibling.kind === "Join"
+        sibling.kind === "Join" ||
+        sibling.kind === "CEP"
       ) {
         const up = getUpstream(
           { children: [sibling] } as ConstructNode,
