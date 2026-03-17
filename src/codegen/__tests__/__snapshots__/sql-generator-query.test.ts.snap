@@ -1,7 +1,24 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`Query: WHERE + GROUP BY + HAVING combined > produces all clauses in correct order 1`] = `
-"SET 'pipeline.name' = 'combined-clauses-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : combined-clauses-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'combined-clauses-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
@@ -17,11 +34,28 @@ CREATE TABLE \`orders\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : filtered_agg
+-- type        : kafka
+-- topic       : filtered-agg
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`filtered_agg\` WITH (
   'connector' = 'kafka',
   'topic' = 'filtered-agg',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : orders
+-- output      : filtered_agg
+-- ====================================================================
 
 INSERT INTO \`filtered_agg\`
 SELECT user_id AS \`user_id\`, SUM(amount) AS \`total\` FROM \`orders\`
@@ -32,7 +66,24 @@ HAVING SUM(amount) > 500;
 `;
 
 exports[`Query: aggregation with HAVING > produces correct SQL 1`] = `
-"SET 'pipeline.name' = 'agg-having-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : agg-having-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'agg-having-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
@@ -48,11 +99,28 @@ CREATE TABLE \`orders\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : high_spenders
+-- type        : kafka
+-- topic       : high-spenders
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`high_spenders\` WITH (
   'connector' = 'kafka',
   'topic' = 'high-spenders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : orders
+-- output      : high_spenders
+-- ====================================================================
 
 INSERT INTO \`high_spenders\`
 SELECT user_id AS \`user_id\`, SUM(amount) AS \`total\` FROM \`orders\`
@@ -62,7 +130,24 @@ HAVING SUM(amount) > 1000;
 `;
 
 exports[`Query: chained with upstream Filter > wraps the upstream filter in a subquery 1`] = `
-"SET 'pipeline.name' = 'filter-query-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : filter-query-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'filter-query-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
@@ -78,11 +163,31 @@ CREATE TABLE \`orders\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : user_totals
+-- type        : kafka
+-- topic       : user-totals
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`user_totals\` WITH (
   'connector' = 'kafka',
   'topic' = 'user-totals',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Filter_1
+-- type        : Filter
+-- input       : orders
+-- output      : user_totals
+-- rule        : user_id <> 'bot'
+-- ====================================================================
 
 INSERT INTO \`user_totals\`
 SELECT user_id AS \`user_id\`, SUM(amount) AS \`total\` FROM (
@@ -93,7 +198,24 @@ GROUP BY \`user_id\`;
 `;
 
 exports[`Query: multiple window functions sharing a named window > produces correct SQL with shared WINDOW clause 1`] = `
-"SET 'pipeline.name' = 'multi-window-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : multi-window-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'multi-window-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
@@ -109,11 +231,28 @@ CREATE TABLE \`orders\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : multi_window_output
+-- type        : kafka
+-- topic       : multi-window-output
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`multi_window_output\` WITH (
   'connector' = 'kafka',
   'topic' = 'multi-window-output',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : orders
+-- output      : multi_window_output
+-- ====================================================================
 
 INSERT INTO \`multi_window_output\`
 SELECT user_id AS \`user_id\`, amount AS \`amount\`, LAG(amount, 1) OVER \`w\` AS \`prev_amount\`, LEAD(amount, 1) OVER \`w\` AS \`next_amount\`, ROW_NUMBER() OVER \`w\` AS \`row_num\` FROM \`orders\`
@@ -122,7 +261,24 @@ WINDOW \`w\` AS (PARTITION BY \`user_id\` ORDER BY \`event_time\` ASC);
 `;
 
 exports[`Query: window function with inline OVER > produces correct SQL for RANK with inline window spec 1`] = `
-"SET 'pipeline.name' = 'inline-over-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : inline-over-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'inline-over-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
@@ -138,11 +294,28 @@ CREATE TABLE \`orders\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : ranked_orders
+-- type        : kafka
+-- topic       : ranked-orders
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`ranked_orders\` WITH (
   'connector' = 'kafka',
   'topic' = 'ranked-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : orders
+-- output      : ranked_orders
+-- ====================================================================
 
 INSERT INTO \`ranked_orders\`
 SELECT user_id AS \`user_id\`, amount AS \`amount\`, RANK() OVER (PARTITION BY \`user_id\` ORDER BY \`amount\` DESC) AS \`rank_num\` FROM \`orders\`;
@@ -150,7 +323,24 @@ SELECT user_id AS \`user_id\`, amount AS \`amount\`, RANK() OVER (PARTITION BY \
 `;
 
 exports[`Query: window function with named window > produces correct SQL for LAG and ROW_NUMBER with named window 1`] = `
-"SET 'pipeline.name' = 'named-window-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : named-window-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'named-window-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
@@ -166,11 +356,28 @@ CREATE TABLE \`orders\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : windowed_orders
+-- type        : kafka
+-- topic       : windowed-orders
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`windowed_orders\` WITH (
   'connector' = 'kafka',
   'topic' = 'windowed-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : orders
+-- output      : windowed_orders
+-- ====================================================================
 
 INSERT INTO \`windowed_orders\`
 SELECT user_id AS \`user_id\`, amount AS \`amount\`, LAG(amount, 1) OVER \`w\` AS \`prev_amount\`, ROW_NUMBER() OVER \`w\` AS \`row_num\` FROM \`orders\`

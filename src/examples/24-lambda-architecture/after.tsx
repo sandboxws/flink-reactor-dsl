@@ -35,8 +35,8 @@ export default (
       {/* Sink 1: Raw archive to data lake */}
       <Route.Branch condition="true">
         <FileSystemSink
-          path="s3://data-lake/clickstream/raw/"
-          format="parquet"
+          path="/tmp/data-lake/clickstream/raw/"
+          format="json"
           partitionBy={["DATE(event_time)", "HOUR(event_time)"]}
           rollingPolicy={{ size: "256MB", interval: "10min" }}
         />

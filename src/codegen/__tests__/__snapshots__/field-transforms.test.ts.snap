@@ -1,7 +1,24 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`AddField (reverse-nesting) > generates SELECT *, expr AS alias 1`] = `
-"SET 'pipeline.name' = 'addfield-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : addfield-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'addfield-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : products
+-- type        : kafka
+-- topic       : products
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`products\` (
   \`id\` INT,
@@ -11,12 +28,21 @@ CREATE TABLE \`products\` (
   \`debug_flag\` BOOLEAN,
   PRIMARY KEY (\`id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'products',
-  'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092',
-  'scan.startup.mode' = 'earliest-offset'
+  'key.format' = 'json',
+  'value.format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : output
+-- type        : kafka
+-- topic       : output
+-- format      : json
+-- ====================================================================
 
 CREATE TABLE \`output\` (
   \`id\` INT,
@@ -24,13 +50,23 @@ CREATE TABLE \`output\` (
   \`price\` DOUBLE,
   \`internal_id\` STRING,
   \`debug_flag\` BOOLEAN,
-  \`total\` STRING,
+  \`total\` DOUBLE,
   \`processed_at\` STRING
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'output',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : AddField_1
+-- type        : AddField
+-- input       : products
+-- output      : output
+-- ====================================================================
 
 INSERT INTO \`output\`
 SELECT *, price * 2 AS \`total\`, CURRENT_TIMESTAMP AS \`processed_at\` FROM \`products\`;
@@ -38,7 +74,24 @@ SELECT *, price * 2 AS \`total\`, CURRENT_TIMESTAMP AS \`processed_at\` FROM \`p
 `;
 
 exports[`Cast (reverse-nesting) > generates CAST for targeted fields 1`] = `
-"SET 'pipeline.name' = 'cast-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : cast-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'cast-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : products
+-- type        : kafka
+-- topic       : products
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`products\` (
   \`id\` INT,
@@ -48,12 +101,21 @@ CREATE TABLE \`products\` (
   \`debug_flag\` BOOLEAN,
   PRIMARY KEY (\`id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'products',
-  'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092',
-  'scan.startup.mode' = 'earliest-offset'
+  'key.format' = 'json',
+  'value.format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : output
+-- type        : kafka
+-- topic       : output
+-- format      : json
+-- ====================================================================
 
 CREATE TABLE \`output\` (
   \`id\` BIGINT,
@@ -64,8 +126,18 @@ CREATE TABLE \`output\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'output',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Cast_1
+-- type        : Cast
+-- input       : products
+-- output      : output
+-- ====================================================================
 
 INSERT INTO \`output\`
 SELECT CAST(\`id\` AS BIGINT) AS \`id\`, \`name\`, CAST(\`price\` AS DECIMAL(10, 2)) AS \`price\`, \`internal_id\`, \`debug_flag\` FROM \`products\`;
@@ -73,7 +145,24 @@ SELECT CAST(\`id\` AS BIGINT) AS \`id\`, \`name\`, CAST(\`price\` AS DECIMAL(10,
 `;
 
 exports[`Cast (reverse-nesting) > generates TRY_CAST when safe=true 1`] = `
-"SET 'pipeline.name' = 'safe-cast-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : safe-cast-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'safe-cast-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : products
+-- type        : kafka
+-- topic       : products
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`products\` (
   \`id\` INT,
@@ -83,12 +172,21 @@ CREATE TABLE \`products\` (
   \`debug_flag\` BOOLEAN,
   PRIMARY KEY (\`id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'products',
-  'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092',
-  'scan.startup.mode' = 'earliest-offset'
+  'key.format' = 'json',
+  'value.format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : output
+-- type        : kafka
+-- topic       : output
+-- format      : json
+-- ====================================================================
 
 CREATE TABLE \`output\` (
   \`id\` BIGINT,
@@ -99,8 +197,18 @@ CREATE TABLE \`output\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'output',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Cast_1
+-- type        : Cast
+-- input       : products
+-- output      : output
+-- ====================================================================
 
 INSERT INTO \`output\`
 SELECT TRY_CAST(\`id\` AS BIGINT) AS \`id\`, \`name\`, \`price\`, \`internal_id\`, \`debug_flag\` FROM \`products\`;
@@ -108,7 +216,24 @@ SELECT TRY_CAST(\`id\` AS BIGINT) AS \`id\`, \`name\`, \`price\`, \`internal_id\
 `;
 
 exports[`Coalesce (reverse-nesting) > generates COALESCE for targeted fields 1`] = `
-"SET 'pipeline.name' = 'coalesce-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : coalesce-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'coalesce-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : products
+-- type        : kafka
+-- topic       : products
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`products\` (
   \`id\` INT,
@@ -118,12 +243,21 @@ CREATE TABLE \`products\` (
   \`debug_flag\` BOOLEAN,
   PRIMARY KEY (\`id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'products',
-  'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092',
-  'scan.startup.mode' = 'earliest-offset'
+  'key.format' = 'json',
+  'value.format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : output
+-- type        : kafka
+-- topic       : output
+-- format      : json
+-- ====================================================================
 
 CREATE TABLE \`output\` (
   \`id\` INT,
@@ -134,8 +268,18 @@ CREATE TABLE \`output\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'output',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Coalesce_1
+-- type        : Coalesce
+-- input       : products
+-- output      : output
+-- ====================================================================
 
 INSERT INTO \`output\`
 SELECT \`id\`, COALESCE(\`name\`, 'unknown') AS \`name\`, COALESCE(\`price\`, 0) AS \`price\`, \`internal_id\`, \`debug_flag\` FROM \`products\`;
@@ -143,7 +287,24 @@ SELECT \`id\`, COALESCE(\`name\`, 'unknown') AS \`name\`, COALESCE(\`price\`, 0)
 `;
 
 exports[`Drop (reverse-nesting) > generates SELECT excluding dropped fields 1`] = `
-"SET 'pipeline.name' = 'drop-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : drop-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'drop-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : products
+-- type        : kafka
+-- topic       : products
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`products\` (
   \`id\` INT,
@@ -153,12 +314,21 @@ CREATE TABLE \`products\` (
   \`debug_flag\` BOOLEAN,
   PRIMARY KEY (\`id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'products',
-  'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092',
-  'scan.startup.mode' = 'earliest-offset'
+  'key.format' = 'json',
+  'value.format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : output
+-- type        : kafka
+-- topic       : output
+-- format      : json
+-- ====================================================================
 
 CREATE TABLE \`output\` (
   \`id\` INT,
@@ -167,8 +337,18 @@ CREATE TABLE \`output\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'output',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Drop_1
+-- type        : Drop
+-- input       : products
+-- output      : output
+-- ====================================================================
 
 INSERT INTO \`output\`
 SELECT \`id\`, \`name\`, \`price\` FROM \`products\`;
@@ -176,7 +356,24 @@ SELECT \`id\`, \`name\`, \`price\` FROM \`products\`;
 `;
 
 exports[`Rename (reverse-nesting) > generates aliased SELECT for renamed fields 1`] = `
-"SET 'pipeline.name' = 'rename-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : rename-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'rename-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : products
+-- type        : kafka
+-- topic       : products
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`products\` (
   \`id\` INT,
@@ -186,12 +383,21 @@ CREATE TABLE \`products\` (
   \`debug_flag\` BOOLEAN,
   PRIMARY KEY (\`id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'products',
-  'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092',
-  'scan.startup.mode' = 'earliest-offset'
+  'key.format' = 'json',
+  'value.format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : output
+-- type        : kafka
+-- topic       : output
+-- format      : json
+-- ====================================================================
 
 CREATE TABLE \`output\` (
   \`product_id\` INT,
@@ -202,8 +408,18 @@ CREATE TABLE \`output\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'output',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Rename_1
+-- type        : Rename
+-- input       : products
+-- output      : output
+-- ====================================================================
 
 INSERT INTO \`output\`
 SELECT \`id\` AS \`product_id\`, \`name\`, \`price\`, \`internal_id\`, \`debug_flag\` FROM \`products\`;
@@ -211,7 +427,24 @@ SELECT \`id\` AS \`product_id\`, \`name\`, \`price\`, \`internal_id\`, \`debug_f
 `;
 
 exports[`chained field transforms > Drop → Rename → Cast → AddField produces nested SQL 1`] = `
-"SET 'pipeline.name' = 'chained-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : chained-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'chained-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : products
+-- type        : kafka
+-- topic       : products
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`products\` (
   \`id\` INT,
@@ -221,24 +454,42 @@ CREATE TABLE \`products\` (
   \`debug_flag\` BOOLEAN,
   PRIMARY KEY (\`id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'products',
-  'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092',
-  'scan.startup.mode' = 'earliest-offset'
+  'key.format' = 'json',
+  'value.format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : output
+-- type        : kafka
+-- topic       : output
+-- format      : json
+-- ====================================================================
 
 CREATE TABLE \`output\` (
   \`id\` BIGINT,
   \`product_name\` STRING,
   \`price\` DOUBLE,
   \`internal_id\` STRING,
-  \`discounted\` STRING
+  \`discounted\` DOUBLE
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'output',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- transforms  : Drop → Rename → Cast → AddField
+-- input       : products
+-- output      : output
+-- ====================================================================
 
 INSERT INTO \`output\`
 SELECT *, price * 0.9 AS \`discounted\` FROM (
@@ -252,7 +503,24 @@ SELECT \`id\`, \`name\`, \`price\`, \`internal_id\` FROM \`products\`
 `;
 
 exports[`chained field transforms > chained field transforms in forward-reading JSX pattern 1`] = `
-"SET 'pipeline.name' = 'forward-chained';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : forward-chained
+-- ====================================================================
+
+SET 'pipeline.name' = 'forward-chained';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : products
+-- type        : kafka
+-- topic       : products
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`products\` (
   \`id\` INT,
@@ -262,24 +530,42 @@ CREATE TABLE \`products\` (
   \`debug_flag\` BOOLEAN,
   PRIMARY KEY (\`id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'products',
-  'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092',
-  'scan.startup.mode' = 'earliest-offset'
+  'key.format' = 'json',
+  'value.format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : output
+-- type        : kafka
+-- topic       : output
+-- format      : json
+-- ====================================================================
 
 CREATE TABLE \`output\` (
   \`id\` BIGINT,
   \`product_name\` STRING,
   \`price\` DOUBLE,
   \`internal_id\` STRING,
-  \`discounted\` STRING
+  \`discounted\` DOUBLE
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'output',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- transforms  : Drop → Rename → Cast → AddField
+-- input       : products
+-- output      : output
+-- ====================================================================
 
 INSERT INTO \`output\`
 SELECT *, price * 0.9 AS \`discounted\` FROM (
@@ -293,7 +579,24 @@ SELECT \`id\`, \`name\`, \`price\`, \`internal_id\` FROM \`products\`
 `;
 
 exports[`field transforms (forward-reading JSX) > Drop works as a sibling between source and sink 1`] = `
-"SET 'pipeline.name' = 'forward-drop';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : forward-drop
+-- ====================================================================
+
+SET 'pipeline.name' = 'forward-drop';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : products
+-- type        : kafka
+-- topic       : products
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`products\` (
   \`id\` INT,
@@ -303,12 +606,21 @@ CREATE TABLE \`products\` (
   \`debug_flag\` BOOLEAN,
   PRIMARY KEY (\`id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'products',
-  'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092',
-  'scan.startup.mode' = 'earliest-offset'
+  'key.format' = 'json',
+  'value.format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : output
+-- type        : kafka
+-- topic       : output
+-- format      : json
+-- ====================================================================
 
 CREATE TABLE \`output\` (
   \`id\` INT,
@@ -317,8 +629,18 @@ CREATE TABLE \`output\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'output',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Drop_1
+-- type        : Drop
+-- input       : products
+-- output      : output
+-- ====================================================================
 
 INSERT INTO \`output\`
 SELECT \`id\`, \`name\`, \`price\` FROM \`products\`;
@@ -326,7 +648,24 @@ SELECT \`id\`, \`name\`, \`price\` FROM \`products\`;
 `;
 
 exports[`field transforms (forward-reading JSX) > Rename works as a sibling between source and sink 1`] = `
-"SET 'pipeline.name' = 'forward-rename';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : forward-rename
+-- ====================================================================
+
+SET 'pipeline.name' = 'forward-rename';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : products
+-- type        : kafka
+-- topic       : products
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`products\` (
   \`id\` INT,
@@ -336,12 +675,21 @@ CREATE TABLE \`products\` (
   \`debug_flag\` BOOLEAN,
   PRIMARY KEY (\`id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'products',
-  'format' = 'json',
-  'properties.bootstrap.servers' = 'kafka:9092',
-  'scan.startup.mode' = 'earliest-offset'
+  'key.format' = 'json',
+  'value.format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : output
+-- type        : kafka
+-- topic       : output
+-- format      : json
+-- ====================================================================
 
 CREATE TABLE \`output\` (
   \`product_id\` INT,
@@ -352,8 +700,18 @@ CREATE TABLE \`output\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'output',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Rename_1
+-- type        : Rename
+-- input       : products
+-- output      : output
+-- ====================================================================
 
 INSERT INTO \`output\`
 SELECT \`id\` AS \`product_id\`, \`name\` AS \`product_name\`, \`price\`, \`internal_id\`, \`debug_flag\` FROM \`products\`;

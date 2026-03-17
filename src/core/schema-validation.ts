@@ -292,19 +292,17 @@ function validateNodeColumnReferences(
     // ── Array-lookup components ──────────────────────────────────
     case "Deduplicate": {
       const key = node.props.key as readonly string[] | undefined
-      const order = node.props.order as readonly string[] | undefined
+      const order = node.props.order as string | undefined
       if (key) {
         for (const col of key) {
           if (!colSet.has(col)) diagnostics.push(makeDiag("error", col, "key"))
         }
       }
       if (order) {
-        for (const col of order) {
-          // order may have "ASC"/"DESC" suffix
-          const colName = col.replace(/\s+(ASC|DESC)$/i, "").trim()
-          if (!colSet.has(colName))
-            diagnostics.push(makeDiag("error", colName, "order"))
-        }
+        // order is a single column name, optionally with ASC/DESC suffix
+        const colName = order.replace(/\s+(ASC|DESC)$/i, "").trim()
+        if (!colSet.has(colName))
+          diagnostics.push(makeDiag("error", colName, "order"))
       }
       break
     }
@@ -313,7 +311,9 @@ function validateNodeColumnReferences(
       const partitionBy = node.props.partitionBy as
         | readonly string[]
         | undefined
-      const orderBy = node.props.orderBy as readonly string[] | undefined
+      const orderBy = node.props.orderBy as
+        | Record<string, "ASC" | "DESC">
+        | undefined
       if (partitionBy) {
         for (const col of partitionBy) {
           if (!colSet.has(col))
@@ -321,10 +321,9 @@ function validateNodeColumnReferences(
         }
       }
       if (orderBy) {
-        for (const col of orderBy) {
-          const colName = col.replace(/\s+(ASC|DESC)$/i, "").trim()
-          if (!colSet.has(colName))
-            diagnostics.push(makeDiag("error", colName, "orderBy"))
+        for (const col of Object.keys(orderBy)) {
+          if (!colSet.has(col))
+            diagnostics.push(makeDiag("error", col, "orderBy"))
         }
       }
       break

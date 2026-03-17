@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { SqlGatewayClient, SqlGatewayClientError } from "../client.js"
+import {
+  SqlGatewayClient,
+  SqlGatewayClientError,
+  StatementExecutionError,
+} from "../client.js"
 import type {
   RawFetchResultsResponse,
   RawGetOperationStatusResponse,
@@ -393,6 +397,160 @@ describe("SqlGatewayClient", () => {
       await expect(client.openSession()).rejects.toThrow(
         /SQL Gateway error: 500/,
       )
+    })
+  })
+
+  describe("executeStatement", () => {
+    it("throws StatementExecutionError with structured detail on ERROR status", async () => {
+      // submitStatement
+      mockFetch.mockResolvedValueOnce(
+        mockJsonResponse<RawSubmitStatementResponse>({
+          operationHandle: "op-err",
+        }),
+      )
+      // getOperationStatus → ERROR
+      mockFetch.mockResolvedValueOnce(
+        mockJsonResponse<RawGetOperationStatusResponse>({ status: "ERROR" }),
+      )
+      // fetchResults → error message from Flink
+      const errorResult: RawFetchResultsResponse = {
+        results: {
+          columns: [
+            {
+              name: "message",
+              logicalType: { type: "VARCHAR", nullable: true },
+            },
+          ],
+          data: [
+            {
+              kind: "INSERT",
+              fields: [
+                "org.apache.flink.table.api.ValidationException: Column 'amount' not found in any table\n\tat org.apache.flink.table.planner.Resolver.resolve(Resolver.java:42)\nCaused by: org.apache.calcite.sql.validate.SqlValidatorException: Column 'amount' not found",
+              ],
+            },
+          ],
+        },
+        resultType: "EOS",
+        nextResultUri: null,
+      }
+      mockFetch.mockResolvedValueOnce(mockJsonResponse(errorResult))
+
+      const err = (await client
+        .executeStatement("sess-abc", "SELECT amount FROM orders")
+        .catch((e: unknown) => e)) as StatementExecutionError
+
+      expect(err).toBeInstanceOf(StatementExecutionError)
+      expect(err.detail.statement).toBe("SELECT amount FROM orders")
+      expect(err.detail.message).toBe("Column 'amount' not found in any table")
+      expect(err.detail.rootCause).toBe("Column 'amount' not found")
+      expect(err.detail.fullMessage).toContain("ValidationException")
+    })
+
+    it("extracts root cause from deepest Caused by in chain", async () => {
+      mockFetch.mockResolvedValueOnce(
+        mockJsonResponse<RawSubmitStatementResponse>({
+          operationHandle: "op-chain",
+        }),
+      )
+      mockFetch.mockResolvedValueOnce(
+        mockJsonResponse<RawGetOperationStatusResponse>({ status: "ERROR" }),
+      )
+      const errorResult: RawFetchResultsResponse = {
+        results: {
+          columns: [
+            {
+              name: "message",
+              logicalType: { type: "VARCHAR", nullable: true },
+            },
+          ],
+          data: [
+            {
+              kind: "INSERT",
+              fields: [
+                "org.apache.flink.table.api.TableException: Failed to parse SQL\nCaused by: org.apache.calcite.runtime.CalciteContextException: From line 1, col 8\nCaused by: java.lang.RuntimeException: Table 'orders' not found",
+              ],
+            },
+          ],
+        },
+        resultType: "EOS",
+        nextResultUri: null,
+      }
+      mockFetch.mockResolvedValueOnce(mockJsonResponse(errorResult))
+
+      const err = (await client
+        .executeStatement("sess-abc", "SELECT * FROM orders")
+        .catch((e: unknown) => e)) as StatementExecutionError
+
+      expect(err.detail.message).toBe("Failed to parse SQL")
+      expect(err.detail.rootCause).toBe("Table 'orders' not found")
+    })
+
+    it("handles errors without Caused by chain", async () => {
+      mockFetch.mockResolvedValueOnce(
+        mockJsonResponse<RawSubmitStatementResponse>({
+          operationHandle: "op-simple",
+        }),
+      )
+      mockFetch.mockResolvedValueOnce(
+        mockJsonResponse<RawGetOperationStatusResponse>({ status: "ERROR" }),
+      )
+      const errorResult: RawFetchResultsResponse = {
+        results: {
+          columns: [
+            {
+              name: "message",
+              logicalType: { type: "VARCHAR", nullable: true },
+            },
+          ],
+          data: [
+            {
+              kind: "INSERT",
+              fields: ["Syntax error at position 0"],
+            },
+          ],
+        },
+        resultType: "EOS",
+        nextResultUri: null,
+      }
+      mockFetch.mockResolvedValueOnce(mockJsonResponse(errorResult))
+
+      const err = (await client
+        .executeStatement("sess-abc", "SELCT 1")
+        .catch((e: unknown) => e)) as StatementExecutionError
+
+      expect(err.detail.message).toBe("Syntax error at position 0")
+      expect(err.detail.rootCause).toBeNull()
+      expect(err.detail.statement).toBe("SELCT 1")
+    })
+
+    it("handles fetchResults throwing (error in HTTP response)", async () => {
+      mockFetch.mockResolvedValueOnce(
+        mockJsonResponse<RawSubmitStatementResponse>({
+          operationHandle: "op-http-err",
+        }),
+      )
+      mockFetch.mockResolvedValueOnce(
+        mockJsonResponse<RawGetOperationStatusResponse>({ status: "ERROR" }),
+      )
+      // fetchResults returns HTTP error with Flink error in body
+      mockFetch.mockResolvedValueOnce(
+        mockJsonResponse(
+          {
+            errors: [
+              "org.apache.flink.table.api.ValidationException: Table 'missing_table' not found",
+            ],
+          },
+          500,
+        ),
+      )
+
+      const err = (await client
+        .executeStatement("sess-abc", "SELECT * FROM missing_table")
+        .catch((e: unknown) => e)) as StatementExecutionError
+
+      expect(err).toBeInstanceOf(StatementExecutionError)
+      expect(err.detail.message).toBe("Table 'missing_table' not found")
+      expect(err.detail.statement).toBe("SELECT * FROM missing_table")
     })
   })
 })

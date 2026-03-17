@@ -4,7 +4,15 @@ import { Pipeline } from "@/components/pipeline.js"
 import { Route } from "@/components/route.js"
 import { JdbcSink, KafkaSink } from "@/components/sinks.js"
 import { KafkaSource } from "@/components/sources.js"
-import { Aggregate, Filter, Map } from "@/components/transforms.js"
+import {
+  Aggregate,
+  Deduplicate,
+  Filter,
+  Map,
+  TopN,
+  Union,
+} from "@/components/transforms.js"
+import { TumbleWindow } from "@/components/windows.js"
 import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
 import { Field, Schema } from "@/core/schema.js"
 
@@ -354,6 +362,208 @@ describe("route branching", () => {
       type: "DECIMAL(10, 2)",
       constraints: [],
     })
+  })
+})
+
+// ── Window schema resolution ─────────────────────────────────────────
+
+describe("window schema resolution", () => {
+  it("TumbleWindow + Aggregate adds window_start and window_end", () => {
+    const pipeline = Pipeline({
+      name: "tumble-agg",
+      children: [
+        KafkaSink({
+          topic: "output",
+          children: [
+            TumbleWindow({
+              size: "1 hour",
+              on: "event_time",
+              children: [
+                Aggregate({
+                  groupBy: ["user_id"],
+                  select: {
+                    user_id: "user_id",
+                    total_amount: "SUM(amount)",
+                  },
+                  children: [
+                    KafkaSource({
+                      topic: "orders",
+                      schema: OrderSchema,
+                    }),
+                  ],
+                }),
+              ],
+            }),
+          ],
+        }),
+      ],
+    })
+
+    const schemas = introspectPipelineSchemas(pipeline)
+    const sinks = schemas.filter((s) => s.kind === "sink")
+
+    // groupBy(user_id) + agg(total_amount) + window_start + window_end = 4
+    expect(sinks[0].columns).toHaveLength(4)
+    expect(sinks[0].columns.map((c) => c.name)).toEqual([
+      "user_id",
+      "total_amount",
+      "window_start",
+      "window_end",
+    ])
+    expect(sinks[0].columns[2].type).toBe("TIMESTAMP(3)")
+    expect(sinks[0].columns[3].type).toBe("TIMESTAMP(3)")
+  })
+})
+
+// ── Deduplicate/TopN schema resolution ──────────────────────────────
+
+describe("deduplicate/topn schema resolution", () => {
+  it("Deduplicate adds rownum column", () => {
+    const pipeline = Pipeline({
+      name: "dedup",
+      children: [
+        KafkaSink({
+          topic: "output",
+          children: [
+            Deduplicate({
+              key: ["user_id"],
+              order: "event_time",
+              keep: "first",
+              children: [
+                KafkaSource({
+                  topic: "orders",
+                  schema: OrderSchema,
+                }),
+              ],
+            }),
+          ],
+        }),
+      ],
+    })
+
+    const schemas = introspectPipelineSchemas(pipeline)
+    const sinks = schemas.filter((s) => s.kind === "sink")
+
+    // 4 source columns + rownum = 5
+    expect(sinks[0].columns).toHaveLength(5)
+    expect(sinks[0].columns[4]).toEqual({
+      name: "rownum",
+      type: "BIGINT",
+      constraints: [],
+    })
+  })
+
+  it("TopN adds rownum column", () => {
+    const pipeline = Pipeline({
+      name: "topn",
+      children: [
+        KafkaSink({
+          topic: "output",
+          children: [
+            TopN({
+              partitionBy: ["user_id"],
+              orderBy: { amount: "DESC" },
+              n: 3,
+              children: [
+                KafkaSource({
+                  topic: "orders",
+                  schema: OrderSchema,
+                }),
+              ],
+            }),
+          ],
+        }),
+      ],
+    })
+
+    const schemas = introspectPipelineSchemas(pipeline)
+    const sinks = schemas.filter((s) => s.kind === "sink")
+
+    // 4 source columns + rownum = 5
+    expect(sinks[0].columns).toHaveLength(5)
+    expect(sinks[0].columns[4]).toEqual({
+      name: "rownum",
+      type: "BIGINT",
+      constraints: [],
+    })
+  })
+
+  it("Deduplicate → TumbleWindow + Aggregate chain resolves correctly", () => {
+    const pipeline = Pipeline({
+      name: "dedup-aggregate",
+      children: [
+        KafkaSink({
+          topic: "output",
+          children: [
+            TumbleWindow({
+              size: "1 hour",
+              on: "event_time",
+              children: [
+                Aggregate({
+                  groupBy: ["user_id"],
+                  select: {
+                    user_id: "user_id",
+                    order_count: "COUNT(*)",
+                  },
+                  children: [
+                    Deduplicate({
+                      key: ["order_id"],
+                      order: "event_time",
+                      keep: "first",
+                      children: [
+                        KafkaSource({
+                          topic: "orders",
+                          schema: OrderSchema,
+                        }),
+                      ],
+                    }),
+                  ],
+                }),
+              ],
+            }),
+          ],
+        }),
+      ],
+    })
+
+    const schemas = introspectPipelineSchemas(pipeline)
+    const sinks = schemas.filter((s) => s.kind === "sink")
+
+    // Dedup(4 + rownum) → Aggregate(user_id + order_count) → Window(+ window_start + window_end) = 4
+    expect(sinks[0].columns).toHaveLength(4)
+    expect(sinks[0].columns.map((c) => c.name)).toEqual([
+      "user_id",
+      "order_count",
+      "window_start",
+      "window_end",
+    ])
+  })
+})
+
+// ── Union (forward-reading) schema resolution ───────────────────────
+
+describe("union forward-reading schema resolution", () => {
+  it("resolves sink schema when Union contains sources as children", () => {
+    const us = KafkaSource({
+      topic: "events_us",
+      schema: OrderSchema,
+    })
+    const eu = KafkaSource({
+      topic: "events_eu",
+      schema: OrderSchema,
+    })
+
+    const pipeline = Pipeline({
+      name: "merged",
+      children: [Union({ children: [us, eu] }), KafkaSink({ topic: "output" })],
+    })
+
+    const schemas = introspectPipelineSchemas(pipeline)
+    const sinks = schemas.filter((s) => s.kind === "sink")
+
+    // Union is passthrough — sink should have same 4 fields as source
+    expect(sinks).toHaveLength(1)
+    expect(sinks[0].columns).toHaveLength(4)
   })
 })
 

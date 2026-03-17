@@ -1,6 +1,6 @@
 {
   "name": "flink-reactor",
-  "version": "0.1.0",
+  "version": "0.1.8-rc.1",
   "description": "React-style TSX DSL that synthesizes to Flink SQL + Kubernetes FlinkDeployment CRDs",
   "type": "module",
   "main": "./dist/index.js",
@@ -13,13 +13,22 @@
     "./jsx-runtime": {
       "import": "./dist/jsx-runtime.js",
       "types": "./dist/jsx-runtime.d.ts"
+    },
+    "./browser": {
+      "import": "./dist/browser.js",
+      "types": "./dist/browser.d.ts"
     }
   },
   "bin": {
     "flink-reactor": "./dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "src/cli/cluster/docker-compose.yml",
+    "src/cli/cluster/Dockerfile.flink",
+    "src/cli/cluster/data",
+    "src/cli/cluster/init",
+    "src/cli/cluster/pipelines"
   ],
   "packageManager": "pnpm@10.30.1",
   "repository": {
@@ -35,6 +44,8 @@
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:snapshots": "vitest run src/codegen/__tests__/example-snapshots.test.ts",
+    "test:explain": "vitest run src/lib/sql-gateway/__tests__/explain-integration.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",

@@ -1,7 +1,24 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`6.1: KafkaSource → Filter → KafkaSink > produces correct DDL + DML 1`] = `
-"SET 'pipeline.name' = 'filter-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : filter-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'filter-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
@@ -16,6 +33,15 @@ CREATE TABLE \`orders\` (
   'properties.bootstrap.servers' = 'kafka:9092',
   'scan.startup.mode' = 'earliest-offset'
 );
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : large_orders
+-- type        : kafka
+-- topic       : large-orders
+-- format      : json
+-- ====================================================================
 
 CREATE TABLE \`large_orders\` (
   \`order_id\` BIGINT,
@@ -25,8 +51,19 @@ CREATE TABLE \`large_orders\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'large-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Filter_1
+-- type        : Filter
+-- input       : orders
+-- output      : large_orders
+-- rule        : \`amount\` > 100
+-- ====================================================================
 
 INSERT INTO \`large_orders\`
 SELECT * FROM \`orders\` WHERE \`amount\` > 100;
@@ -34,7 +71,24 @@ SELECT * FROM \`orders\` WHERE \`amount\` > 100;
 `;
 
 exports[`6.2: Two-table inner join > produces correct JOIN SQL 1`] = `
-"SET 'pipeline.name' = 'join-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : join-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'join-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
@@ -49,6 +103,17 @@ CREATE TABLE \`orders\` (
   'properties.bootstrap.servers' = 'kafka:9092',
   'scan.startup.mode' = 'earliest-offset'
 );
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : users
+-- type        : kafka
+-- topic       : users
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`users\` (
   \`user_id\` STRING,
@@ -62,16 +127,35 @@ CREATE TABLE \`users\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : enriched_orders
+-- type        : kafka
+-- topic       : enriched-orders
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`enriched_orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
-  \`event_time\` TIMESTAMP(3)
+  \`event_time\` TIMESTAMP(3),
+  \`name\` STRING,
+  \`email\` STRING
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'enriched-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : orders
+-- output      : enriched_orders
+-- ====================================================================
 
 INSERT INTO \`enriched_orders\`
 SELECT * FROM \`orders\` INNER JOIN \`users\` ON \`KafkaSource_0\`.\`user_id\` = \`KafkaSource_1\`.\`user_id\`;
@@ -79,7 +163,24 @@ SELECT * FROM \`orders\` INNER JOIN \`users\` ON \`KafkaSource_0\`.\`user_id\` =
 `;
 
 exports[`6.3: Windowed aggregation with TUMBLE > produces correct TVF + GROUP BY 1`] = `
-"SET 'pipeline.name' = 'windowed-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : windowed-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'windowed-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
@@ -95,15 +196,34 @@ CREATE TABLE \`orders\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : hourly_totals
+-- type        : kafka
+-- topic       : hourly-totals
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`hourly_totals\` (
   \`user_id\` STRING,
   \`total_amount\` BIGINT,
-  \`order_count\` BIGINT
+  \`order_count\` BIGINT,
+  \`window_start\` TIMESTAMP(3),
+  \`window_end\` TIMESTAMP(3)
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'hourly-totals',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : unknown
+-- output      : hourly_totals
+-- ====================================================================
 
 INSERT INTO \`hourly_totals\`
 SELECT \`user_id\`, SUM(\`amount\`) AS \`total_amount\`, COUNT(*) AS \`order_count\`, window_start, window_end FROM TABLE(
@@ -113,7 +233,24 @@ SELECT \`user_id\`, SUM(\`amount\`) AS \`total_amount\`, COUNT(*) AS \`order_cou
 `;
 
 exports[`6.4: Deduplicate produces ROW_NUMBER pattern > produces correct ROW_NUMBER with WHERE rownum = 1 1`] = `
-"SET 'pipeline.name' = 'dedup-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : dedup-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'dedup-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : events
+-- type        : kafka
+-- topic       : events
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`events\` (
   \`event_id\` BIGINT,
@@ -130,17 +267,37 @@ CREATE TABLE \`events\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : deduped_events
+-- type        : kafka
+-- topic       : deduped-events
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`deduped_events\` (
   \`event_id\` BIGINT,
   \`user_id\` STRING,
   \`event_type\` STRING,
   \`event_time\` TIMESTAMP(3),
-  \`payload\` STRING
+  \`payload\` STRING,
+  \`rownum\` BIGINT
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'deduped-events',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Deduplicate_1
+-- type        : Deduplicate
+-- input       : events
+-- output      : deduped_events
+-- ====================================================================
 
 INSERT INTO \`deduped_events\`
 SELECT *, ROW_NUMBER() OVER (PARTITION BY \`event_id\` ORDER BY \`event_time\` ASC) AS rownum
@@ -150,7 +307,24 @@ QUALIFY rownum = 1;
 `;
 
 exports[`6.5: TopN produces ROW_NUMBER pattern > produces correct ROW_NUMBER with WHERE rownum <= N 1`] = `
-"SET 'pipeline.name' = 'topn-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : topn-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'topn-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
@@ -166,16 +340,37 @@ CREATE TABLE \`orders\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : top_orders
+-- type        : kafka
+-- topic       : top-orders
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`top_orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
-  \`event_time\` TIMESTAMP(3)
+  \`event_time\` TIMESTAMP(3),
+  \`rownum\` BIGINT
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'top-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : TopN_1
+-- type        : TopN
+-- input       : orders
+-- output      : top_orders
+-- top-n       : 5
+-- ====================================================================
 
 INSERT INTO \`top_orders\`
 SELECT *, ROW_NUMBER() OVER (PARTITION BY \`user_id\` ORDER BY \`amount\` DESC) AS rownum
@@ -185,7 +380,24 @@ QUALIFY rownum <= 5;
 `;
 
 exports[`6.6: Multi-sink produces STATEMENT SET > wraps multiple INSERT INTO in STATEMENT SET 1`] = `
-"SET 'pipeline.name' = 'multi-sink-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : multi-sink-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'multi-sink-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : events
+-- type        : kafka
+-- topic       : events
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`events\` (
   \`event_id\` BIGINT,
@@ -201,6 +413,15 @@ CREATE TABLE \`events\` (
   'properties.bootstrap.servers' = 'kafka:9092',
   'scan.startup.mode' = 'earliest-offset'
 );
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : errors_2
+-- type        : kafka
+-- topic       : errors
+-- format      : json
+-- ====================================================================
 
 CREATE TABLE \`errors_2\` (
   \`event_id\` BIGINT,
@@ -211,8 +432,18 @@ CREATE TABLE \`errors_2\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'errors',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : all_events_2
+-- type        : kafka
+-- topic       : all-events
+-- format      : json
+-- ====================================================================
 
 CREATE TABLE \`all_events_2\` (
   \`event_id\` BIGINT,
@@ -223,8 +454,26 @@ CREATE TABLE \`all_events_2\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'all-events',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Filter_3
+-- type        : Filter
+-- input       : events
+-- output      : errors_2
+-- rule        : \`event_type\` = 'ERROR'
+-- ====================================================================
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : events
+-- output      : all_events_2
+-- ====================================================================
 
 EXECUTE STATEMENT SET BEGIN
 INSERT INTO \`errors_2\`
@@ -236,12 +485,35 @@ END;
 `;
 
 exports[`6.7: Catalog pipeline produces CREATE CATALOG > generates CREATE CATALOG and catalog-qualified references 1`] = `
-"SET 'pipeline.name' = 'catalog-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : catalog-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'catalog-pipeline';
+
+-- ====================================================================
+-- CATALOG
+-- --------------------------------------------------------------------
+-- id          : PaimonCatalog_0
+-- type        : paimon
+-- warehouse   : s3://bucket/paimon
+-- ====================================================================
 
 CREATE CATALOG \`lake\` WITH (
   'type' = 'paimon',
   'warehouse' = 's3://bucket/paimon'
 );
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : page_view_alerts
+-- type        : kafka
+-- topic       : page-view-alerts
+-- format      : json
+-- ====================================================================
 
 CREATE TABLE \`page_view_alerts\` WITH (
   'connector' = 'kafka',
@@ -249,13 +521,37 @@ CREATE TABLE \`page_view_alerts\` WITH (
   'format' = 'json'
 );
 
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : lake
+-- output      : page_view_alerts
+-- ====================================================================
+
 INSERT INTO \`page_view_alerts\`
 SELECT * FROM \`lake\`.\`analytics\`.\`page_views\`;
 "
 `;
 
 exports[`6.8: CDC source with debezium-json > produces Kafka source DDL with debezium-json format 1`] = `
-"SET 'pipeline.name' = 'cdc-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : cdc-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'cdc-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : dbserver1_inventory_orders
+-- type        : kafka
+-- topic       : dbserver1.inventory.orders
+-- format      : debezium-json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`dbserver1_inventory_orders\` (
   \`order_id\` BIGINT,
@@ -271,6 +567,15 @@ CREATE TABLE \`dbserver1_inventory_orders\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : orders_snapshot
+-- type        : jdbc
+-- table       : orders_snapshot
+-- url         : jdbc:postgresql://localhost:5433/warehouse
+-- ====================================================================
+
 CREATE TABLE \`orders_snapshot\` (
   \`order_id\` BIGINT,
   \`product\` STRING,
@@ -283,13 +588,37 @@ CREATE TABLE \`orders_snapshot\` (
   'table-name' = 'orders_snapshot'
 );
 
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : dbserver1_inventory_orders
+-- output      : orders_snapshot
+-- ====================================================================
+
 INSERT INTO \`orders_snapshot\`
 SELECT * FROM \`dbserver1_inventory_orders\`;
 "
 `;
 
 exports[`6.9: LookupJoin with async config > produces lookup join with proc_time and FOR SYSTEM_TIME AS OF 1`] = `
-"SET 'pipeline.name' = 'lookup-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : lookup-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'lookup-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
@@ -304,6 +633,15 @@ CREATE TABLE \`orders\` (
   'properties.bootstrap.servers' = 'kafka:9092',
   'scan.startup.mode' = 'earliest-offset'
 );
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : enriched_orders
+-- type        : kafka
+-- topic       : enriched-orders
+-- format      : json
+-- ====================================================================
 
 CREATE TABLE \`enriched_orders\` (
   \`order_id\` BIGINT,
@@ -313,8 +651,16 @@ CREATE TABLE \`enriched_orders\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'enriched-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : orders
+-- output      : enriched_orders
+-- ====================================================================
 
 INSERT INTO \`enriched_orders\`
 SELECT * FROM \`orders\` LEFT JOIN \`dim_users\` FOR SYSTEM_TIME AS OF \`orders\`.proc_time ON \`KafkaSource_0\`.\`user_id\` = \`dim_users\`.\`user_id\`;
@@ -322,7 +668,24 @@ SELECT * FROM \`orders\` LEFT JOIN \`dim_users\` FOR SYSTEM_TIME AS OF \`orders\
 `;
 
 exports[`6.10: IntervalJoin with time bounds > produces BETWEEN ... AND ... time predicates 1`] = `
-"SET 'pipeline.name' = 'interval-join-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : interval-join-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'interval-join-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
@@ -337,6 +700,17 @@ CREATE TABLE \`orders\` (
   'properties.bootstrap.servers' = 'kafka:9092',
   'scan.startup.mode' = 'earliest-offset'
 );
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : shipments
+-- type        : kafka
+-- topic       : shipments
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`shipments\` (
   \`order_id\` BIGINT,
@@ -351,24 +725,60 @@ CREATE TABLE \`shipments\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : order_shipments
+-- type        : kafka
+-- topic       : order-shipments
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`order_shipments\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
-  \`event_time\` TIMESTAMP(3)
+  \`event_time\` TIMESTAMP(3),
+  \`shipped_time\` TIMESTAMP(3),
+  \`carrier\` STRING
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'order-shipments',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : orders
+-- output      : order_shipments
+-- ====================================================================
+
 INSERT INTO \`order_shipments\`
-SELECT * FROM \`orders\` JOIN \`shipments\` ON \`KafkaSource_0\`.\`order_id\` = \`KafkaSource_1\`.\`order_id\` AND \`orders\`.event_time BETWEEN \`shipments\`.event_time AND \`shipments\`.event_time + INTERVAL '7' DAY;
+SELECT * FROM \`orders\` JOIN \`shipments\` ON \`KafkaSource_0\`.\`order_id\` = \`KafkaSource_1\`.\`order_id\` AND \`shipments\`.\`shipped_time\` BETWEEN \`orders\`.event_time AND \`orders\`.event_time + INTERVAL '7' DAY;
 "
 `;
 
 exports[`6.11: Anti join produces WHERE NOT EXISTS > generates correlated subquery with NOT EXISTS 1`] = `
-"SET 'pipeline.name' = 'anti-join-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : anti-join-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'anti-join-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
@@ -383,6 +793,17 @@ CREATE TABLE \`orders\` (
   'properties.bootstrap.servers' = 'kafka:9092',
   'scan.startup.mode' = 'earliest-offset'
 );
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : cancellations
+-- type        : kafka
+-- topic       : cancellations
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`cancellations\` (
   \`order_id\` BIGINT,
@@ -395,6 +816,15 @@ CREATE TABLE \`cancellations\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : active_orders
+-- type        : kafka
+-- topic       : active-orders
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`active_orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
@@ -403,8 +833,16 @@ CREATE TABLE \`active_orders\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'active-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : orders
+-- output      : active_orders
+-- ====================================================================
 
 INSERT INTO \`active_orders\`
 SELECT \`orders\`.* FROM \`orders\` WHERE NOT EXISTS (
@@ -414,7 +852,24 @@ SELECT \`orders\`.* FROM \`orders\` WHERE NOT EXISTS (
 `;
 
 exports[`6.12: Broadcast hint in join SQL > generates /*+ BROADCAST(alias) */ hint 1`] = `
-"SET 'pipeline.name' = 'broadcast-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : broadcast-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'broadcast-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
@@ -429,6 +884,17 @@ CREATE TABLE \`orders\` (
   'properties.bootstrap.servers' = 'kafka:9092',
   'scan.startup.mode' = 'earliest-offset'
 );
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : products
+-- type        : kafka
+-- topic       : products
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`products\` (
   \`product_id\` STRING,
@@ -442,16 +908,36 @@ CREATE TABLE \`products\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : enriched_orders
+-- type        : kafka
+-- topic       : enriched-orders
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`enriched_orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
-  \`event_time\` TIMESTAMP(3)
+  \`event_time\` TIMESTAMP(3),
+  \`product_id\` STRING,
+  \`product_name\` STRING,
+  \`category\` STRING
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'enriched-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : orders
+-- output      : enriched_orders
+-- ====================================================================
 
 INSERT INTO \`enriched_orders\`
 SELECT /*+ BROADCAST(\`products\`) */ * FROM \`orders\` INNER JOIN \`products\` ON \`KafkaSource_0\`.\`product_id\` = \`KafkaSource_1\`.\`product_id\`;
@@ -459,7 +945,24 @@ SELECT /*+ BROADCAST(\`products\`) */ * FROM \`orders\` INNER JOIN \`products\` 
 `;
 
 exports[`9.1: RawSQL inlines SQL in pipeline > inlines raw SQL as a subquery 1`] = `
-"SET 'pipeline.name' = 'raw-sql-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : raw-sql-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'raw-sql-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
@@ -475,6 +978,17 @@ CREATE TABLE \`orders\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : users
+-- type        : kafka
+-- topic       : users
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
 CREATE TABLE \`users\` (
   \`user_id\` STRING,
   \`name\` STRING,
@@ -487,6 +1001,15 @@ CREATE TABLE \`users\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : enriched_orders
+-- type        : kafka
+-- topic       : enriched-orders
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`enriched_orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
@@ -495,8 +1018,16 @@ CREATE TABLE \`enriched_orders\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'enriched-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : KafkaSource_0
+-- output      : enriched_orders
+-- ====================================================================
 
 INSERT INTO \`enriched_orders\`
 SELECT o.*, u.name AS user_name FROM \`KafkaSource_0\` o JOIN \`KafkaSource_1\` u ON o.\`user_id\` = u.\`user_id\`;
@@ -504,9 +1035,34 @@ SELECT o.*, u.name AS user_name FROM \`KafkaSource_0\` o JOIN \`KafkaSource_1\` 
 `;
 
 exports[`9.2: UDF generates CREATE FUNCTION DDL > produces CREATE FUNCTION statement 1`] = `
-"SET 'pipeline.name' = 'udf-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : udf-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'udf-pipeline';
+
+-- ====================================================================
+-- FUNCTION
+-- --------------------------------------------------------------------
+-- name        : my_hash
+-- class       : com.mycompany.HashFunction
+-- language    : java
+-- ====================================================================
 
 CREATE FUNCTION \`my_hash\` AS 'com.mycompany.HashFunction';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : events
+-- type        : kafka
+-- topic       : events
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`events\` (
   \`event_id\` BIGINT,
@@ -523,14 +1079,33 @@ CREATE TABLE \`events\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : hashed_events
+-- type        : kafka
+-- topic       : hashed-events
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`hashed_events\` (
   \`event_id\` BIGINT,
   \`hashed\` STRING
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'hashed-events',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Map_2
+-- type        : Map
+-- input       : events
+-- output      : hashed_events
+-- ====================================================================
 
 INSERT INTO \`hashed_events\`
 SELECT \`event_id\` AS \`event_id\`, my_hash(\`payload\`) AS \`hashed\` FROM \`events\`;
@@ -538,7 +1113,24 @@ SELECT \`event_id\` AS \`event_id\`, my_hash(\`payload\`) AS \`hashed\` FROM \`e
 `;
 
 exports[`9.3: MatchRecognize generates MATCH_RECOGNIZE clause > produces MATCH_RECOGNIZE with PARTITION BY, ORDER BY, MEASURES, PATTERN, DEFINE 1`] = `
-"SET 'pipeline.name' = 'cep-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : cep-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'cep-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : transactions
+-- type        : kafka
+-- topic       : transactions
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`transactions\` (
   \`user_id\` STRING,
@@ -554,16 +1146,33 @@ CREATE TABLE \`transactions\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : fraud_alerts
+-- type        : kafka
+-- topic       : fraud-alerts
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`fraud_alerts\` (
   \`user_id\` STRING,
-  \`amount\` DECIMAL(10, 2),
-  \`event_type\` STRING,
-  \`event_time\` TIMESTAMP(3)
+  \`start_time\` TIMESTAMP(3),
+  \`end_time\` TIMESTAMP(3),
+  \`total_amount\` DECIMAL(10, 2)
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'fraud-alerts',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : transactions
+-- output      : fraud_alerts
+-- ====================================================================
 
 INSERT INTO \`fraud_alerts\`
 SELECT *
@@ -586,9 +1195,34 @@ MATCH_RECOGNIZE (
 `;
 
 exports[`LateralJoin produces LATERAL TABLE > generates cross join lateral table SQL 1`] = `
-"SET 'pipeline.name' = 'lateral-join-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : lateral-join-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'lateral-join-pipeline';
+
+-- ====================================================================
+-- FUNCTION
+-- --------------------------------------------------------------------
+-- name        : parse_address
+-- class       : com.mycompany.fns.AddressParser
+-- language    : java
+-- ====================================================================
 
 CREATE FUNCTION \`parse_address\` AS 'com.mycompany.fns.AddressParser';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
@@ -602,6 +1236,15 @@ CREATE TABLE \`orders\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : enriched_orders
+-- type        : kafka
+-- topic       : enriched-orders
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`enriched_orders\` (
   \`order_id\` BIGINT,
   \`shipping_address\` STRING,
@@ -609,8 +1252,16 @@ CREATE TABLE \`enriched_orders\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'enriched-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : orders
+-- output      : enriched_orders
+-- ====================================================================
 
 INSERT INTO \`enriched_orders\`
 SELECT \`orders\`.*, T.\`street\`, T.\`city\`, T.\`zip\` FROM \`orders\` JOIN LATERAL TABLE(parse_address(shipping_address)) AS T(\`street\`, \`city\`, \`zip\`);
@@ -618,7 +1269,24 @@ SELECT \`orders\`.*, T.\`street\`, T.\`city\`, T.\`zip\` FROM \`orders\` JOIN LA
 `;
 
 exports[`LateralJoin produces LATERAL TABLE > generates left join lateral table SQL 1`] = `
-"SET 'pipeline.name' = 'left-lateral-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : left-lateral-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'left-lateral-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : documents
+-- type        : kafka
+-- topic       : documents
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`documents\` (
   \`doc_id\` BIGINT,
@@ -631,14 +1299,31 @@ CREATE TABLE \`documents\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : entities
+-- type        : kafka
+-- topic       : entities
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`entities\` (
   \`doc_id\` BIGINT,
   \`content\` STRING
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'entities',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : documents
+-- output      : entities
+-- ====================================================================
 
 INSERT INTO \`entities\`
 SELECT \`documents\`.*, T.\`entity\`, T.\`entity_type\` FROM \`documents\` LEFT JOIN LATERAL TABLE(extract_entities(content)) AS T(\`entity\`, \`entity_type\`);
@@ -646,7 +1331,24 @@ SELECT \`documents\`.*, T.\`entity\`, T.\`entity_type\` FROM \`documents\` LEFT 
 `;
 
 exports[`QUALIFY: Deduplicate version-aware codegen > uses QUALIFY on Flink 2.0 1`] = `
-"SET 'pipeline.name' = 'dedup-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : dedup-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'dedup-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : events
+-- type        : kafka
+-- topic       : events
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`events\` (
   \`event_id\` BIGINT,
@@ -663,17 +1365,37 @@ CREATE TABLE \`events\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : deduped_events
+-- type        : kafka
+-- topic       : deduped-events
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`deduped_events\` (
   \`event_id\` BIGINT,
   \`user_id\` STRING,
   \`event_type\` STRING,
   \`event_time\` TIMESTAMP(3),
-  \`payload\` STRING
+  \`payload\` STRING,
+  \`rownum\` BIGINT
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'deduped-events',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Deduplicate_1
+-- type        : Deduplicate
+-- input       : events
+-- output      : deduped_events
+-- ====================================================================
 
 INSERT INTO \`deduped_events\`
 SELECT *, ROW_NUMBER() OVER (PARTITION BY \`event_id\` ORDER BY \`event_time\` ASC) AS rownum
@@ -683,7 +1405,24 @@ QUALIFY rownum = 1;
 `;
 
 exports[`QUALIFY: Deduplicate version-aware codegen > uses subquery wrapper on Flink 1.20 1`] = `
-"SET 'pipeline.name' = 'dedup-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : dedup-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'dedup-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : events
+-- type        : kafka
+-- topic       : events
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`events\` (
   \`event_id\` BIGINT,
@@ -700,17 +1439,37 @@ CREATE TABLE \`events\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : deduped_events
+-- type        : kafka
+-- topic       : deduped-events
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`deduped_events\` (
   \`event_id\` BIGINT,
   \`user_id\` STRING,
   \`event_type\` STRING,
   \`event_time\` TIMESTAMP(3),
-  \`payload\` STRING
+  \`payload\` STRING,
+  \`rownum\` BIGINT
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'deduped-events',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Deduplicate_1
+-- type        : Deduplicate
+-- input       : events
+-- output      : deduped_events
+-- ====================================================================
 
 INSERT INTO \`deduped_events\`
 SELECT * FROM (
@@ -721,7 +1480,24 @@ SELECT * FROM (
 `;
 
 exports[`QUALIFY: Qualify escape-hatch component > generates QUALIFY with condition only 1`] = `
-"SET 'pipeline.name' = 'qualify-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : qualify-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'qualify-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : events
+-- type        : kafka
+-- topic       : events
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`events\` (
   \`event_id\` BIGINT,
@@ -738,6 +1514,15 @@ CREATE TABLE \`events\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : output
+-- type        : kafka
+-- topic       : output
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`output\` (
   \`event_id\` BIGINT,
   \`user_id\` STRING,
@@ -747,8 +1532,16 @@ CREATE TABLE \`output\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'output',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : events
+-- output      : output
+-- ====================================================================
 
 INSERT INTO \`output\`
 SELECT *
@@ -758,7 +1551,24 @@ QUALIFY rn = 1;
 `;
 
 exports[`QUALIFY: Qualify escape-hatch component > generates QUALIFY with inline window expression 1`] = `
-"SET 'pipeline.name' = 'qualify-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : qualify-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'qualify-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : events
+-- type        : kafka
+-- topic       : events
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`events\` (
   \`event_id\` BIGINT,
@@ -775,6 +1585,15 @@ CREATE TABLE \`events\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : output
+-- type        : kafka
+-- topic       : output
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`output\` (
   \`event_id\` BIGINT,
   \`user_id\` STRING,
@@ -784,8 +1603,16 @@ CREATE TABLE \`output\` (
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'output',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : events
+-- output      : output
+-- ====================================================================
 
 INSERT INTO \`output\`
 SELECT *, ROW_NUMBER() OVER (PARTITION BY \`event_type\` ORDER BY \`event_time\` DESC) AS rn
@@ -795,7 +1622,24 @@ QUALIFY rn <= 3;
 `;
 
 exports[`QUALIFY: TopN version-aware codegen > uses QUALIFY on Flink 2.0 1`] = `
-"SET 'pipeline.name' = 'topn-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : topn-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'topn-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
@@ -811,16 +1655,37 @@ CREATE TABLE \`orders\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : top_orders
+-- type        : kafka
+-- topic       : top-orders
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`top_orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
-  \`event_time\` TIMESTAMP(3)
+  \`event_time\` TIMESTAMP(3),
+  \`rownum\` BIGINT
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'top-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : TopN_1
+-- type        : TopN
+-- input       : orders
+-- output      : top_orders
+-- top-n       : 5
+-- ====================================================================
 
 INSERT INTO \`top_orders\`
 SELECT *, ROW_NUMBER() OVER (PARTITION BY \`user_id\` ORDER BY \`amount\` DESC) AS rownum
@@ -830,7 +1695,24 @@ QUALIFY rownum <= 5;
 `;
 
 exports[`QUALIFY: TopN version-aware codegen > uses subquery wrapper on Flink 1.20 1`] = `
-"SET 'pipeline.name' = 'topn-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : topn-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'topn-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
@@ -846,16 +1728,37 @@ CREATE TABLE \`orders\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : top_orders
+-- type        : kafka
+-- topic       : top-orders
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`top_orders\` (
   \`order_id\` BIGINT,
   \`user_id\` STRING,
   \`amount\` DECIMAL(10, 2),
-  \`event_time\` TIMESTAMP(3)
+  \`event_time\` TIMESTAMP(3),
+  \`rownum\` BIGINT
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'top-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : TopN_1
+-- type        : TopN
+-- input       : orders
+-- output      : top_orders
+-- top-n       : 5
+-- ====================================================================
 
 INSERT INTO \`top_orders\`
 SELECT * FROM (
@@ -866,7 +1769,24 @@ SELECT * FROM (
 `;
 
 exports[`Route produces correct multi-branch SQL > generates Route DML with programmatic reverse-nesting pattern 1`] = `
-"SET 'pipeline.name' = 'log-router';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : log-router
+-- ====================================================================
+
+SET 'pipeline.name' = 'log-router';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : logs
+-- type        : kafka
+-- topic       : logs
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`logs\` (
   \`message\` STRING,
@@ -880,35 +1800,74 @@ CREATE TABLE \`logs\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
-CREATE TABLE \`errors\` (
-  \`message\` STRING,
-  \`level\` STRING,
-  \`timestamp\` TIMESTAMP(3)
-) WITH (
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : errors
+-- type        : kafka
+-- topic       : errors
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`errors\` WITH (
   'connector' = 'kafka',
   'topic' = 'errors',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
-CREATE TABLE \`warnings\` (
-  \`message\` STRING,
-  \`level\` STRING,
-  \`timestamp\` TIMESTAMP(3)
-) WITH (
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : warnings
+-- type        : kafka
+-- topic       : warnings
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`warnings\` WITH (
   'connector' = 'kafka',
   'topic' = 'warnings',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
 
-CREATE TABLE \`other\` (
-  \`message\` STRING,
-  \`level\` STRING,
-  \`timestamp\` TIMESTAMP(3)
-) WITH (
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : other
+-- type        : kafka
+-- topic       : other
+-- format      : json
+-- ====================================================================
+
+CREATE TABLE \`other\` WITH (
   'connector' = 'kafka',
   'topic' = 'other',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : logs
+-- output      : errors
+-- ====================================================================
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : logs
+-- output      : warnings
+-- ====================================================================
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : logs
+-- output      : other
+-- ====================================================================
 
 EXECUTE STATEMENT SET BEGIN
 INSERT INTO \`errors\`
@@ -924,7 +1883,25 @@ END;
 `;
 
 exports[`Route produces correct multi-branch SQL > generates STATEMENT SET with branch conditions and transforms (JSX forward-reading) 1`] = `
-"SET 'pipeline.name' = 'inventory-analytics';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : inventory-analytics
+-- ====================================================================
+
+SET 'pipeline.name' = 'inventory-analytics';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : cdc_inventory_products
+-- type        : kafka
+-- topic       : cdc.inventory.products
+-- format      : debezium-json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- group-id    : inventory-analytics
+-- ====================================================================
 
 CREATE TABLE \`cdc_inventory_products\` (
   \`id\` INT,
@@ -941,6 +1918,16 @@ CREATE TABLE \`cdc_inventory_products\` (
   'properties.group.id' = 'inventory-analytics'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : low_stock_alerts
+-- type        : kafka
+-- topic       : low-stock-alerts
+-- format      : json
+-- bootstrap   : kafka:9092
+-- ====================================================================
+
 CREATE TABLE \`low_stock_alerts\` (
   \`id\` INT,
   \`name\` STRING,
@@ -953,6 +1940,16 @@ CREATE TABLE \`low_stock_alerts\` (
   'format' = 'json',
   'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : category_stats
+-- type        : kafka
+-- topic       : category-stats
+-- format      : json
+-- bootstrap   : kafka:9092
+-- ====================================================================
 
 CREATE TABLE \`category_stats\` (
   \`category\` STRING,
@@ -968,6 +1965,23 @@ CREATE TABLE \`category_stats\` (
   'properties.bootstrap.servers' = 'kafka:9092'
 );
 
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : cdc_inventory_products
+-- output      : low_stock_alerts
+-- ====================================================================
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Aggregate_4
+-- type        : Aggregate
+-- input       : cdc_inventory_products
+-- output      : category_stats
+-- group-by    : category
+-- ====================================================================
+
 EXECUTE STATEMENT SET BEGIN
 INSERT INTO \`low_stock_alerts\`
 SELECT * FROM \`cdc_inventory_products\`
@@ -979,7 +1993,24 @@ END;
 `;
 
 exports[`SideOutput produces STATEMENT SET with main + side INSERTs > generates WHERE NOT for main path and WHERE for side path with metadata 1`] = `
-"SET 'pipeline.name' = 'side-output-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : side-output-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'side-output-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
@@ -995,17 +2026,51 @@ CREATE TABLE \`orders\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : processed_orders
+-- type        : kafka
+-- topic       : processed-orders
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`processed_orders\` WITH (
   'connector' = 'kafka',
   'topic' = 'processed-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : order_errors
+-- type        : kafka
+-- topic       : order-errors
+-- format      : json
+-- ====================================================================
 
 CREATE TABLE \`order_errors\` WITH (
   'connector' = 'kafka',
   'topic' = 'order-errors',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : orders
+-- output      : processed_orders
+-- ====================================================================
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : orders
+-- output      : order_errors
+-- ====================================================================
 
 EXECUTE STATEMENT SET BEGIN
 INSERT INTO \`processed_orders\`
@@ -1017,7 +2082,24 @@ END;
 `;
 
 exports[`SideOutput produces STATEMENT SET with main + side INSERTs > generates side output without tag 1`] = `
-"SET 'pipeline.name' = 'no-tag-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : no-tag-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'no-tag-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : events
+-- type        : kafka
+-- topic       : events
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`events\` (
   \`event_id\` BIGINT,
@@ -1034,17 +2116,51 @@ CREATE TABLE \`events\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : good_events
+-- type        : kafka
+-- topic       : good-events
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`good_events\` WITH (
   'connector' = 'kafka',
   'topic' = 'good-events',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : bad_events
+-- type        : kafka
+-- topic       : bad-events
+-- format      : json
+-- ====================================================================
 
 CREATE TABLE \`bad_events\` WITH (
   'connector' = 'kafka',
   'topic' = 'bad-events',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : events
+-- output      : good_events
+-- ====================================================================
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : events
+-- output      : bad_events
+-- ====================================================================
 
 EXECUTE STATEMENT SET BEGIN
 INSERT INTO \`good_events\`
@@ -1056,7 +2172,24 @@ END;
 `;
 
 exports[`Validate produces STATEMENT SET with valid + reject INSERTs > generates full validation SQL with notNull, range, and expression rules 1`] = `
-"SET 'pipeline.name' = 'validate-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : validate-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'validate-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : raw_orders
+-- type        : kafka
+-- topic       : raw-orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`raw_orders\` (
   \`order_id\` BIGINT,
@@ -1071,17 +2204,51 @@ CREATE TABLE \`raw_orders\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : valid_orders
+-- type        : kafka
+-- topic       : valid-orders
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`valid_orders\` WITH (
   'connector' = 'kafka',
   'topic' = 'valid-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : invalid_orders
+-- type        : kafka
+-- topic       : invalid-orders
+-- format      : json
+-- ====================================================================
 
 CREATE TABLE \`invalid_orders\` WITH (
   'connector' = 'kafka',
   'topic' = 'invalid-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : raw_orders
+-- output      : valid_orders
+-- ====================================================================
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : raw_orders
+-- output      : invalid_orders
+-- ====================================================================
 
 EXECUTE STATEMENT SET BEGIN
 INSERT INTO \`valid_orders\`
@@ -1114,7 +2281,24 @@ END;
 `;
 
 exports[`Validate produces STATEMENT SET with valid + reject INSERTs > generates notNull-only validation 1`] = `
-"SET 'pipeline.name' = 'notnull-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : notnull-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'notnull-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : events
+-- type        : kafka
+-- topic       : events
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`events\` (
   \`event_id\` BIGINT,
@@ -1131,17 +2315,51 @@ CREATE TABLE \`events\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : validated
+-- type        : kafka
+-- topic       : validated
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`validated\` WITH (
   'connector' = 'kafka',
   'topic' = 'validated',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : rejected
+-- type        : kafka
+-- topic       : rejected
+-- format      : json
+-- ====================================================================
 
 CREATE TABLE \`rejected\` WITH (
   'connector' = 'kafka',
   'topic' = 'rejected',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : events
+-- output      : validated
+-- ====================================================================
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : events
+-- output      : rejected
+-- ====================================================================
 
 EXECUTE STATEMENT SET BEGIN
 INSERT INTO \`validated\`
@@ -1165,7 +2383,24 @@ END;
 `;
 
 exports[`View produces CREATE VIEW > generates CREATE VIEW from upstream Map + Source 1`] = `
-"SET 'pipeline.name' = 'view-pipeline';
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : view-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'view-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : orders
+-- type        : kafka
+-- topic       : orders
+-- format      : json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
 
 CREATE TABLE \`orders\` (
   \`order_id\` BIGINT,
@@ -1181,20 +2416,63 @@ CREATE TABLE \`orders\` (
   'scan.startup.mode' = 'earliest-offset'
 );
 
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : high_value
+-- type        : kafka
+-- topic       : high-value
+-- format      : json
+-- ====================================================================
+
 CREATE TABLE \`high_value\` WITH (
   'connector' = 'kafka',
   'topic' = 'high-value',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : all_orders
+-- type        : kafka
+-- topic       : all-orders
+-- format      : json
+-- ====================================================================
 
 CREATE TABLE \`all_orders\` WITH (
   'connector' = 'kafka',
   'topic' = 'all-orders',
-  'format' = 'json'
+  'format' = 'json',
+  'properties.bootstrap.servers' = 'kafka:9092'
 );
+
+-- ====================================================================
+-- VIEW
+-- --------------------------------------------------------------------
+-- name        : enriched_orders
+-- ====================================================================
 
 CREATE VIEW \`enriched_orders\` AS
 SELECT \`order_id\` AS \`order_id\`, amount * quantity AS \`total\` FROM \`orders\`;
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Filter_4
+-- type        : Filter
+-- input       : enriched_orders
+-- output      : high_value
+-- rule        : total > 1000
+-- ====================================================================
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : enriched_orders
+-- output      : all_orders
+-- ====================================================================
 
 EXECUTE STATEMENT SET BEGIN
 INSERT INTO \`high_value\`

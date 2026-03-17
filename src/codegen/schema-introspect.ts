@@ -46,6 +46,10 @@ export function inferExpressionType(
       return "BIGINT"
     return fieldType
   }
+  // SUM with complex expression (e.g. SUM(CASE WHEN ...)) — always numeric
+  if (/^SUM\s*\(/i.test(trimmed)) {
+    return "BIGINT"
+  }
 
   // AVG(col) — always DOUBLE for integer types, keep DECIMAL
   const avgMatch = trimmed.match(/^AVG\s*\(\s*`?(\w+)`?\s*\)/i)
@@ -55,10 +59,43 @@ export function inferExpressionType(
     return "DOUBLE"
   }
 
-  // MIN/MAX(col) — same type as source
-  const minMaxMatch = trimmed.match(/^(?:MIN|MAX)\s*\(\s*`?(\w+)`?\s*\)/i)
-  if (minMaxMatch) {
-    return upstreamFields.get(minMaxMatch[1]) ?? "STRING"
+  // MIN/MAX/FIRST_VALUE/LAST_VALUE(col) — same type as source
+  const preserveTypeMatch = trimmed.match(
+    /^(?:MIN|MAX|FIRST_VALUE|LAST_VALUE)\s*\(\s*`?(\w+)`?\s*\)/i,
+  )
+  if (preserveTypeMatch) {
+    return upstreamFields.get(preserveTypeMatch[1]) ?? "STRING"
+  }
+
+  // TIMESTAMPDIFF — always returns INT
+  if (/^TIMESTAMPDIFF\s*\(/i.test(trimmed)) {
+    return "INT"
+  }
+
+  // Comparison operators — result is BOOLEAN
+  if (
+    /[><=!]/.test(trimmed) ||
+    /\b(?:AND|OR|NOT|IN|BETWEEN|LIKE|IS)\b/i.test(trimmed)
+  ) {
+    return "BOOLEAN"
+  }
+
+  // Arithmetic expression (contains +, -, *, /) — infer from operand types
+  if (/[+\-*/]/.test(trimmed)) {
+    // Extract column references from the expression
+    const colRefs =
+      trimmed.match(/`?(\w+)`?/g)?.map((c) => c.replace(/`/g, "")) ?? []
+    const operandTypes = colRefs
+      .map((c) => upstreamFields.get(c))
+      .filter(Boolean) as string[]
+    if (operandTypes.length > 0) {
+      // If any operand is DECIMAL, result is DECIMAL; if DOUBLE, result is DOUBLE; else BIGINT
+      if (operandTypes.some((t) => t.startsWith("DECIMAL"))) {
+        return operandTypes.find((t) => t.startsWith("DECIMAL")) ?? "DECIMAL"
+      }
+      if (operandTypes.some((t) => t === "DOUBLE")) return "DOUBLE"
+      return "BIGINT"
+    }
   }
 
   // Fallback
@@ -89,11 +126,49 @@ export function resolveNodeSchema(
 
     // Passthrough transforms — same schema as upstream
     case "Filter":
-    case "Deduplicate":
-    case "TopN":
       return node.children.length > 0
         ? resolveNodeSchema(node.children[0], nodeIndex)
         : null
+
+    // Deduplicate/TopN add a rownum column via ROW_NUMBER()
+    case "Deduplicate":
+    case "TopN": {
+      const upstreamSchema =
+        node.children.length > 0
+          ? resolveNodeSchema(node.children[0], nodeIndex)
+          : null
+      if (!upstreamSchema) return null
+      return [...upstreamSchema, { name: "rownum", type: "BIGINT" }]
+    }
+
+    // Window nodes: resolve child schema + append window_start/window_end
+    case "TumbleWindow":
+    case "SlideWindow":
+    case "SessionWindow": {
+      // Window typically wraps an Aggregate child
+      const aggChild = node.children.find((c) => c.component === "Aggregate")
+      if (aggChild) {
+        // Resolve the aggregate against its own upstream (the source inside the window)
+        const aggSchema = resolveNodeSchema(aggChild, nodeIndex)
+        if (!aggSchema) return null
+        return [
+          ...aggSchema,
+          { name: "window_start", type: "TIMESTAMP(3)" },
+          { name: "window_end", type: "TIMESTAMP(3)" },
+        ]
+      }
+      // No aggregate child — passthrough with window columns
+      const childSchema =
+        node.children.length > 0
+          ? resolveNodeSchema(node.children[0], nodeIndex)
+          : null
+      if (!childSchema) return null
+      return [
+        ...childSchema,
+        { name: "window_start", type: "TIMESTAMP(3)" },
+        { name: "window_end", type: "TIMESTAMP(3)" },
+      ]
+    }
 
     // Rename — same fields with some names changed
     case "Rename": {
@@ -159,6 +234,21 @@ export function resolveNodeSchema(
       return [...base, ...added]
     }
 
+    // FlatMap — upstream fields + unnested fields
+    case "FlatMap": {
+      const asFields = node.props.as as Record<string, string>
+      const upstreamSchema =
+        node.children.length > 0
+          ? resolveNodeSchema(node.children[0], nodeIndex)
+          : null
+      const base = upstreamSchema ?? []
+      const unnested = Object.entries(asFields).map(([name, type]) => ({
+        name,
+        type,
+      }))
+      return [...base, ...unnested]
+    }
+
     // Map — output columns from `select` keys, types inferred from upstream
     case "Map": {
       const select = node.props.select as Record<string, string>
@@ -208,6 +298,82 @@ export function resolveNodeSchema(
       return columns
     }
 
+    // Joins — merge both sides' schemas, deduplicating columns that
+    // appear on both sides (e.g. join key columns).
+    case "Join":
+    case "IntervalJoin": {
+      const joinType = node.props.type as string | undefined
+      const leftSchema = node.children[0]
+        ? resolveNodeSchema(node.children[0], nodeIndex)
+        : null
+      // Anti/semi joins only produce left-side columns
+      if (joinType === "anti" || joinType === "semi") return leftSchema
+      const rightSchema = node.children[1]
+        ? resolveNodeSchema(node.children[1], nodeIndex)
+        : null
+      if (!leftSchema) return rightSchema
+      if (!rightSchema) return leftSchema
+      const leftNames = new Set(leftSchema.map((c) => c.name))
+      return [
+        ...leftSchema,
+        ...rightSchema.filter((c) => !leftNames.has(c.name)),
+      ]
+    }
+    case "TemporalJoin": {
+      const streamSchema = node.children[0]
+        ? resolveNodeSchema(node.children[0], nodeIndex)
+        : null
+      const temporalSchema = node.children[1]
+        ? resolveNodeSchema(node.children[1], nodeIndex)
+        : null
+      if (!streamSchema) return temporalSchema
+      if (!temporalSchema) return streamSchema
+      const streamNames = new Set(streamSchema.map((c) => c.name))
+      return [
+        ...streamSchema,
+        ...temporalSchema.filter((c) => !streamNames.has(c.name)),
+      ]
+    }
+    // LookupJoin — only input schema (lookup table is external)
+    case "LookupJoin":
+      return node.children[0]
+        ? resolveNodeSchema(node.children[0], nodeIndex)
+        : null
+
+    // MatchRecognize — output schema from PARTITION BY + MEASURES
+    case "MatchRecognize": {
+      const measures = node.props.measures as Record<string, string> | undefined
+      const partitionBy = node.props.partitionBy as
+        | readonly string[]
+        | undefined
+      if (!measures) return null
+      // Resolve the input source schema for type inference
+      const inputSchema = node.children[0]
+        ? resolveNodeSchema(node.children[0], nodeIndex)
+        : null
+      const sourceFields = new Map(
+        inputSchema?.map((c) => [c.name, c.type]) ?? [],
+      )
+      const columns: ResolvedColumn[] = []
+      // PARTITION BY columns are automatically included in output
+      if (partitionBy) {
+        for (const col of partitionBy) {
+          columns.push({ name: col, type: sourceFields.get(col) ?? "STRING" })
+        }
+      }
+      // MEASURES define the remaining output columns
+      for (const [name, expr] of Object.entries(measures)) {
+        // Strip pattern variable prefixes (A., B., C.) so inferExpressionType
+        // can look up base column names in the source schema
+        const stripped = expr.replace(/\b[A-Z]\./g, "")
+        columns.push({
+          name,
+          type: inferExpressionType(stripped, sourceFields),
+        })
+      }
+      return columns
+    }
+
     // VirtualRef — internal node used by sibling/branch chaining
     case "VirtualRef": {
       // Schema carried from the previous transform in a sibling chain
@@ -241,9 +407,48 @@ export function resolveTransformSchema(
 
   switch (transform.component) {
     case "Filter":
+      return inputSchema // passthrough
+
+    // Deduplicate/TopN add a rownum column via ROW_NUMBER()
     case "Deduplicate":
     case "TopN":
-      return inputSchema // passthrough
+      return [...inputSchema, { name: "rownum", type: "BIGINT" }]
+
+    // Window nodes: append window_start/window_end
+    case "TumbleWindow":
+    case "SlideWindow":
+    case "SessionWindow": {
+      // Window typically wraps an Aggregate child
+      const aggChild = transform.children?.find(
+        (c) => c.component === "Aggregate",
+      )
+      if (aggChild) {
+        // Resolve aggregate output from inputSchema
+        const aggSchema = resolveTransformSchema(aggChild, inputSchema)
+        if (!aggSchema) return null
+        return [
+          ...aggSchema,
+          { name: "window_start", type: "TIMESTAMP(3)" },
+          { name: "window_end", type: "TIMESTAMP(3)" },
+        ]
+      }
+      // No aggregate — passthrough with window columns
+      return [
+        ...inputSchema,
+        { name: "window_start", type: "TIMESTAMP(3)" },
+        { name: "window_end", type: "TIMESTAMP(3)" },
+      ]
+    }
+
+    // FlatMap — upstream fields + unnested fields
+    case "FlatMap": {
+      const asFields = transform.props.as as Record<string, string>
+      const unnested = Object.entries(asFields).map(([name, type]) => ({
+        name,
+        type,
+      }))
+      return [...inputSchema, ...unnested]
+    }
 
     case "Rename": {
       const columns = transform.props.columns as Record<string, string>
@@ -360,7 +565,12 @@ export function findRouteUpstreamNode(
     const routeIndex = parent.children.indexOf(routeNode)
     for (let i = routeIndex - 1; i >= 0; i--) {
       const sibling = parent.children[i]
-      if (sibling.kind === "Source" || sibling.kind === "Transform") {
+      if (
+        sibling.kind === "Source" ||
+        sibling.kind === "Transform" ||
+        sibling.kind === "Join" ||
+        sibling.kind === "CEP"
+      ) {
         return sibling
       }
     }
@@ -525,18 +735,39 @@ function resolveSinkSchemas(
         const sinkIndex = parent.children.indexOf(node)
         for (let i = sinkIndex - 1; i >= 0; i--) {
           const sibling = parent.children[i]
+          // Start from Sources, or from self-contained nodes that embed their
+          // own source data (e.g. Union with source children, LookupJoin).
+          // Window nodes with only Aggregate children are NOT self-contained —
+          // they need upstream data and are applied as intermediate transforms.
           if (sibling.kind === "Source") {
-            let schema = resolveNodeSchema(sibling, nodeIndex)
-            // Propagate through intermediate transforms
-            for (let j = i + 1; j < sinkIndex; j++) {
-              const transform = parent.children[j]
-              if (transform.kind === "Transform" && schema) {
-                schema = resolveTransformSchema(transform, schema)
-              }
-            }
-            if (schema) result.set(node.id, schema)
-            break
+            // Sources always resolve
+          } else if (
+            (sibling.kind === "Transform" ||
+              sibling.kind === "Window" ||
+              sibling.kind === "Join" ||
+              sibling.kind === "CEP") &&
+            sibling.children.length > 0 &&
+            findDeepestSource(sibling) !== null
+          ) {
+            // Self-contained node (has its own source data)
+          } else {
+            continue
           }
+          const startSchema = resolveNodeSchema(sibling, nodeIndex)
+          if (!startSchema) continue
+          // Propagate through intermediate transforms after the starting node
+          let schema: ResolvedColumn[] | null = startSchema
+          for (let j = i + 1; j < sinkIndex; j++) {
+            const transform = parent.children[j]
+            if (
+              (transform.kind === "Transform" || transform.kind === "Window") &&
+              schema
+            ) {
+              schema = resolveTransformSchema(transform, schema)
+            }
+          }
+          if (schema) result.set(node.id, schema)
+          break
         }
       }
       return

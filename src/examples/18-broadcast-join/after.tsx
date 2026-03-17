@@ -13,6 +13,7 @@ const EventSchema = Schema({
     product_id: Field.STRING(),
     event_time: Field.TIMESTAMP(3),
   },
+  primaryKey: { columns: ["event_id"] },
 })
 
 const BlacklistSchema = Schema({
@@ -44,7 +45,7 @@ export default (
     <Join
       left={events}
       right={blacklist}
-      on="user_id = user_id"
+      on="`user_events`.user_id = `blacklist`.user_id"
       type="anti"
       hints={{ broadcast: "right" }}
     />

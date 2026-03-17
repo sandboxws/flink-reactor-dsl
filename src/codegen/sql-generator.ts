@@ -16,7 +16,6 @@ import { optimizePipeline } from "./pipeline-optimizer.js"
 import {
   collectTransformChain,
   findDeepestSource,
-  findRouteUpstreamNode,
   indexTree,
   type ResolvedColumn,
   resolveNodeSchema,
@@ -29,6 +28,45 @@ import { verifySql } from "./sql-verifier.js"
 // version-aware SQL generation (e.g. QUALIFY). Since codegen is
 // synchronous, there's no reentrancy risk.
 let _synthVersion: FlinkMajorVersion = "2.0"
+
+// ── Module-scoped fragment collector ────────────────────────────────
+// Tracks which construct nodes contributed which byte ranges within
+// the current DML statement being built. Set by collectSinkDml before
+// query building, cleared afterward.
+let _fragments: SqlFragment[] | null = null
+
+function beginFragmentCollection(): SqlFragment[] {
+  const fragments: SqlFragment[] = []
+  _fragments = fragments
+  return fragments
+}
+
+function endFragmentCollection(): void {
+  _fragments = null
+}
+
+/** Push a fragment for the current node's contribution. No-op when not collecting. */
+function pushFragment(
+  offset: number,
+  length: number,
+  node: ConstructNode,
+): void {
+  if (_fragments) {
+    _fragments.push({
+      offset,
+      length,
+      origin: { nodeId: node.id, component: node.component, kind: node.kind },
+    })
+  }
+}
+
+/** Shift all fragments from startIndex onward by delta bytes. */
+function shiftFragmentsSince(startIndex: number, delta: number): void {
+  if (!_fragments) return
+  for (let i = startIndex; i < _fragments.length; i++) {
+    _fragments[i] = { ..._fragments[i], offset: _fragments[i].offset + delta }
+  }
+}
 
 // ── Public API ──────────────────────────────────────────────────────
 
@@ -46,10 +84,64 @@ export interface GenerateSqlOptions {
   readonly optimize?: boolean | OptimizeOptions
 }
 
+/** Maps a statement index to the construct node that produced it. */
+export interface StatementOrigin {
+  /** Unique node ID from the ConstructNode tree */
+  readonly nodeId: string
+  /** Component class name (e.g. "KafkaSource", "Filter", "Aggregate") */
+  readonly component: string
+  /** Node kind (e.g. "Source", "Sink", "Transform", "Pipeline") */
+  readonly kind: string
+}
+
+/** A fragment of a SQL statement attributed to a construct node. */
+export interface SqlFragment {
+  /** Byte offset from the start of the statement. */
+  readonly offset: number
+  /** Length in bytes. */
+  readonly length: number
+  /** The construct node that produced this fragment. */
+  readonly origin: StatementOrigin
+}
+
+export type SqlSection =
+  | "configuration"
+  | "catalogs"
+  | "functions"
+  | "sources"
+  | "sinks"
+  | "views"
+  | "materialized-tables"
+  | "pipeline"
+
+/** Metadata for a single SQL statement, used by dashboard for hover tooltips. */
+export interface StatementMeta {
+  /** Human-readable label (e.g., 'KafkaSource: raw_events'). */
+  readonly label: string
+  /** Section this statement belongs to. */
+  readonly section: SqlSection
+  /** Node kind. Absent for comment-only entries. */
+  readonly kind?: string
+  /** Component class name (e.g., "KafkaSource"). */
+  readonly component?: string
+  /** Key-value details for tooltip body. */
+  readonly details: ReadonlyArray<{ key: string; value: string }>
+  /** Schema columns, if applicable (sources/sinks). */
+  readonly schema?: ReadonlyArray<{ name: string; type: string }>
+}
+
 export interface GenerateSqlResult {
   readonly statements: readonly string[]
   readonly sql: string
   readonly diagnostics: readonly ValidationDiagnostic[]
+  /** Maps each statement index to the node that produced it. Entries may be absent for synthetic statements (SET, STATEMENT SET wrappers). */
+  readonly statementOrigins: ReadonlyMap<number, StatementOrigin>
+  /** All contributing nodes per statement, with optional sub-statement spans. */
+  readonly statementContributors: ReadonlyMap<number, readonly SqlFragment[]>
+  /** Indices of comment-only statements (not executable SQL). */
+  readonly commentIndices: ReadonlySet<number>
+  /** Per-statement metadata for hover tooltips (keyed by statement index). */
+  readonly statementMeta: ReadonlyMap<number, StatementMeta>
 }
 
 /**
@@ -91,85 +183,518 @@ export function generateSql(
   ctx.buildFromTree(currentTree)
 
   const statements: string[] = []
+  const statementOrigins = new Map<number, StatementOrigin>()
+  const statementContributors = new Map<number, readonly SqlFragment[]>()
+  const commentIndices = new Set<number>()
+  const statementMeta = new Map<number, StatementMeta>()
+
+  /** Push a statement and record which node produced it. */
+  function emit(sql: string, node?: ConstructNode): void {
+    if (node) {
+      statementOrigins.set(statements.length, {
+        nodeId: node.id,
+        component: node.component,
+        kind: node.kind,
+      })
+    }
+    statements.push(sql)
+  }
+
+  /** Push a comment-only statement (comment block). */
+  function emitComment(comment: string, meta?: StatementMeta): void {
+    const idx = statements.length
+    commentIndices.add(idx)
+    if (meta) statementMeta.set(idx, meta)
+    statements.push(comment)
+  }
 
   // 1. SET statements from pipeline props
-  statements.push(...generateSetStatements(currentTree, version))
+  const setStatements = generateSetStatements(currentTree, version)
+  const allSets = [...setStatements, ...optimizerSets]
+  if (allSets.length > 0) {
+    const pProps = currentTree.props
+    const details: Array<{ key: string; value: string }> = []
+    if (pProps.name) details.push({ key: "name", value: String(pProps.name) })
+    if (pProps.parallelism !== undefined)
+      details.push({ key: "parallelism", value: String(pProps.parallelism) })
+    if (pProps.mode) details.push({ key: "mode", value: String(pProps.mode) })
+    if (pProps.checkpoint) {
+      const cp = pProps.checkpoint as { interval: string; mode?: string }
+      details.push({ key: "checkpoint", value: cp.interval })
+      if (cp.mode) details.push({ key: "cp-mode", value: cp.mode })
+    }
+    if (pProps.stateBackend)
+      details.push({ key: "state", value: String(pProps.stateBackend) })
+    if (pProps.stateTtl)
+      details.push({ key: "state-ttl", value: String(pProps.stateTtl) })
 
-  // 1.5. Auto-injected optimizer SET statements (after user SETs for precedence)
-  if (optimizerSets.length > 0) {
-    statements.push(...optimizerSets)
+    emitComment(buildCommentBlock("PIPELINE", details), {
+      label: "Pipeline",
+      section: "configuration",
+      details,
+    })
+    for (const s of allSets) {
+      emit(s, currentTree)
+    }
   }
 
   // 2. CREATE CATALOG
   const catalogs = ctx.getNodesByKind("Catalog")
   for (const cat of catalogs) {
-    statements.push(generateCatalogDdl(cat))
+    const details = buildCatalogDetails(cat)
+    emitComment(buildCommentBlock("CATALOG", details), {
+      label: `Catalog: ${cat.id}`,
+      section: "catalogs",
+      kind: cat.kind,
+      component: cat.component,
+      details,
+    })
+    emit(generateCatalogDdl(cat), cat)
   }
 
   // 2.5. CREATE FUNCTION (UDFs)
   const udfs = ctx.getNodesByKind("UDF")
   for (const udf of udfs) {
-    statements.push(generateUdfDdl(udf))
+    const funcName = udf.props.name as string
+    const className = udf.props.className as string
+    const details: Array<{ key: string; value: string }> = [
+      { key: "name", value: funcName },
+      { key: "class", value: className },
+      { key: "language", value: (udf.props.language as string) ?? "java" },
+    ]
+    emitComment(buildCommentBlock("FUNCTION", details), {
+      label: `UDF: ${funcName}`,
+      section: "functions",
+      kind: udf.kind,
+      component: "UDF",
+      details,
+    })
+    emit(generateUdfDdl(udf), udf)
   }
 
-  // 3. CREATE TABLE (sources) — check plugin DDL generators first
+  // 3. CREATE TABLE (sources)
   const sources = ctx.getNodesByKind("Source")
   for (const src of sources) {
     const pluginGen = pluginDdl?.get(src.component)
+    let ddl: string | null = null
     if (pluginGen) {
-      const ddl = pluginGen(src)
-      if (ddl) statements.push(ddl)
+      ddl = pluginGen(src)
     } else {
-      const ddl = generateSourceDdl(src)
-      if (ddl) statements.push(ddl)
+      ddl = generateSourceDdl(src)
+    }
+    if (ddl) {
+      const details = buildSourceDetails(src)
+      const schema = buildSourceSchema(src)
+      emitComment(buildCommentBlock("SOURCE TABLE", details), {
+        label: `Source: ${src.id}`,
+        section: "sources",
+        kind: src.kind,
+        component: src.component,
+        details,
+        schema,
+      })
+      emit(ddl, src)
     }
   }
 
   // 4. CREATE TABLE (sinks) — resolve schemas then generate DDL
   const sinks = ctx.getNodesByKind("Sink")
   const sinkMeta = resolveSinkMetadata(currentTree, nodeIndex)
+
+  // Resolve pipeline-level bootstrapServers from any KafkaSource so
+  // KafkaSinks that omit it still produce self-contained DDL.
+  const pipelineBootstrap = sources
+    .filter((s) => s.component === "KafkaSource" && s.props.bootstrapServers)
+    .map((s) => s.props.bootstrapServers as string)[0]
+
   for (const sink of sinks) {
     const pluginGen = pluginDdl?.get(sink.component)
+    const resolved = sinkMeta.get(sink.id)
+    const details = buildSinkDetails(sink)
+    const schema = resolved?.schema
+      ? resolved.schema.map((c) => ({ name: c.name, type: c.type }))
+      : undefined
+    emitComment(buildCommentBlock("SINK TABLE", details), {
+      label: `Sink: ${sink.id}`,
+      section: "sinks",
+      kind: sink.kind,
+      component: sink.component,
+      details,
+      schema,
+    })
     if (pluginGen) {
       const ddl = pluginGen(sink)
-      if (ddl) statements.push(ddl)
+      if (ddl) emit(ddl, sink)
     } else {
-      statements.push(generateSinkDdl(sink, sinkMeta.get(sink.id)))
+      emit(generateSinkDdl(sink, resolved, pipelineBootstrap), sink)
     }
   }
 
-  // 4.5. CREATE VIEW (only for View nodes that define a query, not references)
+  // 4.5. CREATE VIEW
   const views = ctx.getNodesByKind("View")
   for (const view of views) {
     if (view.children.length > 0) {
-      statements.push(generateViewDdl(view, nodeIndex, pluginSql))
+      const viewName = view.props.name as string
+      const details: Array<{ key: string; value: string }> = [
+        { key: "name", value: viewName },
+      ]
+      emitComment(buildCommentBlock("VIEW", details), {
+        label: `View: ${viewName}`,
+        section: "views",
+        kind: view.kind,
+        component: "View",
+        details,
+      })
+      emit(generateViewDdl(view, nodeIndex, pluginSql), view)
     }
   }
 
   // 4.75. CREATE MATERIALIZED TABLE
   const matTables = ctx.getNodesByKind("MaterializedTable")
   for (const matTable of matTables) {
-    statements.push(
+    const mtName = matTable.props.name as string
+    const details: Array<{ key: string; value: string }> = [
+      { key: "name", value: mtName },
+    ]
+    if (matTable.props.catalogName)
+      details.push({
+        key: "catalog",
+        value: String(matTable.props.catalogName),
+      })
+    if (matTable.props.freshness)
+      details.push({
+        key: "freshness",
+        value: String(matTable.props.freshness),
+      })
+    emitComment(buildCommentBlock("MATERIALIZED TABLE", details), {
+      label: `MaterializedTable: ${mtName}`,
+      section: "materialized-tables",
+      kind: matTable.kind,
+      component: "MaterializedTable",
+      details,
+    })
+    emit(
       generateMaterializedTableDdl(matTable, nodeIndex, pluginSql, version),
+      matTable,
     )
   }
 
   // 5. DML: INSERT INTO / STATEMENT SET
-  const dmlStatements = generateDml(currentTree, nodeIndex, pluginSql)
-  if (dmlStatements.length === 1) {
-    statements.push(dmlStatements[0])
-  } else if (dmlStatements.length > 1) {
-    statements.push(
-      `EXECUTE STATEMENT SET BEGIN\n${dmlStatements.join("\n")}\nEND;`,
-    )
+  const dmlEntries = generateDml(currentTree, nodeIndex, pluginSql)
+  for (const entry of dmlEntries) {
+    const details = buildDmlDetails(entry, nodeIndex)
+    emitComment(buildCommentBlock("TRANSFORMATION", details), {
+      label: `Transformation: ${details.find((d) => d.key === "output")?.value ?? "unknown"}`,
+      section: "pipeline",
+      details,
+    })
+  }
+  if (dmlEntries.length === 1) {
+    const entry = dmlEntries[0]
+    if (entry.contributors.length > 0) {
+      statementContributors.set(statements.length, entry.contributors)
+    }
+    statements.push(entry.sql)
+  } else if (dmlEntries.length > 1) {
+    // Wrap multiple DML in EXECUTE STATEMENT SET, shifting fragment offsets
+    const prefix = "EXECUTE STATEMENT SET BEGIN\n"
+    const allContributors: SqlFragment[] = []
+    let currentOffset = prefix.length
+    for (const entry of dmlEntries) {
+      for (const c of entry.contributors) {
+        allContributors.push({ ...c, offset: c.offset + currentOffset })
+      }
+      currentOffset += entry.sql.length + 1 // +1 for \n between statements
+    }
+    if (allContributors.length > 0) {
+      statementContributors.set(statements.length, allContributors)
+    }
+    statements.push(`${prefix}${dmlEntries.map((d) => d.sql).join("\n")}\nEND;`)
   }
 
-  const diagnostics = verifySql(statements)
+  // Filter out comment-only entries before SQL verification (comments aren't executable)
+  const executableStatements = statements.filter(
+    (_, i) => !commentIndices.has(i),
+  )
+  const diagnostics = verifySql(executableStatements)
 
   return {
     statements,
     sql: `${statements.join("\n\n")}\n`,
     diagnostics,
+    statementOrigins,
+    statementContributors,
+    commentIndices,
+    statementMeta,
+  }
+}
+
+// ── Comment block builder ────────────────────────────────────────────
+
+const RULER = `-- ${"=".repeat(68)}`
+const SEP = `-- ${"-".repeat(68)}`
+
+function buildCommentBlock(
+  type: string,
+  entries: ReadonlyArray<{ key: string; value: string }>,
+): string {
+  const lines = [RULER, `-- ${type}`, SEP]
+  for (const { key, value } of entries) {
+    lines.push(`-- ${key.padEnd(12)}: ${value}`)
+  }
+  lines.push(RULER)
+  return lines.join("\n")
+}
+
+// ── Per-node detail builders ─────────────────────────────────────────
+
+function connectorTypeFor(component: string): string {
+  switch (component) {
+    case "KafkaSource":
+    case "KafkaSink":
+      return "kafka"
+    case "JdbcSource":
+    case "JdbcSink":
+      return "jdbc"
+    case "FileSystemSink":
+      return "filesystem"
+    case "IcebergSink":
+      return "iceberg"
+    case "PaimonSink":
+      return "paimon"
+    default:
+      return component.toLowerCase().replace(/source$|sink$/i, "")
+  }
+}
+
+function buildCatalogDetails(
+  node: ConstructNode,
+): Array<{ key: string; value: string }> {
+  const props = node.props
+  const details: Array<{ key: string; value: string }> = [
+    { key: "id", value: node.id },
+    { key: "type", value: catalogTypeForComponent(node.component) },
+  ]
+  if (props.defaultDatabase)
+    details.push({ key: "database", value: String(props.defaultDatabase) })
+  if (props.warehouse)
+    details.push({ key: "warehouse", value: String(props.warehouse) })
+  if (props.uri) details.push({ key: "uri", value: String(props.uri) })
+  if (props.baseUrl)
+    details.push({ key: "base-url", value: String(props.baseUrl) })
+  if (props.hiveConfDir)
+    details.push({ key: "hive-conf", value: String(props.hiveConfDir) })
+  return details
+}
+
+function catalogTypeForComponent(component: string): string {
+  switch (component) {
+    case "PaimonCatalog":
+      return "paimon"
+    case "IcebergCatalog":
+      return "iceberg"
+    case "HiveCatalog":
+      return "hive"
+    case "JdbcCatalog":
+      return "jdbc"
+    case "GenericCatalog":
+      return "generic"
+    default:
+      return component
+  }
+}
+
+function buildSourceDetails(
+  node: ConstructNode,
+): Array<{ key: string; value: string }> {
+  const props = node.props
+  const details: Array<{ key: string; value: string }> = [
+    { key: "id", value: node.id },
+    { key: "type", value: connectorTypeFor(node.component) },
+  ]
+
+  switch (node.component) {
+    case "KafkaSource":
+      details.push({ key: "topic", value: (props.topic as string) ?? "" })
+      details.push({ key: "format", value: (props.format as string) ?? "json" })
+      if (props.bootstrapServers)
+        details.push({
+          key: "bootstrap",
+          value: String(props.bootstrapServers),
+        })
+      details.push({
+        key: "startup",
+        value: (props.startupMode as string) ?? "earliest-offset",
+      })
+      if (props.consumerGroup)
+        details.push({ key: "group-id", value: String(props.consumerGroup) })
+      break
+    case "JdbcSource":
+      details.push({ key: "table", value: (props.table as string) ?? "" })
+      details.push({ key: "url", value: (props.url as string) ?? "" })
+      break
+    default: {
+      const connector = (props.connector as string) ?? node.component
+      details[1] = { key: "type", value: connector }
+      if (props.format)
+        details.push({ key: "format", value: String(props.format) })
+      if (props.options) {
+        for (const [k, v] of Object.entries(
+          props.options as Record<string, string>,
+        )) {
+          details.push({ key: k, value: v })
+        }
+      }
+      break
+    }
+  }
+
+  return details
+}
+
+function buildSourceSchema(
+  node: ConstructNode,
+): Array<{ name: string; type: string }> | undefined {
+  const schemaDef = node.props.schema as
+    | import("@/core/schema.js").SchemaDefinition
+    | undefined
+  if (!schemaDef) return undefined
+  return Object.entries(schemaDef.fields).map(([name, type]) => ({
+    name,
+    type: String(type),
+  }))
+}
+
+function buildSinkDetails(
+  node: ConstructNode,
+): Array<{ key: string; value: string }> {
+  const props = node.props
+  const cType = connectorTypeFor(node.component)
+  const details: Array<{ key: string; value: string }> = [
+    { key: "id", value: node.id },
+    { key: "type", value: cType },
+  ]
+
+  switch (node.component) {
+    case "KafkaSink":
+      details.push({ key: "topic", value: (props.topic as string) ?? "" })
+      details.push({ key: "format", value: (props.format as string) ?? "json" })
+      if (props.bootstrapServers)
+        details.push({
+          key: "bootstrap",
+          value: String(props.bootstrapServers),
+        })
+      break
+    case "JdbcSink":
+      details.push({ key: "table", value: (props.table as string) ?? "" })
+      details.push({ key: "url", value: (props.url as string) ?? "" })
+      break
+    case "FileSystemSink":
+      details.push({ key: "path", value: (props.path as string) ?? "" })
+      if (props.format)
+        details.push({ key: "format", value: String(props.format) })
+      break
+    case "GenericSink": {
+      const connector = (props.connector as string) ?? "generic"
+      details[1] = { key: "type", value: connector }
+      if (connector === "print" || connector === "blackhole")
+        details.push({ key: "purpose", value: "debug / development sink" })
+      if (props.options) {
+        for (const [k, v] of Object.entries(
+          props.options as Record<string, string>,
+        )) {
+          details.push({ key: k, value: v })
+        }
+      }
+      break
+    }
+    default:
+      break
+  }
+
+  return details
+}
+
+function buildDmlDetails(
+  entry: DmlEntry,
+  nodeIndex: Map<string, ConstructNode>,
+): Array<{ key: string; value: string }> {
+  const details: Array<{ key: string; value: string }> = []
+
+  // Extract sink name from INSERT INTO `name`
+  const sinkMatch = entry.sql.match(/INSERT INTO `([^`]+)`/)
+  const sinkName = sinkMatch?.[1] ?? "unknown"
+
+  // Collect unique sources and transforms from contributors
+  const sourceIds: string[] = []
+  const transformNodes: ConstructNode[] = []
+  const seen = new Set<string>()
+  for (const c of entry.contributors) {
+    if (seen.has(c.origin.nodeId)) continue
+    seen.add(c.origin.nodeId)
+    if (c.origin.kind === "Source") sourceIds.push(c.origin.nodeId)
+    if (c.origin.kind === "Transform") {
+      const n = nodeIndex.get(c.origin.nodeId)
+      if (n) transformNodes.push(n)
+    }
+  }
+
+  // If no contributors, try parsing FROM clause
+  if (sourceIds.length === 0) {
+    const fromMatch = entry.sql.match(/FROM `([^`]+)`/)
+    if (fromMatch) sourceIds.push(fromMatch[1])
+  }
+
+  // Build details based on transform chain
+  if (transformNodes.length === 1) {
+    const t = transformNodes[0]
+    details.push({ key: "step", value: t.id })
+    details.push({ key: "type", value: t.component })
+    details.push({ key: "input", value: sourceIds.join(", ") || "unknown" })
+    details.push({ key: "output", value: sinkName })
+    const detail = getTransformDetail(t)
+    if (detail) details.push(detail)
+  } else if (transformNodes.length > 1) {
+    details.push({
+      key: "transforms",
+      value: transformNodes.map((t) => t.component).join(" → "),
+    })
+    details.push({ key: "input", value: sourceIds.join(", ") || "unknown" })
+    details.push({ key: "output", value: sinkName })
+  } else {
+    // No transforms — direct source to sink
+    details.push({ key: "input", value: sourceIds.join(", ") || "unknown" })
+    details.push({ key: "output", value: sinkName })
+  }
+
+  return details
+}
+
+function getTransformDetail(
+  node: ConstructNode,
+): { key: string; value: string } | null {
+  switch (node.component) {
+    case "Filter":
+      return node.props.condition
+        ? { key: "rule", value: String(node.props.condition) }
+        : null
+    case "Aggregate":
+      return node.props.groupBy
+        ? {
+            key: "group-by",
+            value: Array.isArray(node.props.groupBy)
+              ? (node.props.groupBy as string[]).join(", ")
+              : String(node.props.groupBy),
+          }
+        : null
+    case "TopN":
+      return node.props.n ? { key: "top-n", value: String(node.props.n) } : null
+    case "Deduplicate":
+      return node.props.orderBy
+        ? { key: "order-by", value: String(node.props.orderBy) }
+        : null
+    default:
+      return null
   }
 }
 
@@ -481,20 +1006,44 @@ function generateSourceWithClause(node: ConstructNode): string {
   const withProps: Record<string, string> = {}
 
   switch (node.component) {
-    case "KafkaSource":
-      withProps.connector = "kafka"
-      withProps.topic = props.topic as string
-      withProps.format = (props.format as string) ?? "json"
+    case "KafkaSource": {
+      const schema = props.schema as SchemaDefinition | undefined
+      const hasPk =
+        (schema?.primaryKey?.columns?.length ?? 0) > 0 ||
+        ((props.primaryKey as readonly string[] | undefined)?.length ?? 0) > 0
+      const rawFormat = (props.format as string) ?? "json"
+      // Changelog formats (debezium-json, canal-json) support PK on regular kafka connector.
+      // Plain formats (json, avro, csv) need upsert-kafka for PK support.
+      const isChangelogFormat =
+        rawFormat === "debezium-json" ||
+        rawFormat === "canal-json" ||
+        rawFormat === "debezium-avro" ||
+        rawFormat === "maxwell-json"
+      if (hasPk && !isChangelogFormat) {
+        withProps.connector = "upsert-kafka"
+        withProps.topic = props.topic as string
+        withProps["key.format"] = "json"
+        withProps["value.format"] = rawFormat
+      } else {
+        withProps.connector = "kafka"
+        withProps.topic = props.topic as string
+        withProps.format = rawFormat
+      }
       if (props.bootstrapServers) {
         withProps["properties.bootstrap.servers"] =
           props.bootstrapServers as string
       }
-      withProps["scan.startup.mode"] =
-        (props.startupMode as string) ?? "earliest-offset"
+      // upsert-kafka doesn't support scan.startup.mode
+      const isUpsertKafka = hasPk && !isChangelogFormat
+      if (!isUpsertKafka) {
+        withProps["scan.startup.mode"] =
+          (props.startupMode as string) ?? "earliest-offset"
+      }
       if (props.consumerGroup) {
         withProps["properties.group.id"] = props.consumerGroup as string
       }
       break
+    }
     case "JdbcSource":
       withProps.connector = "jdbc"
       withProps.url = props.url as string
@@ -521,7 +1070,11 @@ function generateSourceWithClause(node: ConstructNode): string {
 
 // ── CREATE TABLE DDL (Sinks) ────────────────────────────────────────
 
-function generateSinkDdl(node: ConstructNode, metadata?: SinkMetadata): string {
+function generateSinkDdl(
+  node: ConstructNode,
+  metadata?: SinkMetadata,
+  pipelineBootstrap?: string,
+): string {
   const props = node.props
   const tableName = node.id
 
@@ -529,7 +1082,7 @@ function generateSinkDdl(node: ConstructNode, metadata?: SinkMetadata): string {
     return `-- ${node.component} ${q(String(props.catalogName))}.${q(String(props.database))}.${q(String(props.table))} (catalog-managed)`
   }
 
-  const withClause = generateSinkWithClause(node, metadata)
+  const withClause = generateSinkWithClause(node, metadata, pipelineBootstrap)
   const parts: string[] = []
 
   // Build column definitions from resolved schema
@@ -544,8 +1097,18 @@ function generateSinkDdl(node: ConstructNode, metadata?: SinkMetadata): string {
     metadata.primaryKey &&
     metadata.primaryKey.length > 0
 
-  if (node.component === "JdbcSink" && props.upsertMode && props.keyFields) {
-    const cols = (props.keyFields as readonly string[]).map(q).join(", ")
+  // JdbcSink needs PK for upsert: explicit keyFields or auto-propagated from retract mode
+  const jdbcNeedsPk =
+    node.component === "JdbcSink" &&
+    ((props.upsertMode && props.keyFields) ||
+      (metadata?.changelogMode === "retract" &&
+        metadata.primaryKey &&
+        metadata.primaryKey.length > 0))
+
+  if (jdbcNeedsPk) {
+    const cols = props.keyFields
+      ? (props.keyFields as readonly string[]).map(q).join(", ")
+      : (metadata?.primaryKey ?? []).map(q).join(", ")
     if (columnDefs) {
       parts.push(
         `CREATE TABLE ${q(tableName)} (`,
@@ -561,16 +1124,40 @@ function generateSinkDdl(node: ConstructNode, metadata?: SinkMetadata): string {
       )
     }
   } else if (node.component === "FileSystemSink" && props.partitionBy) {
-    const partCols = (props.partitionBy as readonly string[]).join(", ")
-    if (columnDefs) {
+    const rawPartCols = props.partitionBy as readonly string[]
+    // Flink PARTITIONED BY only accepts physical column references.
+    // When partitionBy contains function calls (e.g. DATE(col)), generate
+    // physical partition columns and reference those names instead.
+    const physicalPartCols: string[] = []
+    const partColRefs: string[] = []
+    for (const expr of rawPartCols) {
+      const funcMatch = expr.match(/^(\w+)\((\w+)\)$/i)
+      if (funcMatch) {
+        const [, func, col] = funcMatch
+        const resolved = resolvePartitionExpression(func, col)
+        physicalPartCols.push(`  ${q(resolved.name)} ${resolved.type}`)
+        partColRefs.push(q(resolved.name))
+      } else {
+        partColRefs.push(q(expr))
+      }
+    }
+    const partClause = partColRefs.join(", ")
+    const allColumnDefs = columnDefs
+      ? physicalPartCols.length > 0
+        ? `${columnDefs},\n${physicalPartCols.join(",\n")}`
+        : columnDefs
+      : physicalPartCols.length > 0
+        ? physicalPartCols.join(",\n")
+        : null
+    if (allColumnDefs) {
       parts.push(
         `CREATE TABLE ${q(tableName)} (`,
-        columnDefs,
-        `) PARTITIONED BY (${partCols}) WITH (\n${withClause}\n);`,
+        allColumnDefs,
+        `) PARTITIONED BY (${partClause}) WITH (\n${withClause}\n);`,
       )
     } else {
       parts.push(
-        `CREATE TABLE ${q(tableName)} PARTITIONED BY (${partCols}) WITH (\n${withClause}\n);`,
+        `CREATE TABLE ${q(tableName)} PARTITIONED BY (${partClause}) WITH (\n${withClause}\n);`,
       )
     }
   } else if (needsUpsertPk && columnDefs) {
@@ -594,9 +1181,62 @@ function generateSinkDdl(node: ConstructNode, metadata?: SinkMetadata): string {
   return parts.join("\n")
 }
 
+/**
+ * Map a partition function expression to a physical column and SQL expression.
+ * Flink PARTITIONED BY requires physical columns, not computed columns.
+ * E.g. DATE(event_time) → { name: "dt", type: "DATE", expr: "CAST(`event_time` AS DATE)" }
+ */
+function resolvePartitionExpression(
+  func: string,
+  col: string,
+): { name: string; type: string; expr: string } {
+  const upperFunc = func.toUpperCase()
+  switch (upperFunc) {
+    case "DATE":
+      return {
+        name: "dt",
+        type: "DATE",
+        expr: `CAST(${q(col)} AS DATE)`,
+      }
+    case "HOUR":
+      return {
+        name: "hr",
+        type: "BIGINT",
+        expr: `HOUR(CAST(${q(col)} AS TIMESTAMP))`,
+      }
+    case "YEAR":
+      return {
+        name: "yr",
+        type: "BIGINT",
+        expr: `YEAR(CAST(${q(col)} AS TIMESTAMP))`,
+      }
+    case "MONTH":
+      return {
+        name: "mo",
+        type: "BIGINT",
+        expr: `MONTH(CAST(${q(col)} AS TIMESTAMP))`,
+      }
+    case "DAY":
+      return {
+        name: "dy",
+        type: "BIGINT",
+        expr: `DAY(CAST(${q(col)} AS TIMESTAMP))`,
+      }
+    default: {
+      const name = `_p_${func.toLowerCase()}`
+      return {
+        name,
+        type: "STRING",
+        expr: `${upperFunc}(${q(col)})`,
+      }
+    }
+  }
+}
+
 function generateSinkWithClause(
   node: ConstructNode,
   metadata?: SinkMetadata,
+  pipelineBootstrap?: string,
 ): string {
   const props = node.props
   const withProps: Record<string, string> = {}
@@ -620,9 +1260,10 @@ function generateSinkWithClause(
         withProps.topic = props.topic as string
         withProps.format = (props.format as string) ?? "json"
       }
-      if (props.bootstrapServers) {
-        withProps["properties.bootstrap.servers"] =
-          props.bootstrapServers as string
+      // Explicit prop takes priority; fall back to pipeline-level bootstrap
+      const bootstrap = (props.bootstrapServers as string) ?? pipelineBootstrap
+      if (bootstrap) {
+        withProps["properties.bootstrap.servers"] = bootstrap
       }
       break
     }
@@ -706,6 +1347,10 @@ function resolveSinkMetadata(
       if (t.component === "Aggregate" && !hasWindow) {
         mode = "retract"
       }
+      // Session windows produce retract (sessions can merge on late events)
+      if (t.component === "SessionWindow") {
+        mode = "retract"
+      }
     }
     return mode
   }
@@ -714,6 +1359,7 @@ function resolveSinkMetadata(
    * Propagate primary key through a transform chain.
    * - Filter/Map/Deduplicate/TopN: PK preserved from upstream
    * - Aggregate: PK becomes the groupBy columns
+   * - Window with Aggregate child: PK becomes the groupBy columns
    */
   function propagatePrimaryKey(
     transforms: readonly ConstructNode[],
@@ -723,6 +1369,12 @@ function resolveSinkMetadata(
     for (const t of transforms) {
       if (t.component === "Aggregate") {
         pk = t.props.groupBy as readonly string[]
+      } else if (t.kind === "Window") {
+        // Extract PK from Aggregate child inside the window
+        const aggChild = t.children?.find((c) => c.component === "Aggregate")
+        if (aggChild) {
+          pk = aggChild.props.groupBy as readonly string[]
+        }
       } else if (t.component === "Rename" && pk) {
         const columns = t.props.columns as Record<string, string>
         pk = pk.map((col) => columns[col] ?? col)
@@ -767,23 +1419,54 @@ function resolveSinkMetadata(
         let primaryKey: readonly string[] | undefined
         for (let i = sinkIndex - 1; i >= 0; i--) {
           const sibling = parent.children[i]
+          // Start from Sources, or from self-contained nodes that embed their
+          // own source data (e.g. Union with source children, LookupJoin).
+          // Window nodes with only Aggregate children are NOT self-contained —
+          // they need upstream data and are applied as intermediate transforms.
           if (sibling.kind === "Source") {
-            schema = resolveNodeSchema(sibling, nodeIndex)
+            // Sources always resolve
+          } else if (
+            (sibling.kind === "Transform" ||
+              sibling.kind === "Window" ||
+              sibling.kind === "Join" ||
+              sibling.kind === "CEP") &&
+            sibling.children.length > 0 &&
+            findDeepestSource(sibling) !== null
+          ) {
+            // Self-contained node (has its own source data)
+          } else {
+            continue
+          }
+          const startSchema = resolveNodeSchema(sibling, nodeIndex)
+          if (!startSchema) continue
+          schema = startSchema
+          if (sibling.kind === "Source") {
             changelogMode = resolveSourceChangelogMode(sibling)
             primaryKey = resolveSourcePrimaryKey(sibling)
-            // Propagate through intermediate transforms
-            const transforms: ConstructNode[] = []
-            for (let j = i + 1; j < sinkIndex; j++) {
-              const transform = parent.children[j]
-              if (transform.kind === "Transform") {
-                transforms.push(transform)
-                if (schema) schema = resolveTransformSchema(transform, schema)
-              }
+          } else if (sibling.kind === "Join") {
+            // Anti/semi joins produce retract (result changes when right side changes)
+            const joinType = sibling.props.type as string | undefined
+            if (joinType === "anti" || joinType === "semi") {
+              changelogMode = "retract"
             }
-            changelogMode = propagateChangelogMode(transforms, changelogMode)
-            primaryKey = propagatePrimaryKey(transforms, primaryKey)
-            break
+            // Propagate PK from the left (primary) source
+            const leftSource = findDeepestSource(sibling)
+            if (leftSource) {
+              primaryKey = resolveSourcePrimaryKey(leftSource)
+            }
           }
+          // Propagate through intermediate transforms
+          const transforms: ConstructNode[] = []
+          for (let j = i + 1; j < sinkIndex; j++) {
+            const transform = parent.children[j]
+            if (transform.kind === "Transform" || transform.kind === "Window") {
+              transforms.push(transform)
+              if (schema) schema = resolveTransformSchema(transform, schema)
+            }
+          }
+          changelogMode = propagateChangelogMode(transforms, changelogMode)
+          primaryKey = propagatePrimaryKey(transforms, primaryKey)
+          break
         }
         if (schema) result.set(node.id, { schema, changelogMode, primaryKey })
       }
@@ -791,23 +1474,61 @@ function resolveSinkMetadata(
     }
 
     if (node.component === "Route") {
-      // Find upstream source for the Route
-      const routeUpstreamNode = findRouteUpstreamNode(node, parent)
-      const routeSchema = routeUpstreamNode
-        ? resolveNodeSchema(routeUpstreamNode, nodeIndex)
-        : null
-      const upstreamSource =
-        routeUpstreamNode?.kind === "Source"
-          ? routeUpstreamNode
-          : routeUpstreamNode
-            ? findDeepestSource(routeUpstreamNode)
-            : null
-      const baseChangelogMode = upstreamSource
-        ? resolveSourceChangelogMode(upstreamSource)
-        : ("append-only" as ChangelogMode)
-      const basePk = upstreamSource
-        ? resolveSourcePrimaryKey(upstreamSource)
-        : undefined
+      // Resolve upstream schema for the Route using the same backward walk
+      // as sink resolution — find the Source and propagate through transforms.
+      let routeSchema: ResolvedColumn[] | null = null
+      let baseChangelogMode: ChangelogMode = "append-only"
+      let basePk: readonly string[] | undefined
+      if (parent) {
+        const routeIndex = parent.children.indexOf(node)
+        for (let i = routeIndex - 1; i >= 0; i--) {
+          const sibling = parent.children[i]
+          if (sibling.kind === "Source") {
+            // Source — resolve directly
+          } else if (
+            (sibling.kind === "Transform" ||
+              sibling.kind === "Window" ||
+              sibling.kind === "Join" ||
+              sibling.kind === "CEP") &&
+            sibling.children.length > 0 &&
+            findDeepestSource(sibling) !== null
+          ) {
+            // Self-contained node
+          } else {
+            continue
+          }
+          const startSchema = resolveNodeSchema(sibling, nodeIndex)
+          if (!startSchema) continue
+          routeSchema = startSchema
+          if (sibling.kind === "Source") {
+            baseChangelogMode = resolveSourceChangelogMode(sibling)
+            basePk = resolveSourcePrimaryKey(sibling)
+          } else if (sibling.kind === "Join") {
+            const joinType = sibling.props.type as string | undefined
+            if (joinType === "anti" || joinType === "semi") {
+              baseChangelogMode = "retract"
+            }
+            const leftSource = findDeepestSource(sibling)
+            if (leftSource) basePk = resolveSourcePrimaryKey(leftSource)
+          }
+          // Propagate through intermediate transforms between start and Route
+          const transforms: ConstructNode[] = []
+          for (let j = i + 1; j < routeIndex; j++) {
+            const transform = parent.children[j]
+            if (transform.kind === "Transform" || transform.kind === "Window") {
+              transforms.push(transform)
+              if (routeSchema)
+                routeSchema = resolveTransformSchema(transform, routeSchema)
+            }
+          }
+          baseChangelogMode = propagateChangelogMode(
+            transforms,
+            baseChangelogMode,
+          )
+          basePk = propagatePrimaryKey(transforms, basePk)
+          break
+        }
+      }
 
       // Resolve metadata for each sink in each branch
       const branches = node.children.filter(
@@ -865,17 +1586,23 @@ function resolveSinkMetadata(
  * (toward sources) to assemble the SELECT expression.
  */
 
+/** A DML statement with its fragment contributors. */
+interface DmlEntry {
+  sql: string
+  contributors: SqlFragment[]
+}
+
 function generateDml(
   pipelineNode: ConstructNode,
   nodeIndex: Map<string, ConstructNode>,
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
-): string[] {
-  const statements: string[] = []
+): DmlEntry[] {
+  const entries: DmlEntry[] = []
 
   // Collect all sinks from the pipeline's direct children
-  collectSinkDml(pipelineNode, nodeIndex, statements, pluginSql)
+  collectSinkDml(pipelineNode, nodeIndex, entries, pluginSql)
 
-  return statements
+  return entries
 }
 
 /**
@@ -896,7 +1623,13 @@ function buildSiblingChainQuery(
   const chain: ConstructNode[] = []
   for (let i = 0; i < sinkIndex; i++) {
     const sibling = parent.children[i]
-    if (sibling.kind === "Source" || sibling.kind === "Transform") {
+    if (
+      sibling.kind === "Source" ||
+      sibling.kind === "Transform" ||
+      sibling.kind === "Window" ||
+      sibling.kind === "Join" ||
+      sibling.kind === "CEP"
+    ) {
       chain.push(sibling)
     }
   }
@@ -919,22 +1652,13 @@ function buildSiblingChainQuery(
   let chainSchema: ResolvedColumn[] | null =
     chain[0].kind === "Source" ? resolveNodeSchema(chain[0], nodeIndex) : null
 
+  const chainFragStart = _fragments?.length ?? 0
+
   for (let i = 1; i < chain.length; i++) {
     const transform = chain[i]
+    const prevSql = currentUpstream.sql
+    const fragBeforeIter = _fragments?.length ?? 0
 
-    // Only inject VirtualRef if the transform has no children (forward-reading pattern)
-    if (transform.children.length > 0) {
-      // Transform already has children (reverse-nesting) — just build it normally
-      currentUpstream = {
-        sql: buildQuery(transform, nodeIndex, pluginSql),
-        sourceRef: transform.id,
-        isSimple: false,
-      }
-      chainSchema = resolveNodeSchema(transform, nodeIndex)
-      continue
-    }
-
-    const savedChildren = transform.children
     const rawRef = currentUpstream.sourceRef.replace(/^`|`$/g, "")
 
     // Attach _schema to VirtualRef so schema-aware transforms can resolve upstream columns
@@ -958,9 +1682,57 @@ function buildSiblingChainQuery(
           children: [],
         }
 
-    ;(transform as { children: ConstructNode[] }).children = [virtualSource]
+    // For Window nodes with children (e.g. TumbleWindow wrapping Aggregate),
+    // add VirtualRef as a direct child of the Window alongside the Aggregate.
+    // buildWindowQuery looks for a non-Aggregate child as `sourceChild`.
+    const injectionTarget = transform
+    let injectionMode: "replace" | "append" = "replace"
+    if (transform.kind === "Window" && transform.children.length > 0) {
+      injectionMode = "append"
+    } else if (transform.children.length > 0) {
+      // Non-Window transform already has children (reverse-nesting) — just build it normally
+      currentUpstream = {
+        sql: buildQuery(transform, nodeIndex, pluginSql),
+        sourceRef: transform.id,
+        isSimple: false,
+      }
+      chainSchema = resolveNodeSchema(transform, nodeIndex)
+      continue
+    }
+
+    const savedChildren = injectionTarget.children
+    if (injectionMode === "append") {
+      // Add VirtualRef alongside existing children (e.g. Window's Aggregate)
+      ;(injectionTarget as { children: ConstructNode[] }).children = [
+        ...savedChildren,
+        virtualSource,
+      ]
+    } else {
+      ;(injectionTarget as { children: ConstructNode[] }).children = [
+        virtualSource,
+      ]
+    }
     const sql = buildQuery(transform, nodeIndex, pluginSql)
-    ;(transform as { children: ConstructNode[] }).children = savedChildren
+    ;(injectionTarget as { children: ConstructNode[] }).children = savedChildren
+
+    // Shift fragments from previous iterations to account for embedding.
+    // When the previous SQL is wrapped inside the new query (e.g. as a subquery),
+    // earlier fragments need their offsets adjusted to where prevSql appears in sql.
+    if (
+      !currentUpstream.isSimple &&
+      _fragments &&
+      fragBeforeIter > chainFragStart
+    ) {
+      const embedIdx = sql.indexOf(prevSql)
+      if (embedIdx >= 0) {
+        for (let f = chainFragStart; f < fragBeforeIter; f++) {
+          _fragments[f] = {
+            ..._fragments[f],
+            offset: _fragments[f].offset + embedIdx,
+          }
+        }
+      }
+    }
 
     // Propagate schema through the transform
     if (chainSchema) {
@@ -976,53 +1748,91 @@ function buildSiblingChainQuery(
 function collectSinkDml(
   node: ConstructNode,
   nodeIndex: Map<string, ConstructNode>,
-  statements: string[],
+  entries: DmlEntry[],
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
   parent?: ConstructNode,
 ): void {
   if (node.kind === "Sink") {
     const sinkRef = resolveSinkRef(node)
+
+    // Collect fragments during query building
+    const fragments = beginFragmentCollection()
     let upstream: string
     if (node.children.length > 0) {
       // Pattern 1: reverse-nesting — sink wraps its upstream as children
       upstream = buildQuery(node.children[0], nodeIndex, pluginSql)
     } else if (parent) {
       // Pattern 2: forward-reading JSX — sink is a sibling of its upstream
-      // Collect preceding siblings (sources + transforms) in reading order and chain them
       const sinkIndex = parent.children.indexOf(node)
       upstream = buildSiblingChainQuery(parent, sinkIndex, nodeIndex, pluginSql)
     } else {
       upstream = "SELECT * FROM unknown"
     }
-    statements.push(`INSERT INTO ${sinkRef}\n${upstream};`)
+    endFragmentCollection()
+
+    // FileSystemSink with function-based partitionBy: wrap the query
+    // to add computed partition columns (e.g. CAST(event_time AS DATE) AS dt)
+    if (node.component === "FileSystemSink" && node.props.partitionBy) {
+      const rawPartCols = node.props.partitionBy as readonly string[]
+      const partProjections: string[] = []
+      for (const expr of rawPartCols) {
+        const funcMatch = expr.match(/^(\w+)\((\w+)\)$/i)
+        if (funcMatch) {
+          const [, func, col] = funcMatch
+          const resolved = resolvePartitionExpression(func, col)
+          partProjections.push(`${resolved.expr} AS ${q(resolved.name)}`)
+        }
+      }
+      if (partProjections.length > 0) {
+        upstream = `SELECT *, ${partProjections.join(", ")} FROM (\n${upstream}\n)`
+      }
+    }
+
+    const insertPrefix = `INSERT INTO ${sinkRef}\n`
+    const fullSql = `${insertPrefix}${upstream};`
+
+    // Shift all query fragments by the INSERT INTO prefix length
+    const contributors: SqlFragment[] = fragments.map((f) => ({
+      ...f,
+      offset: f.offset + insertPrefix.length,
+    }))
+    // Add the INSERT INTO target as a Sink fragment
+    contributors.unshift({
+      offset: 0,
+      length: insertPrefix.length - 1, // exclude the trailing \n
+      origin: { nodeId: node.id, component: node.component, kind: node.kind },
+    })
+
+    entries.push({ sql: fullSql, contributors })
+
     // Recurse into upstream to find SideOutput/Validate side-path DML
     for (const child of node.children) {
-      collectSideDml(child, nodeIndex, statements, pluginSql)
+      collectSideDml(child, nodeIndex, entries, pluginSql)
     }
     return
   }
 
   // Route generates multiple INSERT statements (one per branch)
   if (node.component === "Route") {
-    collectRouteDml(node, nodeIndex, statements, pluginSql, parent)
+    collectRouteDml(node, nodeIndex, entries, pluginSql, parent)
     return
   }
 
   // SideOutput generates two INSERT statements (main + side)
   if (node.component === "SideOutput") {
-    collectSideOutputDml(node, nodeIndex, statements, pluginSql)
+    collectSideOutputDml(node, nodeIndex, entries, pluginSql)
     return
   }
 
   // Validate generates two INSERT statements (valid + rejected)
   if (node.component === "Validate") {
-    collectValidateDml(node, nodeIndex, statements, pluginSql)
+    collectValidateDml(node, nodeIndex, entries, pluginSql)
     return
   }
 
   // Recurse into children to find sinks
   for (const child of node.children) {
-    collectSinkDml(child, nodeIndex, statements, pluginSql, node)
+    collectSinkDml(child, nodeIndex, entries, pluginSql, node)
   }
 }
 
@@ -1052,19 +1862,23 @@ function resolveRouteUpstream(
     return up
   }
 
-  // Pattern 2: upstream is a preceding sibling in parent (JSX forward-reading)
+  // Pattern 2: upstream is a preceding sibling chain in parent (JSX forward-reading)
+  // Build the full chain (e.g. Source → Map) rather than just the nearest sibling.
   if (parent) {
     const routeIndex = parent.children.indexOf(routeNode)
-    for (let i = routeIndex - 1; i >= 0; i--) {
-      const sibling = parent.children[i]
-      if (sibling.kind === "Source" || sibling.kind === "Transform") {
-        const up = getUpstream(
-          { children: [sibling] } as ConstructNode,
-          nodeIndex,
-          pluginSql,
-        )
-        return up
+    const chainSql = buildSiblingChainQuery(
+      parent,
+      routeIndex,
+      nodeIndex,
+      pluginSql,
+    )
+    if (chainSql !== "SELECT * FROM unknown") {
+      // Check if the chain is a simple table reference
+      const simpleMatch = chainSql.match(/^SELECT \* FROM (`[^`]+`)$/)
+      if (simpleMatch) {
+        return { sql: chainSql, sourceRef: simpleMatch[1], isSimple: true }
       }
+      return { sql: chainSql, sourceRef: "unknown", isSimple: false }
     }
   }
 
@@ -1143,8 +1957,12 @@ function buildBranchQuery(
   }
 
   // Chain remaining transforms using VirtualRef for temporary child injection
+  const branchFragStart = _fragments?.length ?? 0
+
   for (let i = startIndex; i < transforms.length; i++) {
     const transform = transforms[i]
+    const prevSql = currentUpstream.sql
+    const fragBeforeIter = _fragments?.length ?? 0
     const savedChildren = transform.children
 
     // Strip backticks from sourceRef to avoid double-quoting when q() is applied
@@ -1170,9 +1988,35 @@ function buildBranchQuery(
           children: [],
         }
 
-    ;(transform as { children: ConstructNode[] }).children = [virtualSource]
+    // For Window nodes with children (e.g. Aggregate), append VirtualRef
+    // alongside existing children instead of replacing them.
+    if (transform.kind === "Window" && savedChildren.length > 0) {
+      ;(transform as { children: ConstructNode[] }).children = [
+        ...savedChildren,
+        virtualSource,
+      ]
+    } else {
+      ;(transform as { children: ConstructNode[] }).children = [virtualSource]
+    }
     const sql = buildQuery(transform, nodeIndex, pluginSql)
     ;(transform as { children: ConstructNode[] }).children = savedChildren
+
+    // Shift fragments from previous iterations to account for embedding
+    if (
+      !currentUpstream.isSimple &&
+      _fragments &&
+      fragBeforeIter > branchFragStart
+    ) {
+      const embedIdx = sql.indexOf(prevSql)
+      if (embedIdx >= 0) {
+        for (let f = branchFragStart; f < fragBeforeIter; f++) {
+          _fragments[f] = {
+            ..._fragments[f],
+            offset: _fragments[f].offset + embedIdx,
+          }
+        }
+      }
+    }
 
     // Propagate schema through the transform
     if (chainSchema) {
@@ -1188,7 +2032,7 @@ function buildBranchQuery(
 function collectRouteDml(
   routeNode: ConstructNode,
   nodeIndex: Map<string, ConstructNode>,
-  statements: string[],
+  entries: DmlEntry[],
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
   parent?: ConstructNode,
 ): void {
@@ -1208,7 +2052,8 @@ function collectRouteDml(
     const transforms = branch.children.filter((c) => c.kind !== "Sink")
     const sinks = branch.children.filter((c) => c.kind === "Sink")
 
-    // Build query chain: source → transforms → (branch condition)
+    // Collect fragments during branch query building
+    const fragments = beginFragmentCollection()
     const query = buildBranchQuery(
       transforms,
       upstream,
@@ -1216,10 +2061,48 @@ function collectRouteDml(
       nodeIndex,
       pluginSql,
     )
+    endFragmentCollection()
 
     for (const sink of sinks) {
       const sinkRef = resolveSinkRef(sink)
-      statements.push(`INSERT INTO ${sinkRef}\n${query};`)
+      let sinkQuery = query
+
+      // FileSystemSink with function-based partitionBy: wrap the query
+      // to add computed partition columns
+      if (sink.component === "FileSystemSink" && sink.props.partitionBy) {
+        const rawPartCols = sink.props.partitionBy as readonly string[]
+        const partProjections: string[] = []
+        for (const expr of rawPartCols) {
+          const funcMatch = expr.match(/^(\w+)\((\w+)\)$/i)
+          if (funcMatch) {
+            const [, func, col] = funcMatch
+            const resolved = resolvePartitionExpression(func, col)
+            partProjections.push(`${resolved.expr} AS ${q(resolved.name)}`)
+          }
+        }
+        if (partProjections.length > 0) {
+          sinkQuery = `SELECT *, ${partProjections.join(", ")} FROM (\n${sinkQuery}\n)`
+        }
+      }
+
+      const insertPrefix = `INSERT INTO ${sinkRef}\n`
+      const fullSql = `${insertPrefix}${sinkQuery};`
+
+      const contributors: SqlFragment[] = fragments.map((f) => ({
+        ...f,
+        offset: f.offset + insertPrefix.length,
+      }))
+      contributors.unshift({
+        offset: 0,
+        length: insertPrefix.length - 1,
+        origin: {
+          nodeId: sink.id,
+          component: sink.component,
+          kind: sink.kind,
+        },
+      })
+
+      entries.push({ sql: fullSql, contributors })
     }
   }
 }
@@ -1256,10 +2139,29 @@ function buildQuery(
       if (node.props._sql) return node.props._sql as string
       return `SELECT * FROM ${q(node.id)}`
 
-    // Sources — terminal nodes
+    // Sources — terminal unless they have child transforms
     case "KafkaSource":
     case "JdbcSource":
     case "GenericSource":
+      if (node.children.length > 0) {
+        // Source wraps child transforms (e.g. <KafkaSource><Map/></KafkaSource>)
+        // Build query by chaining children on top of the source reference.
+        let result = `SELECT * FROM ${q(node.id)}`
+        for (const child of node.children) {
+          const virtualSource: ConstructNode = {
+            id: node.id,
+            kind: "Source",
+            component: "VirtualRef",
+            props: {},
+            children: [],
+          }
+          const saved = child.children
+          ;(child as { children: ConstructNode[] }).children = [virtualSource]
+          result = buildQuery(child, nodeIndex, pluginSql)
+          ;(child as { children: ConstructNode[] }).children = saved
+        }
+        return result
+      }
       return `SELECT * FROM ${q(node.id)}`
     case "CatalogSource":
       return `SELECT * FROM ${q(String(node.props.catalogName))}.${q(String(node.props.database))}.${q(String(node.props.table))}`
@@ -1405,12 +2307,21 @@ function buildFilterQuery(
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
 ): string {
   const condition = node.props.condition as string
+  const fragStart = _fragments?.length ?? 0
   const upstream = getUpstream(node, nodeIndex, pluginSql)
 
+  const wherePart = ` WHERE ${condition}`
+
   if (upstream.isSimple) {
-    return `SELECT * FROM ${upstream.sourceRef} WHERE ${condition}`
+    const result = `SELECT * FROM ${upstream.sourceRef}${wherePart}`
+    pushFragment(result.length - wherePart.length, wherePart.length, node)
+    return result
   }
-  return `SELECT * FROM (\n${upstream.sql}\n) WHERE ${condition}`
+  const prefix = `SELECT * FROM (\n`
+  const result = `${prefix}${upstream.sql}\n)${wherePart}`
+  shiftFragmentsSince(fragStart, prefix.length)
+  pushFragment(result.length - wherePart.length, wherePart.length, node)
+  return result
 }
 
 // ── Map ─────────────────────────────────────────────────────────────
@@ -1425,12 +2336,21 @@ function buildMapQuery(
     .map(([alias, expr]) => `${expr} AS ${q(alias)}`)
     .join(", ")
 
+  const fragStart = _fragments?.length ?? 0
   const upstream = getUpstream(node, nodeIndex, pluginSql)
 
+  const selectPart = `SELECT ${projections}`
+
   if (upstream.isSimple) {
-    return `SELECT ${projections} FROM ${upstream.sourceRef}`
+    const result = `${selectPart} FROM ${upstream.sourceRef}`
+    pushFragment(0, selectPart.length, node)
+    return result
   }
-  return `SELECT ${projections} FROM (\n${upstream.sql}\n)`
+  const prefix = `${selectPart} FROM (\n`
+  const result = `${prefix}${upstream.sql}\n)`
+  shiftFragmentsSince(fragStart, prefix.length)
+  pushFragment(0, selectPart.length, node)
+  return result
 }
 
 // ── FlatMap ─────────────────────────────────────────────────────────
@@ -1444,10 +2364,28 @@ function buildFlatMapQuery(
   const asFields = node.props.as as Record<string, string>
   const aliases = Object.keys(asFields).map(q).join(", ")
 
+  const fragStart = _fragments?.length ?? 0
   const upstream = getUpstream(node, nodeIndex, pluginSql)
   const ref = upstream.sourceRef
 
-  return `SELECT ${q(ref)}.*, ${aliases} FROM ${upstream.isSimple ? ref : `(\n${upstream.sql}\n) AS ${q(ref)}`} CROSS JOIN UNNEST(${q(ref)}.${q(unnestField)}) AS T(${aliases})`
+  // sourceRef is already backtick-quoted for simple refs — use directly
+  const selectPart = `SELECT ${ref}.*, ${aliases}`
+  const fromPart = upstream.isSimple
+    ? ref
+    : `(\n${upstream.sql}\n) AS ${q(ref)}`
+  const crossJoinPart = `CROSS JOIN UNNEST(${ref}.${q(unnestField)}) AS T(${aliases})`
+  const result = `${selectPart} FROM ${fromPart} ${crossJoinPart}`
+
+  if (!upstream.isSimple) {
+    const prefix = `${selectPart} FROM (\n`
+    shiftFragmentsSince(fragStart, prefix.length)
+  }
+
+  // Track: the added aliases in SELECT and the CROSS JOIN UNNEST are FlatMap's contribution
+  pushFragment(0, selectPart.length, node)
+  pushFragment(result.length - crossJoinPart.length, crossJoinPart.length, node)
+
+  return result
 }
 
 // ── Aggregate ───────────────────────────────────────────────────────
@@ -1470,12 +2408,24 @@ function buildAggregateQuery(
       .map(([alias, expr]) => `${expr} AS ${q(alias)}`),
   ].join(", ")
 
+  const fragStart = _fragments?.length ?? 0
   const upstream = getUpstream(node, nodeIndex, pluginSql)
 
+  const selectPart = `SELECT ${projections}`
+  const groupByPart = ` GROUP BY ${groupCols}`
+
   if (upstream.isSimple) {
-    return `SELECT ${projections} FROM ${upstream.sourceRef} GROUP BY ${groupCols}`
+    const result = `${selectPart} FROM ${upstream.sourceRef}${groupByPart}`
+    pushFragment(0, selectPart.length, node)
+    pushFragment(result.length - groupByPart.length, groupByPart.length, node)
+    return result
   }
-  return `SELECT ${projections} FROM (\n${upstream.sql}\n) GROUP BY ${groupCols}`
+  const prefix = `${selectPart} FROM (\n`
+  const result = `${prefix}${upstream.sql}\n)${groupByPart}`
+  shiftFragmentsSince(fragStart, prefix.length)
+  pushFragment(0, selectPart.length, node)
+  pushFragment(result.length - groupByPart.length, groupByPart.length, node)
+  return result
 }
 
 // ── Union ───────────────────────────────────────────────────────────
@@ -1492,7 +2442,18 @@ function buildUnionQuery(
   }
 
   if (parts.length === 0) return "SELECT * FROM unknown"
-  return parts.join("\nUNION ALL\n")
+  const result = parts.join("\nUNION ALL\n")
+
+  // Track each "UNION ALL" keyword as a Union fragment
+  if (parts.length > 1) {
+    let offset = parts[0].length + 1 // +1 for the \n before "UNION ALL"
+    for (let i = 1; i < parts.length; i++) {
+      pushFragment(offset, "UNION ALL".length, node)
+      offset += "UNION ALL".length + 1 + parts[i].length + 1 // +1 for \n after, +1 for \n before next
+    }
+  }
+
+  return result
 }
 
 // ── Deduplicate ─────────────────────────────────────────────────────
@@ -1509,25 +2470,35 @@ function buildDeduplicateQuery(
   const partitionBy = key.map(q).join(", ")
   const orderDir = keep === "first" ? "ASC" : "DESC"
 
+  const fragStart = _fragments?.length ?? 0
   const upstream = getUpstream(node, nodeIndex, pluginSql)
   const fromClause = upstream.isSimple
     ? upstream.sourceRef
     : `(\n${upstream.sql}\n)`
 
   if (FlinkVersionCompat.isVersionAtLeast(_synthVersion, "2.0")) {
-    return [
-      `SELECT *, ROW_NUMBER() OVER (PARTITION BY ${partitionBy} ORDER BY ${q(order)} ${orderDir}) AS rownum`,
-      `FROM ${fromClause}`,
-      "QUALIFY rownum = 1",
-    ].join("\n")
+    const selectPart = `SELECT *, ROW_NUMBER() OVER (PARTITION BY ${partitionBy} ORDER BY ${q(order)} ${orderDir}) AS rownum`
+    const qualifyPart = "QUALIFY rownum = 1"
+    const result = `${selectPart}\nFROM ${fromClause}\n${qualifyPart}`
+    if (!upstream.isSimple)
+      shiftFragmentsSince(fragStart, selectPart.length + 1 + "FROM (\n".length)
+    pushFragment(0, selectPart.length, node)
+    pushFragment(result.length - qualifyPart.length, qualifyPart.length, node)
+    return result
   }
 
-  return [
-    "SELECT * FROM (",
-    `  SELECT *, ROW_NUMBER() OVER (PARTITION BY ${partitionBy} ORDER BY ${q(order)} ${orderDir}) AS rownum`,
-    `  FROM ${fromClause}`,
-    ") WHERE rownum = 1",
-  ].join("\n")
+  const innerSelect = `  SELECT *, ROW_NUMBER() OVER (PARTITION BY ${partitionBy} ORDER BY ${q(order)} ${orderDir}) AS rownum`
+  const wherePart = ") WHERE rownum = 1"
+  const result = `SELECT * FROM (\n${innerSelect}\n  FROM ${fromClause}\n${wherePart}`
+  if (!upstream.isSimple)
+    shiftFragmentsSince(
+      fragStart,
+      "SELECT * FROM (\n".length + innerSelect.length + 1 + "  FROM (\n".length,
+    )
+  pushFragment(0, "SELECT * FROM (".length, node)
+  pushFragment("SELECT * FROM (\n".length, innerSelect.length, node)
+  pushFragment(result.length - wherePart.length, wherePart.length, node)
+  return result
 }
 
 // ── TopN ────────────────────────────────────────────────────────────
@@ -1547,25 +2518,35 @@ function buildTopNQuery(
     .map(([field, dir]) => `${q(field)} ${dir}`)
     .join(", ")
 
+  const fragStart = _fragments?.length ?? 0
   const upstream = getUpstream(node, nodeIndex, pluginSql)
   const fromClause = upstream.isSimple
     ? upstream.sourceRef
     : `(\n${upstream.sql}\n)`
 
   if (FlinkVersionCompat.isVersionAtLeast(_synthVersion, "2.0")) {
-    return [
-      `SELECT *, ROW_NUMBER() OVER (PARTITION BY ${partitionBy} ORDER BY ${orderClause}) AS rownum`,
-      `FROM ${fromClause}`,
-      `QUALIFY rownum <= ${n}`,
-    ].join("\n")
+    const selectPart = `SELECT *, ROW_NUMBER() OVER (PARTITION BY ${partitionBy} ORDER BY ${orderClause}) AS rownum`
+    const qualifyPart = `QUALIFY rownum <= ${n}`
+    const result = `${selectPart}\nFROM ${fromClause}\n${qualifyPart}`
+    if (!upstream.isSimple)
+      shiftFragmentsSince(fragStart, selectPart.length + 1 + "FROM (\n".length)
+    pushFragment(0, selectPart.length, node)
+    pushFragment(result.length - qualifyPart.length, qualifyPart.length, node)
+    return result
   }
 
-  return [
-    "SELECT * FROM (",
-    `  SELECT *, ROW_NUMBER() OVER (PARTITION BY ${partitionBy} ORDER BY ${orderClause}) AS rownum`,
-    `  FROM ${fromClause}`,
-    `) WHERE rownum <= ${n}`,
-  ].join("\n")
+  const innerSelect = `  SELECT *, ROW_NUMBER() OVER (PARTITION BY ${partitionBy} ORDER BY ${orderClause}) AS rownum`
+  const wherePart = `) WHERE rownum <= ${n}`
+  const result = `SELECT * FROM (\n${innerSelect}\n  FROM ${fromClause}\n${wherePart}`
+  if (!upstream.isSimple)
+    shiftFragmentsSince(
+      fragStart,
+      "SELECT * FROM (\n".length + innerSelect.length + 1 + "  FROM (\n".length,
+    )
+  pushFragment(0, "SELECT * FROM (".length, node)
+  pushFragment("SELECT * FROM (\n".length, innerSelect.length, node)
+  pushFragment(result.length - wherePart.length, wherePart.length, node)
+  return result
 }
 
 // ── Qualify (escape hatch) ───────────────────────────────────────────
@@ -1600,6 +2581,7 @@ function buildRenameQuery(
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
 ): string {
   const columns = node.props.columns as Record<string, string>
+  const fragStart = _fragments?.length ?? 0
   const upstream = getUpstream(node, nodeIndex, pluginSql)
 
   const schema = resolveNodeSchema(node.children[0], nodeIndex)
@@ -1609,17 +2591,39 @@ function buildRenameQuery(
     return `SELECT * FROM (\n${upstream.sql}\n)`
   }
 
-  const projections = schema
-    .map((c) => {
-      const newName = columns[c.name]
-      return newName ? `${q(c.name)} AS ${q(newName)}` : q(c.name)
-    })
-    .join(", ")
+  // Build projections while tracking per-column offsets for renamed columns
+  const colParts: { text: string; renamed: boolean }[] = schema.map((c) => {
+    const newName = columns[c.name]
+    return newName
+      ? { text: `${q(c.name)} AS ${q(newName)}`, renamed: true }
+      : { text: q(c.name), renamed: false }
+  })
+
+  const projections = colParts.map((p) => p.text).join(", ")
+  const selectPart = `SELECT ${projections}`
+
+  // Push a fragment for each renamed column (not the entire SELECT)
+  const pushRenameFragments = (baseOffset: number): void => {
+    let offset = baseOffset + "SELECT ".length
+    for (let i = 0; i < colParts.length; i++) {
+      if (colParts[i].renamed) {
+        pushFragment(offset, colParts[i].text.length, node)
+      }
+      offset += colParts[i].text.length
+      if (i < colParts.length - 1) offset += 2 // ", "
+    }
+  }
 
   if (upstream.isSimple) {
-    return `SELECT ${projections} FROM ${upstream.sourceRef}`
+    const result = `${selectPart} FROM ${upstream.sourceRef}`
+    pushRenameFragments(0)
+    return result
   }
-  return `SELECT ${projections} FROM (\n${upstream.sql}\n)`
+  const prefix = `${selectPart} FROM (\n`
+  const result = `${prefix}${upstream.sql}\n)`
+  shiftFragmentsSince(fragStart, prefix.length)
+  pushRenameFragments(0)
+  return result
 }
 
 // ── Drop ────────────────────────────────────────────────────────────
@@ -1630,6 +2634,7 @@ function buildDropQuery(
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
 ): string {
   const dropCols = new Set(node.props.columns as readonly string[])
+  const fragStart = _fragments?.length ?? 0
   const upstream = getUpstream(node, nodeIndex, pluginSql)
 
   const schema = resolveNodeSchema(node.children[0], nodeIndex)
@@ -1643,10 +2648,18 @@ function buildDropQuery(
     .map((c) => q(c.name))
     .join(", ")
 
+  const selectPart = `SELECT ${projections}`
+
   if (upstream.isSimple) {
-    return `SELECT ${projections} FROM ${upstream.sourceRef}`
+    const result = `${selectPart} FROM ${upstream.sourceRef}`
+    pushFragment(0, selectPart.length, node)
+    return result
   }
-  return `SELECT ${projections} FROM (\n${upstream.sql}\n)`
+  const prefix = `${selectPart} FROM (\n`
+  const result = `${prefix}${upstream.sql}\n)`
+  shiftFragmentsSince(fragStart, prefix.length)
+  pushFragment(0, selectPart.length, node)
+  return result
 }
 
 // ── Cast ────────────────────────────────────────────────────────────
@@ -1659,6 +2672,7 @@ function buildCastQuery(
   const castCols = node.props.columns as Record<string, string>
   const safe = node.props.safe as boolean | undefined
   const castFn = safe ? "TRY_CAST" : "CAST"
+  const fragStart = _fragments?.length ?? 0
   const upstream = getUpstream(node, nodeIndex, pluginSql)
 
   const schema = resolveNodeSchema(node.children[0], nodeIndex)
@@ -1667,19 +2681,42 @@ function buildCastQuery(
     return `SELECT * FROM (\n${upstream.sql}\n)`
   }
 
-  const projections = schema
-    .map((c) => {
-      const targetType = castCols[c.name]
-      return targetType
-        ? `${castFn}(${q(c.name)} AS ${targetType}) AS ${q(c.name)}`
-        : q(c.name)
-    })
-    .join(", ")
+  // Build projections while tracking per-column offsets for cast columns
+  const colParts: { text: string; cast: boolean }[] = schema.map((c) => {
+    const targetType = castCols[c.name]
+    return targetType
+      ? {
+          text: `${castFn}(${q(c.name)} AS ${targetType}) AS ${q(c.name)}`,
+          cast: true,
+        }
+      : { text: q(c.name), cast: false }
+  })
+
+  const projections = colParts.map((p) => p.text).join(", ")
+  const selectPart = `SELECT ${projections}`
+
+  // Push a fragment for each cast column only
+  const pushCastFragments = (baseOffset: number): void => {
+    let offset = baseOffset + "SELECT ".length
+    for (let i = 0; i < colParts.length; i++) {
+      if (colParts[i].cast) {
+        pushFragment(offset, colParts[i].text.length, node)
+      }
+      offset += colParts[i].text.length
+      if (i < colParts.length - 1) offset += 2 // ", "
+    }
+  }
 
   if (upstream.isSimple) {
-    return `SELECT ${projections} FROM ${upstream.sourceRef}`
+    const result = `${selectPart} FROM ${upstream.sourceRef}`
+    pushCastFragments(0)
+    return result
   }
-  return `SELECT ${projections} FROM (\n${upstream.sql}\n)`
+  const prefix = `${selectPart} FROM (\n`
+  const result = `${prefix}${upstream.sql}\n)`
+  shiftFragmentsSince(fragStart, prefix.length)
+  pushCastFragments(0)
+  return result
 }
 
 // ── Coalesce ────────────────────────────────────────────────────────
@@ -1690,6 +2727,7 @@ function buildCoalesceQuery(
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
 ): string {
   const coalesceCols = node.props.columns as Record<string, string>
+  const fragStart = _fragments?.length ?? 0
   const upstream = getUpstream(node, nodeIndex, pluginSql)
 
   const schema = resolveNodeSchema(node.children[0], nodeIndex)
@@ -1698,19 +2736,42 @@ function buildCoalesceQuery(
     return `SELECT * FROM (\n${upstream.sql}\n)`
   }
 
-  const projections = schema
-    .map((c) => {
-      const defaultExpr = coalesceCols[c.name]
-      return defaultExpr
-        ? `COALESCE(${q(c.name)}, ${defaultExpr}) AS ${q(c.name)}`
-        : q(c.name)
-    })
-    .join(", ")
+  // Build projections while tracking per-column offsets for coalesced columns
+  const colParts: { text: string; coalesced: boolean }[] = schema.map((c) => {
+    const defaultExpr = coalesceCols[c.name]
+    return defaultExpr
+      ? {
+          text: `COALESCE(${q(c.name)}, ${defaultExpr}) AS ${q(c.name)}`,
+          coalesced: true,
+        }
+      : { text: q(c.name), coalesced: false }
+  })
+
+  const projections = colParts.map((p) => p.text).join(", ")
+  const selectPart = `SELECT ${projections}`
+
+  // Push a fragment for each coalesced column only
+  const pushCoalesceFragments = (baseOffset: number): void => {
+    let offset = baseOffset + "SELECT ".length
+    for (let i = 0; i < colParts.length; i++) {
+      if (colParts[i].coalesced) {
+        pushFragment(offset, colParts[i].text.length, node)
+      }
+      offset += colParts[i].text.length
+      if (i < colParts.length - 1) offset += 2 // ", "
+    }
+  }
 
   if (upstream.isSimple) {
-    return `SELECT ${projections} FROM ${upstream.sourceRef}`
+    const result = `${selectPart} FROM ${upstream.sourceRef}`
+    pushCoalesceFragments(0)
+    return result
   }
-  return `SELECT ${projections} FROM (\n${upstream.sql}\n)`
+  const prefix = `${selectPart} FROM (\n`
+  const result = `${prefix}${upstream.sql}\n)`
+  shiftFragmentsSince(fragStart, prefix.length)
+  pushCoalesceFragments(0)
+  return result
 }
 
 // ── AddField ────────────────────────────────────────────────────────
@@ -1721,6 +2782,7 @@ function buildAddFieldQuery(
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
 ): string {
   const addCols = node.props.columns as Record<string, string>
+  const fragStart = _fragments?.length ?? 0
   const upstream = getUpstream(node, nodeIndex, pluginSql)
 
   // Check for name collisions with upstream schema
@@ -1740,10 +2802,21 @@ function buildAddFieldQuery(
     .map(([alias, expr]) => `${expr} AS ${q(alias)}`)
     .join(", ")
 
+  const selectPart = `SELECT *, ${addedProjections}`
+  // Fragment covers only the added fields (after "SELECT *, ")
+  const addedOffset = "SELECT *, ".length
+  const addedLength = addedProjections.length
+
   if (upstream.isSimple) {
-    return `SELECT *, ${addedProjections} FROM ${upstream.sourceRef}`
+    const result = `${selectPart} FROM ${upstream.sourceRef}`
+    pushFragment(addedOffset, addedLength, node)
+    return result
   }
-  return `SELECT *, ${addedProjections} FROM (\n${upstream.sql}\n)`
+  const prefix = `${selectPart} FROM (\n`
+  const result = `${prefix}${upstream.sql}\n)`
+  shiftFragmentsSince(fragStart, prefix.length)
+  pushFragment(addedOffset, addedLength, node)
+  return result
 }
 
 // ── Join ────────────────────────────────────────────────────────────
@@ -1758,15 +2831,17 @@ function buildJoinQuery(
   const leftId = node.props.left as string
   const rightId = node.props.right as string
 
-  const leftRef = resolveRef(leftId, nodeIndex)
-  const rightRef = resolveRef(rightId, nodeIndex)
+  const left = resolveJoinOperand(leftId, nodeIndex)
+  const right = resolveJoinOperand(rightId, nodeIndex)
+  const ctes = [left.cte, right.cte].filter(Boolean)
+  const ctePrefix = ctes.length > 0 ? `WITH ${ctes.join(",\n")}\n` : ""
 
   if (joinType === "anti") {
-    return `SELECT ${leftRef}.* FROM ${leftRef} WHERE NOT EXISTS (\n  SELECT 1 FROM ${rightRef} WHERE ${onCondition}\n)`
+    return `${ctePrefix}SELECT ${left.ref}.* FROM ${left.ref} WHERE NOT EXISTS (\n  SELECT 1 FROM ${right.ref} WHERE ${onCondition}\n)`
   }
 
   if (joinType === "semi") {
-    return `SELECT ${leftRef}.* FROM ${leftRef} WHERE EXISTS (\n  SELECT 1 FROM ${rightRef} WHERE ${onCondition}\n)`
+    return `${ctePrefix}SELECT ${left.ref}.* FROM ${left.ref} WHERE EXISTS (\n  SELECT 1 FROM ${right.ref} WHERE ${onCondition}\n)`
   }
 
   const sqlJoinType =
@@ -1776,7 +2851,7 @@ function buildJoinQuery(
     ? `/*+ BROADCAST(${resolveRef(hints.broadcast === "left" ? leftId : rightId, nodeIndex)}) */ `
     : ""
 
-  return `SELECT ${hintClause}* FROM ${leftRef} ${sqlJoinType} JOIN ${rightRef} ON ${onCondition}`
+  return `${ctePrefix}SELECT ${hintClause}* FROM ${left.ref} ${sqlJoinType} JOIN ${right.ref} ON ${onCondition}`
 }
 
 // ── Temporal Join ───────────────────────────────────────────────────
@@ -1790,10 +2865,12 @@ function buildTemporalJoinQuery(
   const streamId = node.props.stream as string
   const temporalId = node.props.temporal as string
 
-  const streamRef = resolveRef(streamId, nodeIndex)
-  const temporalRef = resolveRef(temporalId, nodeIndex)
+  const stream = resolveJoinOperand(streamId, nodeIndex)
+  const temporal = resolveJoinOperand(temporalId, nodeIndex)
+  const ctes = [stream.cte, temporal.cte].filter(Boolean)
+  const ctePrefix = ctes.length > 0 ? `WITH ${ctes.join(",\n")}\n` : ""
 
-  return `SELECT * FROM ${streamRef} LEFT JOIN ${temporalRef} FOR SYSTEM_TIME AS OF ${streamRef}.${q(asOf)} ON ${onCondition}`
+  return `${ctePrefix}SELECT * FROM ${stream.ref} LEFT JOIN ${temporal.ref} FOR SYSTEM_TIME AS OF ${stream.ref}.${q(asOf)} ON ${onCondition}`
 }
 
 // ── Lookup Join ─────────────────────────────────────────────────────
@@ -1807,7 +2884,8 @@ function buildLookupJoinQuery(
   const table = node.props.table as string
   const select = node.props.select as Record<string, string> | undefined
 
-  const inputRef = resolveRef(inputId, nodeIndex)
+  const input = resolveJoinOperand(inputId, nodeIndex)
+  const ctePrefix = input.cte ? `WITH ${input.cte}\n` : ""
 
   const projections = select
     ? Object.entries(select)
@@ -1815,7 +2893,7 @@ function buildLookupJoinQuery(
         .join(", ")
     : "*"
 
-  return `SELECT ${projections} FROM ${inputRef} LEFT JOIN ${q(table)} FOR SYSTEM_TIME AS OF ${inputRef}.proc_time ON ${onCondition}`
+  return `${ctePrefix}SELECT ${projections} FROM ${input.ref} LEFT JOIN ${q(table)} FOR SYSTEM_TIME AS OF ${input.ref}.proc_time ON ${onCondition}`
 }
 
 // ── Interval Join ───────────────────────────────────────────────────
@@ -1830,12 +2908,24 @@ function buildIntervalJoinQuery(
   const leftId = node.props.left as string
   const rightId = node.props.right as string
 
-  const leftRef = resolveRef(leftId, nodeIndex)
-  const rightRef = resolveRef(rightId, nodeIndex)
+  const left = resolveJoinOperand(leftId, nodeIndex)
+  const right = resolveJoinOperand(rightId, nodeIndex)
+  const ctes = [left.cte, right.cte].filter(Boolean)
+  const ctePrefix = ctes.length > 0 ? `WITH ${ctes.join(",\n")}\n` : ""
 
   const sqlJoinType = joinType === "inner" ? "" : `${joinType.toUpperCase()} `
 
-  return `SELECT * FROM ${leftRef} ${sqlJoinType}JOIN ${rightRef} ON ${onCondition} AND ${leftRef}.${interval.from} BETWEEN ${rightRef}.${interval.from} AND ${rightRef}.${interval.to}`
+  // Interval join: right.watermarkCol BETWEEN left.from AND left.to
+  const rightNode = nodeIndex.get(rightId)
+  const rightSchema = rightNode?.props.schema as
+    | { watermark?: { column: string } }
+    | undefined
+  const rightTimeCol = rightSchema?.watermark?.column
+  const betweenCol = rightTimeCol
+    ? `${right.ref}.${q(rightTimeCol)}`
+    : `${right.ref}.${interval.from}`
+
+  return `${ctePrefix}SELECT * FROM ${left.ref} ${sqlJoinType}JOIN ${right.ref} ON ${onCondition} AND ${betweenCol} BETWEEN ${left.ref}.${interval.from} AND ${left.ref}.${interval.to}`
 }
 
 // ── Window ──────────────────────────────────────────────────────────
@@ -1859,14 +2949,23 @@ function buildWindowQuery(
         pluginSql,
       )
     : getUpstream(node, nodeIndex, pluginSql)
-  const sourceRef = upstream.isSimple
-    ? upstream.sourceRef
-    : `(\n${upstream.sql}\n)`
+  // Flink TVF syntax requires TABLE <identifier>, not TABLE (<subquery>).
+  // When the upstream is a subquery, lift it into a CTE so the TVF gets
+  // a named table reference.
+  let ctePrefix = ""
+  let sourceRef: string
+  if (upstream.isSimple) {
+    sourceRef = upstream.sourceRef
+  } else {
+    const cteName = `_windowed_input`
+    ctePrefix = `WITH ${q(cteName)} AS (\n${upstream.sql}\n)\n`
+    sourceRef = q(cteName)
+  }
 
   const tvf = buildWindowTvf(node, sourceRef, windowCol)
 
   if (!aggChild) {
-    return `SELECT * FROM TABLE(\n  ${tvf}\n)`
+    return `${ctePrefix}SELECT * FROM TABLE(\n  ${tvf}\n)`
   }
 
   const groupBy = aggChild.props.groupBy as readonly string[]
@@ -1874,14 +2973,18 @@ function buildWindowQuery(
 
   const groupCols = [...groupBy.map(q), "window_start", "window_end"].join(", ")
 
+  const groupBySet = new Set(groupBy)
   const projections = [
     ...groupBy.map(q),
-    ...Object.entries(select).map(([alias, expr]) => `${expr} AS ${q(alias)}`),
+    // Skip select entries that duplicate a groupBy column
+    ...Object.entries(select)
+      .filter(([alias]) => !groupBySet.has(alias))
+      .map(([alias, expr]) => `${expr} AS ${q(alias)}`),
     "window_start",
     "window_end",
   ].join(", ")
 
-  return `SELECT ${projections} FROM TABLE(\n  ${tvf}\n) GROUP BY ${groupCols}`
+  return `${ctePrefix}SELECT ${projections} FROM TABLE(\n  ${tvf}\n) GROUP BY ${groupCols}`
 }
 
 function buildWindowTvf(
@@ -2137,18 +3240,18 @@ function buildMatchRecognizeQuery(
 function collectSideDml(
   node: ConstructNode,
   nodeIndex: Map<string, ConstructNode>,
-  statements: string[],
+  entries: DmlEntry[],
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
 ): void {
   if (node.component === "SideOutput") {
-    collectSideOutputDml(node, nodeIndex, statements, pluginSql)
+    collectSideOutputDml(node, nodeIndex, entries, pluginSql)
   } else if (node.component === "Validate") {
-    collectValidateDml(node, nodeIndex, statements, pluginSql)
+    collectValidateDml(node, nodeIndex, entries, pluginSql)
   }
 
   // Continue recursing to find nested SideOutput/Validate
   for (const child of node.children) {
-    collectSideDml(child, nodeIndex, statements, pluginSql)
+    collectSideDml(child, nodeIndex, entries, pluginSql)
   }
 }
 
@@ -2183,7 +3286,7 @@ function buildSideOutputQuery(
 function collectSideOutputDml(
   sideOutputNode: ConstructNode,
   nodeIndex: Map<string, ConstructNode>,
-  statements: string[],
+  entries: DmlEntry[],
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
 ): void {
   const condition = sideOutputNode.props.condition as string
@@ -2224,9 +3327,10 @@ function collectSideOutputDml(
         }
         const selectList =
           metaCols.length > 0 ? `*, ${metaCols.join(", ")}` : "*"
-        statements.push(
-          `INSERT INTO ${sinkRef}\nSELECT ${selectList} FROM ${fromClause} WHERE (${condition});`,
-        )
+        entries.push({
+          sql: `INSERT INTO ${sinkRef}\nSELECT ${selectList} FROM ${fromClause} WHERE (${condition});`,
+          contributors: [],
+        })
       }
     }
   }
@@ -2333,7 +3437,7 @@ function buildValidateErrorCase(rules: {
 function collectValidateDml(
   validateNode: ConstructNode,
   nodeIndex: Map<string, ConstructNode>,
-  statements: string[],
+  entries: DmlEntry[],
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
 ): void {
   const rules = validateNode.props.rules as {
@@ -2372,9 +3476,10 @@ function collectValidateDml(
       if (child.kind === "Sink") {
         const sinkRef = resolveSinkRef(child)
         const errorCase = buildValidateErrorCase(rules)
-        statements.push(
-          `INSERT INTO ${sinkRef}\nSELECT *,\n    CASE\n${errorCase}\n    END AS \`_validation_error\`,\n    CURRENT_TIMESTAMP AS \`_validated_at\`\nFROM ${fromClause}\nWHERE NOT (\n    ${validCondition}\n);`,
-        )
+        entries.push({
+          sql: `INSERT INTO ${sinkRef}\nSELECT *,\n    CASE\n${errorCase}\n    END AS \`_validation_error\`,\n    CURRENT_TIMESTAMP AS \`_validated_at\`\nFROM ${fromClause}\nWHERE NOT (\n    ${validCondition}\n);`,
+          contributors: [],
+        })
       }
     }
   }
@@ -2540,6 +3645,26 @@ function resolveRef(
   }
 
   return q(nodeId)
+}
+
+/**
+ * Resolve a join operand (left/right input).
+ * If the operand is a Source, returns a simple table reference.
+ * If the operand is a non-Source (e.g. another Join), inlines its SQL
+ * as a CTE so the join can reference it by name.
+ */
+function resolveJoinOperand(
+  nodeId: string,
+  nodeIndex: Map<string, ConstructNode>,
+): { ref: string; cte: string | null } {
+  const node = nodeIndex.get(nodeId)
+  if (!node || node.kind === "Source") {
+    return { ref: resolveRef(nodeId, nodeIndex), cte: null }
+  }
+  // Non-source operand — build its query and wrap as a CTE
+  const sql = buildQuery(node, nodeIndex)
+  const cteName = q(nodeId)
+  return { ref: cteName, cte: `${cteName} AS (\n${sql}\n)` }
 }
 
 // ── Effect-typed variant ─────────────────────────────────────────────

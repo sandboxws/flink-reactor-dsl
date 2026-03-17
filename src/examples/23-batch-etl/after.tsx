@@ -33,9 +33,9 @@ const ProductSchema = Schema({
 const sales = (
   <GenericSource
     connector="filesystem"
-    format="parquet"
+    format="json"
     schema={SalesSchema}
-    options={{ path: "s3://data-warehouse/sales/2024/" }}
+    options={{ path: "/tmp/data-warehouse/sales/2024/" }}
   />
 )
 
@@ -51,7 +51,7 @@ const enriched = (
   <Join
     left={sales}
     right={products}
-    on="product_id = product_id"
+    on="`filesystem`.product_id = `products`.product_id"
     hints={{ broadcast: "right" }}
   />
 )
@@ -74,8 +74,8 @@ export default (
           }}
         />
         <FileSystemSink
-          path="s3://data-warehouse/aggregates/daily_category_sales/"
-          format="parquet"
+          path="/tmp/data-warehouse/aggregates/daily_category_sales/"
+          format="json"
           partitionBy={["sale_date"]}
         />
       </Route.Branch>
