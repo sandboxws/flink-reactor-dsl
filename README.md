@@ -528,10 +528,19 @@ pnpm format
 
 ## <img src="assets/icons/scale.svg" width="24" height="24" style="vertical-align: middle; margin-bottom: 2px;"> License
 
-Licensed under [BSL 1.1](./LICENSE).
+This project uses a **split license model**:
 
+| Package | License | npm |
+|---------|---------|-----|
+| `flink-reactor` (core DSL) | [BSL 1.1](./LICENSE) | [![npm](https://img.shields.io/npm/v/flink-reactor?color=d97085&label=)](https://www.npmjs.com/package/flink-reactor) |
+| `@flink-reactor/create-app` | [MIT](./packages/create-fr-app/LICENSE) | [![npm](https://img.shields.io/npm/v/@flink-reactor/create-app?color=d97085&label=)](https://www.npmjs.com/package/@flink-reactor/create-app) |
+| `@flink-reactor/ts-plugin` | [MIT](./packages/ts-plugin/LICENSE) | [![npm](https://img.shields.io/npm/v/@flink-reactor/ts-plugin?color=d97085&label=)](https://www.npmjs.com/package/@flink-reactor/ts-plugin) |
+
+**Core DSL (BSL 1.1):**
 - **Internal production use is always free** — use FlinkReactor to build and run your own pipelines without restriction.
 - **Commercial license required** to offer FlinkReactor (or a derivative) as a managed service, hosted platform, or API to third parties.
 - **Converts to [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) on 2030-03-10** — after the change date, this version becomes fully open source.
+
+**Tooling packages (MIT):** The scaffolder and TypeScript plugin are MIT-licensed — use them freely in any context.
 
 For commercial licensing inquiries, see [flink-reactor-platform](https://github.com/sandboxws/flink-reactor-platform).

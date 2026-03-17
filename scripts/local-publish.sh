@@ -37,7 +37,12 @@ rm -rf "$STORAGE/flink-reactor"
 rm -rf "$STORAGE/@flink-reactor"
 start_verdaccio
 
-# --- Publish ---
+# --- Publish workspace packages first ---
+echo ""
+echo "Publishing workspace packages..."
+pnpm --filter './packages/*' exec npm publish --registry "$REGISTRY" --provenance=false 2>&1
+
+# --- Publish root package ---
 echo ""
 echo "Publishing flink-reactor..."
 npm publish --registry "$REGISTRY" --provenance=false 2>&1
@@ -45,3 +50,5 @@ npm publish --registry "$REGISTRY" --provenance=false 2>&1
 echo ""
 echo "Done! Install packages with:"
 echo "  npm install flink-reactor --registry $REGISTRY"
+echo "  npm install @flink-reactor/create-app --registry $REGISTRY"
+echo "  npm install @flink-reactor/ts-plugin --registry $REGISTRY"

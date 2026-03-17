@@ -47,6 +47,7 @@ export default defineConfig([
     dts: true,
     sourcemap: true,
     splitting: false,
+    minify: true,
     noExternal: ["effect", "dt-sql-parser"],
     esbuildOptions(options) {
       options.alias = srcAlias
