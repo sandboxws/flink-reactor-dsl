@@ -4,7 +4,7 @@ import { defineConfig } from "tsup"
 const srcAlias = { "@": resolve("src") }
 
 export default defineConfig([
-  // Library entry — importable as `import { ... } from 'flink-reactor'`
+  // Library entry — importable as `import { ... } from '@flink-reactor/dsl'`
   {
     entry: { index: "src/index.ts", "jsx-runtime": "src/jsx-runtime.ts" },
     format: ["esm"],
@@ -36,7 +36,7 @@ export default defineConfig([
       options.alias = srcAlias
     },
   },
-  // Browser entry — importable as `import { ... } from 'flink-reactor/browser'`
+  // Browser entry — importable as `import { ... } from '@flink-reactor/dsl/browser'`
   {
     entry: { browser: "src/browser.ts" },
     format: ["esm"],

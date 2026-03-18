@@ -26,7 +26,9 @@ describe("upgrade command", () => {
     })
 
     it("passes through unknown names unchanged", () => {
-      expect(resolvePackageName("flink-reactor")).toBe("flink-reactor")
+      expect(resolvePackageName("@flink-reactor/dsl")).toBe(
+        "@flink-reactor/dsl",
+      )
     })
   })
 

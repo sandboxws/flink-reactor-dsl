@@ -13,7 +13,7 @@ export function makePackageJson(
   }
 
   const dependencies: Record<string, string> = {
-    "flink-reactor": "^0.1.0",
+    "@flink-reactor/dsl": "^0.1.0",
   }
 
   const pkg: Record<string, unknown> = {
@@ -45,7 +45,7 @@ export function makeTsconfig(_opts: ScaffoldOptions): string {
       forceConsistentCasingInFileNames: true,
       resolveJsonModule: true,
       jsx: "react-jsx",
-      jsxImportSource: "flink-reactor",
+      jsxImportSource: "@flink-reactor/dsl",
       baseUrl: ".",
       paths: {
         "@/*": ["./*"],
@@ -57,7 +57,7 @@ export function makeTsconfig(_opts: ScaffoldOptions): string {
 }
 
 export function makeConfig(opts: ScaffoldOptions): string {
-  return `import { defineConfig } from 'flink-reactor'
+  return `import { defineConfig } from '@flink-reactor/dsl'
 
 export default defineConfig({
   flink: { version: '${opts.flinkVersion}' },
@@ -89,7 +89,7 @@ dist/
 }
 
 export function makeDevEnv(_opts: ScaffoldOptions): string {
-  return `import { defineEnvironment } from 'flink-reactor'
+  return `import { defineEnvironment } from '@flink-reactor/dsl'
 
 export default defineEnvironment({
   name: 'dev',

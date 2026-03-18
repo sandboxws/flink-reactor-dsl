@@ -532,8 +532,8 @@ This project uses a **split license model**:
 
 | Package | License | npm |
 |---------|---------|-----|
-| `flink-reactor` (core DSL) | [BSL 1.1](./LICENSE) | [![npm](https://img.shields.io/npm/v/flink-reactor?color=d97085&label=)](https://www.npmjs.com/package/flink-reactor) |
-| `@flink-reactor/create-app` | [MIT](./packages/create-fr-app/LICENSE) | [![npm](https://img.shields.io/npm/v/@flink-reactor/create-app?color=d97085&label=)](https://www.npmjs.com/package/@flink-reactor/create-app) |
+| `@flink-reactor/dsl` (core DSL) | [BSL 1.1](./LICENSE) | [![npm](https://img.shields.io/npm/v/@flink-reactor/dsl?color=d97085&label=)](https://www.npmjs.com/package/@flink-reactor/dsl) |
+| `@flink-reactor/create-fr-app` | [MIT](./packages/create-fr-app/LICENSE) | [![npm](https://img.shields.io/npm/v/@flink-reactor/create-fr-app?color=d97085&label=)](https://www.npmjs.com/package/@flink-reactor/create-fr-app) |
 | `@flink-reactor/ts-plugin` | [MIT](./packages/ts-plugin/LICENSE) | [![npm](https://img.shields.io/npm/v/@flink-reactor/ts-plugin?color=d97085&label=)](https://www.npmjs.com/package/@flink-reactor/ts-plugin) |
 
 **Core DSL (BSL 1.1):**

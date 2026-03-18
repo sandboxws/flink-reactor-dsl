@@ -1,5 +1,5 @@
 /**
- * Publish the root `flink-reactor` package to npm.
+ * Publish the root `@flink-reactor/dsl` package to npm.
  *
  * `changeset publish` only handles workspace member packages (packages/*, apps/*).
  * The root package lives at the workspace root, so it must be published separately.

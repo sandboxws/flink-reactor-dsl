@@ -17,11 +17,6 @@ uplinks:
     url: https://registry.npmjs.org/
 
 packages:
-  'flink-reactor':
-    access: $all
-    publish: $anonymous
-    unpublish: $anonymous
-
   '@flink-reactor/*':
     access: $all
     publish: $anonymous

@@ -33,7 +33,6 @@ echo ""
 echo "Clearing previous versions from local registry..."
 pkill -f verdaccio 2>/dev/null || true
 sleep 1
-rm -rf "$STORAGE/flink-reactor"
 rm -rf "$STORAGE/@flink-reactor"
 start_verdaccio
 
@@ -44,11 +43,11 @@ pnpm --filter './packages/*' exec npm publish --registry "$REGISTRY" --provenanc
 
 # --- Publish root package ---
 echo ""
-echo "Publishing flink-reactor..."
+echo "Publishing @flink-reactor/dsl..."
 npm publish --registry "$REGISTRY" --provenance=false 2>&1
 
 echo ""
 echo "Done! Install packages with:"
-echo "  npm install flink-reactor --registry $REGISTRY"
-echo "  npm install @flink-reactor/create-app --registry $REGISTRY"
+echo "  npm install @flink-reactor/dsl --registry $REGISTRY"
+echo "  npm install @flink-reactor/create-fr-app --registry $REGISTRY"
 echo "  npm install @flink-reactor/ts-plugin --registry $REGISTRY"

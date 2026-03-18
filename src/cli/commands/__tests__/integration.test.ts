@@ -55,7 +55,7 @@ describe("integration: new --template starter --yes", () => {
     )
     expect(pkg.name).toBe("my-app")
     expect(pkg.type).toBe("module")
-    expect(pkg.dependencies).toHaveProperty("flink-reactor")
+    expect(pkg.dependencies).toHaveProperty("@flink-reactor/dsl")
 
     // Validate tsconfig.json
     const tsconfig = JSON.parse(
@@ -63,7 +63,7 @@ describe("integration: new --template starter --yes", () => {
     )
     expect(tsconfig.compilerOptions.strict).toBe(true)
     expect(tsconfig.compilerOptions.jsx).toBe("react-jsx")
-    expect(tsconfig.compilerOptions.jsxImportSource).toBe("flink-reactor")
+    expect(tsconfig.compilerOptions.jsxImportSource).toBe("@flink-reactor/dsl")
 
     // Validate config references correct Flink version
     const config = readFileSync(

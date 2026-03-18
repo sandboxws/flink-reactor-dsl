@@ -86,8 +86,8 @@ function discoverFlinkReactorPackages(projectDir: string): string[] {
       ...content.devDependencies,
     }
 
-    return Object.keys(allDeps).filter(
-      (name) => name === "flink-reactor" || name.startsWith("@flink-reactor/"),
+    return Object.keys(allDeps).filter((name) =>
+      name.startsWith("@flink-reactor/"),
     )
   } catch {
     return []

@@ -1,5 +1,5 @@
 {
-  "name": "@flink-reactor/create-app",
+  "name": "@flink-reactor/create-fr-app",
   "version": "0.1.0",
   "description": "CLI to create new apps with the FlinkReactor design system",
   "type": "module",

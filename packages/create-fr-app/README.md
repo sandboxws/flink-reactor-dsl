@@ -1,11 +1,11 @@
-<h1 align="center">@flink-reactor/create-app</h1>
+<h1 align="center">@flink-reactor/create-fr-app</h1>
 
 <p align="center">
   <strong>Scaffold a new FlinkReactor streaming pipeline project in seconds.</strong>
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@flink-reactor/create-app"><img src="https://img.shields.io/npm/v/@flink-reactor/create-app?color=d97085&label=npm" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/@flink-reactor/create-fr-app"><img src="https://img.shields.io/npm/v/@flink-reactor/create-fr-app?color=d97085&label=npm" alt="npm version" /></a>
   <img src="https://img.shields.io/badge/license-MIT-green" alt="license" />
 </p>
 
@@ -13,10 +13,10 @@
 
 ```bash
 # Create a new project (interactive)
-npx @flink-reactor/create-app
+npx @flink-reactor/create-fr-app
 
 # Or with a project name
-npx @flink-reactor/create-app init my-pipeline
+npx @flink-reactor/create-fr-app init my-pipeline
 
 # Using the short alias
 npx create-fr-app my-pipeline
