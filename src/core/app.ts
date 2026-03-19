@@ -23,6 +23,7 @@ import type {
   ValidationError,
 } from "./errors.js"
 import { registerComponentKinds, resetComponentKinds } from "./jsx-runtime.js"
+import { generatePipelineManifest } from "./manifest.js"
 import type { FlinkReactorPlugin } from "./plugin.js"
 import {
   EMPTY_PLUGIN_CHAIN,
@@ -31,7 +32,12 @@ import {
 } from "./plugin-registry.js"
 import { SynthContext, type ValidationCategory } from "./synth-context.js"
 import { rekindTree } from "./tree-utils.js"
-import type { ConstructNode, FlinkMajorVersion, TapManifest } from "./types.js"
+import type {
+  ConstructNode,
+  FlinkMajorVersion,
+  PipelineManifest,
+  TapManifest,
+} from "./types.js"
 
 // ── FlinkReactorApp types ────────────────────────────────────────────
 
@@ -46,6 +52,7 @@ export interface PipelineArtifact {
   readonly sql: GenerateSqlResult
   readonly crd: AnyFlinkCrd
   readonly tapManifest: TapManifest | null
+  readonly pipelineManifest: PipelineManifest
 }
 
 export interface AppSynthResult {
@@ -275,7 +282,10 @@ export function synthesizeApp(
         devMode: true,
       })
 
-      return { name, sql, crd, tapManifest }
+      // Generate pipeline manifest (sources, sinks, catalogs)
+      const pipelineManifest = generatePipelineManifest(node)
+
+      return { name, sql, crd, tapManifest, pipelineManifest }
     })
 
     // ── afterSynth hooks ───────────────────────────────────────────────
@@ -447,7 +457,10 @@ export function synthesizeAppEffect(
             devMode: true,
           })
 
-          pipelines.push({ name, sql, crd, tapManifest })
+          // Generate pipeline manifest (sources, sinks, catalogs)
+          const pipelineManifest = generatePipelineManifest(node)
+
+          pipelines.push({ name, sql, crd, tapManifest, pipelineManifest })
         }
 
         // afterSynth hooks (with typed error capture)

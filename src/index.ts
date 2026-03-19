@@ -255,6 +255,7 @@ export {
   PipelineLoaderLive,
   ProcessRunnerLive,
 } from "./core/layers.js"
+export { generatePipelineManifest } from "./core/manifest.js"
 // Core: plugins
 export type {
   AfterSynthHookContext,
@@ -307,10 +308,13 @@ export {
   walkTree,
   wrapNode,
 } from "./core/tree-utils.js"
+// Core: manifest
 // Core: types
 export type {
   BaseComponentProps,
+  CatalogMeta,
   ChangelogMode,
+  ConnectorMeta,
   ConstructNode,
   FlinkCompositeType,
   FlinkMajorVersion,
@@ -319,6 +323,7 @@ export type {
   FlinkSchema,
   FlinkType,
   NodeKind,
+  PipelineManifest,
   Stream,
   TypedConstructNode,
 } from "./core/types.js"

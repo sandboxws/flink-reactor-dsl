@@ -174,6 +174,52 @@ export interface TapMetadata {
   readonly connectorProperties: Record<string, string>
 }
 
+// ── Pipeline manifest types ──────────────────────────────────────────
+
+/** Metadata for a source or sink connector in the pipeline */
+export interface ConnectorMeta {
+  /** Unique node identifier from the construct tree */
+  readonly nodeId: string
+  /** Component name (e.g., "KafkaSource", "IcebergSink") */
+  readonly componentName: string
+  /** Normalized connector type (e.g., "kafka", "iceberg", "paimon", "jdbc") */
+  readonly connectorType: string
+  /** Role in the pipeline */
+  readonly role: "source" | "sink"
+  /** Primary resource identifier (topic name, catalog.db.table, path) */
+  readonly resource: string
+  /** Raw connector properties */
+  readonly connectorProperties: Record<string, string>
+  /** Schema columns if available */
+  readonly schema: { name: string; type: string }[] | null
+}
+
+/** Metadata for a catalog declaration in the pipeline */
+export interface CatalogMeta {
+  /** Catalog name as declared in SQL */
+  readonly catalogName: string
+  /** Catalog type (e.g., "iceberg", "paimon", "hive", "jdbc") */
+  readonly catalogType: string
+  /** Catalog URI if applicable */
+  readonly uri?: string
+  /** Warehouse location if applicable */
+  readonly warehouse?: string
+}
+
+/** Complete pipeline manifest with all sources, sinks, and catalogs */
+export interface PipelineManifest {
+  /** Pipeline name */
+  readonly pipelineName: string
+  /** All source connectors */
+  readonly sources: ConnectorMeta[]
+  /** All sink connectors */
+  readonly sinks: ConnectorMeta[]
+  /** All catalog declarations */
+  readonly catalogs: CatalogMeta[]
+  /** Generation timestamp */
+  readonly generatedAt: string
+}
+
 /** Manifest file emitted alongside synthesized SQL for all tap points */
 export interface TapManifest {
   /** Pipeline name from Pipeline component */

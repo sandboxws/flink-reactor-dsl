@@ -10,6 +10,7 @@ import { generateCrd, toYaml } from "@/codegen/crd-generator.js"
 import { generateSql, generateTapManifest } from "@/codegen/sql-generator.js"
 import { type PipelineArtifact, synthesizeApp } from "@/core/app.js"
 import { DiscoveryError, type FileSystemError } from "@/core/errors.js"
+import { generatePipelineManifest } from "@/core/manifest.js"
 import { FrFileSystem } from "@/core/services.js"
 
 export function registerSynthCommand(program: Command): void {
@@ -107,11 +108,14 @@ export async function runSynth(opts: {
         devMode: true,
       })
 
+      const pipelineManifest = generatePipelineManifest(pipelineNode)
+
       const artifact: PipelineArtifact = {
         name: discovered.name,
         sql,
         crd,
         tapManifest,
+        pipelineManifest,
       }
 
       allArtifacts.push(artifact)
@@ -286,11 +290,14 @@ export function runSynthEffect(opts: {
           devMode: true,
         })
 
+        const pipelineManifest = generatePipelineManifest(pipelineNode)
+
         const artifact: PipelineArtifact = {
           name: discovered.name,
           sql,
           crd,
           tapManifest,
+          pipelineManifest,
         }
 
         allArtifacts.push(artifact)
