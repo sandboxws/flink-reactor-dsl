@@ -82,6 +82,12 @@ export interface DashboardSection {
   readonly observability?: DashboardObservabilityConfig
 }
 
+// ── Console configuration ────────────────────────────────────────────
+
+export interface ConsoleConfig {
+  readonly url?: string | EnvVarRef
+}
+
 // ── Environment entry ───────────────────────────────────────────────
 
 export interface EnvironmentEntry {
@@ -95,6 +101,7 @@ export interface EnvironmentEntry {
   }
   readonly connectors?: ConnectorConfig
   readonly dashboard?: DashboardSection
+  readonly console?: ConsoleConfig
   readonly pipelines?: Record<string, PipelineOverrides>
 }
 
@@ -119,6 +126,8 @@ export interface FlinkReactorConfig {
   readonly cluster?: ClusterConfig
   /** Default dashboard settings */
   readonly dashboard?: DashboardSection
+  /** Console (reactor-server) connection for tap manifest push */
+  readonly console?: ConsoleConfig
   /** Named environments with overrides */
   readonly environments?: Record<string, EnvironmentEntry>
 

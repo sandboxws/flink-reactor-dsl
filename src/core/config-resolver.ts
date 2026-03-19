@@ -33,6 +33,9 @@ export interface ResolvedConfig {
   }
   readonly connectors?: ConnectorConfig
   readonly dashboard: Resolved<DashboardSection>
+  readonly console: {
+    readonly url?: string
+  }
   readonly pipelines: Record<string, PipelineOverrides>
   readonly environmentName?: string
 }
@@ -89,6 +92,7 @@ export function resolveConfig(
     kafka: config.kafka ?? {},
     connectors: config.connectors,
     dashboard: config.dashboard ?? {},
+    console: config.console ?? {},
     pipelines: {},
   }
 
@@ -109,6 +113,7 @@ export function resolveConfig(
     if (envEntry.kafka) envOverrides.kafka = envEntry.kafka
     if (envEntry.connectors) envOverrides.connectors = envEntry.connectors
     if (envEntry.dashboard) envOverrides.dashboard = envEntry.dashboard
+    if (envEntry.console) envOverrides.console = envEntry.console
     if (envEntry.pipelines) envOverrides.pipelines = envEntry.pipelines
 
     merged = deepMerge(common, envOverrides)
@@ -123,6 +128,7 @@ export function resolveConfig(
   const kubernetes = resolved.kubernetes as Record<string, unknown> | undefined
   const kafka = resolved.kafka as Record<string, unknown> | undefined
   const dashboard = resolved.dashboard as Record<string, unknown> | undefined
+  const console_ = resolved.console as Record<string, unknown> | undefined
 
   return {
     flink: {
@@ -152,6 +158,9 @@ export function resolveConfig(
       rbac: dashboard?.rbac as Resolved<DashboardSection>["rbac"],
       observability:
         dashboard?.observability as Resolved<DashboardSection>["observability"],
+    },
+    console: {
+      url: console_?.url as string | undefined,
     },
     pipelines: (resolved.pipelines as Record<string, PipelineOverrides>) ?? {},
     environmentName: envName,

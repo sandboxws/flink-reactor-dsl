@@ -23,7 +23,7 @@ exports[`Full pipeline TapManifest > generates correct manifest JSON for mixed t
         "topic": "large-orders",
       },
       "connectorType": "kafka",
-      "consumerGroupId": "flink-reactor-tap-ecommerce-large_orders-33e69e92",
+      "consumerGroupId": "fr-tap-ecommerce-large_orders-33e69e92",
       "name": "output-tap",
       "nodeId": "large_orders",
       "observationSql": "CREATE TEMPORARY TABLE \`_tap_large_orders\` (
@@ -36,7 +36,7 @@ exports[`Full pipeline TapManifest > generates correct manifest JSON for mixed t
   'topic' = 'large-orders',
   'format' = 'json',
   'properties.bootstrap.servers' = 'kafka:9092',
-  'properties.group.id' = 'flink-reactor-tap-ecommerce-large_orders-33e69e92',
+  'properties.group.id' = 'fr-tap-ecommerce-large_orders-33e69e92',
   'scan.startup.mode' = 'earliest-offset'
 );
 
@@ -65,7 +65,7 @@ SELECT * FROM \`_tap_large_orders\`;",
         "topic": "orders",
       },
       "connectorType": "kafka",
-      "consumerGroupId": "flink-reactor-tap-ecommerce-orders-187baec2",
+      "consumerGroupId": "fr-tap-ecommerce-orders-187baec2",
       "name": "KafkaSource (orders)",
       "nodeId": "orders",
       "observationSql": "CREATE TEMPORARY TABLE \`_tap_orders\` (
@@ -78,7 +78,7 @@ SELECT * FROM \`_tap_large_orders\`;",
   'topic' = 'orders',
   'format' = 'json',
   'properties.bootstrap.servers' = 'kafka:9092',
-  'properties.group.id' = 'flink-reactor-tap-ecommerce-orders-187baec2',
+  'properties.group.id' = 'fr-tap-ecommerce-orders-187baec2',
   'scan.startup.mode' = 'latest-offset'
 );
 
@@ -116,7 +116,7 @@ exports[`Kafka sink tap observation SQL > generates correct observation SQL with
   'topic' = 'large-orders',
   'format' = 'json',
   'properties.bootstrap.servers' = 'kafka:9092',
-  'properties.group.id' = 'flink-reactor-tap-test-large_orders-def56789',
+  'properties.group.id' = 'fr-tap-test-large_orders-def56789',
   'scan.startup.mode' = 'latest-offset'
 );
 
@@ -133,7 +133,7 @@ exports[`Kafka source tap observation SQL > generates correct observation SQL wi
   'topic' = 'orders',
   'format' = 'json',
   'properties.bootstrap.servers' = 'kafka:9092',
-  'properties.group.id' = 'flink-reactor-tap-test-orders-abc12345',
+  'properties.group.id' = 'fr-tap-test-orders-abc12345',
   'scan.startup.mode' = 'latest-offset'
 );
 
@@ -148,7 +148,7 @@ exports[`Kafka tap with timestamp offset mode > generates correct startup timest
   'topic' = 'orders',
   'format' = 'json',
   'properties.bootstrap.servers' = 'kafka:9092',
-  'properties.group.id' = 'flink-reactor-tap-test-orders-abc12345',
+  'properties.group.id' = 'fr-tap-test-orders-abc12345',
   'scan.startup.mode' = 'timestamp',
   'scan.startup.timestamp-millis' = '1705312800000'
 );

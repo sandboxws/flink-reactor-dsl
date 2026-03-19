@@ -21,12 +21,17 @@ export function registerDevCommand(program: Command): void {
     .option("-e, --env <name>", "Environment name (default: auto-select)")
     .option("--no-cluster", "Skip starting local Flink cluster")
     .option("--port <port>", "Flink dashboard port", "8081")
+    .option(
+      "--console-url <url>",
+      "Push tap manifests to reactor-console at this URL",
+    )
     .action(
       async (opts: {
         pipeline?: string
         env?: string
         cluster: boolean
         port: string
+        consoleUrl?: string
       }) => {
         await runCommand(
           Effect.tryPromise({
@@ -50,6 +55,7 @@ interface DevState {
   envName?: string
   cluster: boolean
   port: string
+  consoleUrl?: string
   watchers: FSWatcher[]
   clusterProcess: ChildProcess | null
   shuttingDown: boolean
@@ -62,6 +68,7 @@ export async function runDev(opts: {
   env?: string
   cluster: boolean
   port: string
+  consoleUrl?: string
   projectDir?: string
 }): Promise<void> {
   const projectDir = opts.projectDir ?? process.cwd()
@@ -72,6 +79,7 @@ export async function runDev(opts: {
     envName: opts.env,
     cluster: opts.cluster,
     port: opts.port,
+    consoleUrl: opts.consoleUrl,
     watchers: [],
     clusterProcess: null,
     shuttingDown: false,
@@ -91,6 +99,7 @@ export async function runDev(opts: {
     env: state.envName,
     outdir: "dist",
     projectDir,
+    consoleUrl: state.consoleUrl,
   })
 
   // Set up file watchers
@@ -200,6 +209,7 @@ function onFileChange(state: DevState): void {
       env: state.envName,
       outdir: "dist",
       projectDir: state.projectDir,
+      consoleUrl: state.consoleUrl,
     })
   }, 300)
 }
@@ -223,6 +233,7 @@ function setupKeyboard(state: DevState): void {
           pipeline: state.pipeline,
           outdir: "dist",
           projectDir: state.projectDir,
+          consoleUrl: state.consoleUrl,
         })
         break
 

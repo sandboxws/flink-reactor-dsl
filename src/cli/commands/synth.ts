@@ -2,8 +2,10 @@ import { join } from "node:path"
 import type { Command } from "commander"
 import { Effect } from "effect"
 import pc from "picocolors"
+import { resolveConsoleUrl } from "@/cli/console-url.js"
 import { loadPipeline, resolveProjectContext } from "@/cli/discovery.js"
 import { runCommand } from "@/cli/effect-runner.js"
+import { pushTapManifest } from "@/cli/tap-push.js"
 import { generateCrd, toYaml } from "@/codegen/crd-generator.js"
 import { generateSql, generateTapManifest } from "@/codegen/sql-generator.js"
 import { type PipelineArtifact, synthesizeApp } from "@/core/app.js"
@@ -25,6 +27,10 @@ export function registerSynthCommand(program: Command): void {
       "--deep-validate",
       "Submit EXPLAIN to a running Flink cluster for semantic validation",
     )
+    .option(
+      "--console-url <url>",
+      "Push tap manifests to reactor-console at this URL",
+    )
     .action(
       async (opts: {
         pipeline?: string
@@ -32,6 +38,7 @@ export function registerSynthCommand(program: Command): void {
         env?: string
         outdir: string
         deepValidate?: boolean
+        consoleUrl?: string
       }) => {
         await runCommand(runSynthEffect(opts))
       },
@@ -46,6 +53,7 @@ export async function runSynth(opts: {
   env?: string
   outdir: string
   projectDir?: string
+  consoleUrl?: string
 }): Promise<PipelineArtifact[]> {
   const projectDir = opts.projectDir ?? process.cwd()
   const ctx = await resolveProjectContext(projectDir, {
@@ -125,6 +133,20 @@ export async function runSynth(opts: {
   }
 
   console.log("")
+
+  // Push tap manifests to console if URL is available
+  const targetUrl = resolveConsoleUrl({
+    consoleUrl: opts.consoleUrl,
+    resolvedConfig: ctx.resolvedConfig ?? undefined,
+  })
+  if (targetUrl) {
+    for (const artifact of allArtifacts) {
+      if (artifact.tapManifest) {
+        await pushTapManifest(artifact.tapManifest, targetUrl)
+      }
+    }
+  }
+
   return allArtifacts
 }
 
@@ -186,6 +208,7 @@ export function runSynthEffect(opts: {
   env?: string
   outdir: string
   projectDir?: string
+  consoleUrl?: string
 }): Effect.Effect<
   readonly PipelineArtifact[],
   DiscoveryError | FileSystemError,
@@ -290,6 +313,23 @@ export function runSynthEffect(opts: {
       }
       console.log("")
     })
+
+    // Push tap manifests to console if URL is available
+    const targetUrl = resolveConsoleUrl({
+      consoleUrl: opts.consoleUrl,
+      resolvedConfig: ctx.resolvedConfig ?? undefined,
+    })
+    if (targetUrl) {
+      for (const artifact of allArtifacts) {
+        const manifest = artifact.tapManifest
+        if (manifest) {
+          yield* Effect.tryPromise({
+            try: () => pushTapManifest(manifest, targetUrl),
+            catch: () => undefined as never, // pushTapManifest never throws
+          })
+        }
+      }
+    }
 
     return allArtifacts as readonly PipelineArtifact[]
   })

@@ -123,6 +123,7 @@ export function resolveConfigEffect(
       kafka: config.kafka ?? {},
       connectors: config.connectors,
       dashboard: config.dashboard ?? {},
+      console: config.console ?? {},
       pipelines: {},
     }
 
@@ -146,6 +147,7 @@ export function resolveConfigEffect(
       if (envEntry.kafka) envOverrides.kafka = envEntry.kafka
       if (envEntry.connectors) envOverrides.connectors = envEntry.connectors
       if (envEntry.dashboard) envOverrides.dashboard = envEntry.dashboard
+      if (envEntry.console) envOverrides.console = envEntry.console
       if (envEntry.pipelines) envOverrides.pipelines = envEntry.pipelines
 
       merged = deepMerge(common, envOverrides)
@@ -161,6 +163,7 @@ export function resolveConfigEffect(
     const kubernetes = r.kubernetes as Record<string, unknown> | undefined
     const kafka = r.kafka as Record<string, unknown> | undefined
     const dashboard = r.dashboard as Record<string, unknown> | undefined
+    const console_ = r.console as Record<string, unknown> | undefined
 
     return {
       flink: {
@@ -190,6 +193,9 @@ export function resolveConfigEffect(
         rbac: dashboard?.rbac as ResolvedConfig["dashboard"]["rbac"],
         observability:
           dashboard?.observability as ResolvedConfig["dashboard"]["observability"],
+      },
+      console: {
+        url: console_?.url as string | undefined,
       },
       pipelines:
         (r.pipelines as Record<string, ResolvedConfig["pipelines"][string]>) ??

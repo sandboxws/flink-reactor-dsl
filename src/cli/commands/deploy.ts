@@ -23,12 +23,17 @@ export function registerDeployCommand(program: Command): void {
     .option("-e, --env <name>", "Environment name")
     .option("--dry-run", "Synth only, print YAML without applying")
     .option("--context <context>", "kubectl context")
+    .option(
+      "--console-url <url>",
+      "Push tap manifests to reactor-console at this URL",
+    )
     .action(
       async (opts: {
         pipeline?: string
         env?: string
         dryRun?: boolean
         context?: string
+        consoleUrl?: string
       }) => {
         await runCommand(runDeployEffect(opts))
       },
@@ -42,6 +47,7 @@ function runDeployEffect(opts: {
   env?: string
   dryRun?: boolean
   context?: string
+  consoleUrl?: string
   projectDir?: string
 }): Effect.Effect<
   void,
@@ -61,6 +67,7 @@ function runDeployEffect(opts: {
           env: opts.env,
           outdir: "dist",
           projectDir,
+          consoleUrl: opts.consoleUrl,
         }),
       catch: (err) =>
         new CliError({
