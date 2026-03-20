@@ -12,6 +12,7 @@ import { registerNewCommand } from "./commands/new.js"
 import { registerResumeCommand } from "./commands/resume.js"
 import { registerSavepointCommand } from "./commands/savepoint.js"
 import { registerSchemaCommand } from "./commands/schema.js"
+import { registerSimCommand } from "./commands/sim.js"
 import { registerStatusCommand } from "./commands/status.js"
 import { registerStopCommand } from "./commands/stop.js"
 import { registerSynthCommand } from "./commands/synth.js"
@@ -86,6 +87,7 @@ export function createProgram(): Command {
   registerDeployCommand(program)
   registerClusterCommand(program)
   registerSchemaCommand(program)
+  registerSimCommand(program)
   registerUpgradeCommand(program)
 
   // Lifecycle commands

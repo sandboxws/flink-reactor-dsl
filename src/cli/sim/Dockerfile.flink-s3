@@ -1,0 +1,17 @@
+# Extends the flink-reactor base image with S3 filesystem plugin
+# for SeaweedFS checkpoint/savepoint storage.
+#
+# Build (from flink-reactor-dsl repo root):
+#   eval $(minikube docker-env)
+#   docker build -t flink-reactor:2.0.1 -f src/cli/cluster/Dockerfile.flink .
+#   docker build -t flink-reactor-s3:2.0.1 -f /path/to/Dockerfile.flink-s3 .
+#
+# Multi-platform (Apple Silicon / x86_64):
+#   docker build -t flink-reactor-s3:2.0.1 --platform linux/arm64 -f Dockerfile.flink-s3 .
+#   docker build -t flink-reactor-s3:2.0.1 --platform linux/amd64 -f Dockerfile.flink-s3 .
+
+FROM flink-reactor:2.0.1
+
+# Enable the S3 Hadoop filesystem plugin for checkpoint I/O
+RUN mkdir -p /opt/flink/plugins/s3-fs-hadoop && \
+    cp /opt/flink/opt/flink-s3-fs-hadoop-*.jar /opt/flink/plugins/s3-fs-hadoop/
