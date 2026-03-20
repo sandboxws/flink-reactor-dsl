@@ -31,7 +31,7 @@ export interface ValidateOptions {
  *
  * @example
  * ```ts
- * import { validate } from 'flink-reactor/testing';
+ * import { validate } from '@flink-reactor/dsl/testing';
  *
  * it('detects orphan sources', () => {
  *   const result = validate(<InvalidPipeline />);

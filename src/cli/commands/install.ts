@@ -3,7 +3,7 @@ import { writeFileSync } from "node:fs"
 import { arch, platform } from "node:os"
 import { join } from "node:path"
 import * as clack from "@clack/prompts"
-import type { Command } from "commander"
+import { type Command, Option } from "commander"
 import { Effect } from "effect"
 import pc from "picocolors"
 import { runCommand } from "@/cli/effect-runner.js"
@@ -27,9 +27,12 @@ export function registerInstallCommand(program: Command): void {
   install
     .command("flink")
     .description("Install Apache Flink locally")
-    .option(
-      "--method <method>",
-      "Installation method (docker, homebrew, binary)",
+    .addOption(
+      new Option("--method <method>", "Installation method").choices([
+        "docker",
+        "homebrew",
+        "binary",
+      ]),
     )
     .option("--flink-version <version>", "Flink version (default: 1.20)")
     .action(async (opts: Record<string, unknown>) => {

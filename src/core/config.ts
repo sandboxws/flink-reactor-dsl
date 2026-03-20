@@ -146,7 +146,7 @@ export interface FlinkReactorConfig {
  *
  * @example
  * ```ts
- * import { defineConfig, env } from 'flink-reactor';
+ * import { defineConfig, env } from '@flink-reactor/dsl';
  *
  * export default defineConfig({
  *   flink: { version: '2.0' },

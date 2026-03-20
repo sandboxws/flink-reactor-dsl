@@ -6,7 +6,7 @@ export function getRideSharingTemplates(opts: ScaffoldOptions): TemplateFile[] {
     ...sharedFiles(opts),
     {
       path: "schemas/rides.ts",
-      content: `import { Schema, Field } from 'flink-reactor';
+      content: `import { Schema, Field } from '@flink-reactor/dsl';
 
 export const RideRequestSchema = Schema({
   fields: {
@@ -46,8 +46,29 @@ export const SurgeZoneSchema = Schema({
       content: `import {
   Pipeline, KafkaSource, KafkaSink, JdbcSink,
   IntervalJoin, MatchRecognize, Route,
-} from 'flink-reactor';
+} from '@flink-reactor/dsl';
 import { RideRequestSchema, TripEventSchema } from '@/schemas/rides';
+
+const requests = KafkaSource({
+  topic: "rides.requests",
+  schema: RideRequestSchema,
+  bootstrapServers: "kafka:9092",
+  consumerGroup: "rides-tracking-req",
+});
+
+const events = KafkaSource({
+  topic: "rides.trip-events",
+  schema: TripEventSchema,
+  bootstrapServers: "kafka:9092",
+  consumerGroup: "rides-tracking-events",
+});
+
+const joined = IntervalJoin({
+  left: requests,
+  right: events,
+  on: "requests.rideId = events.rideId",
+  interval: { from: "requests.requestTime", to: "requests.requestTime + INTERVAL '5' MINUTE" },
+});
 
 export default (
   <Pipeline
@@ -63,24 +84,32 @@ export default (
       "s3.path.style.access": "true",
     }}
   >
-    <KafkaSource topic="rides.requests" schema={RideRequestSchema} bootstrapServers="kafka:9092" consumerGroup="rides-tracking-req" />
-    <IntervalJoin
-      rightSource={<KafkaSource topic="rides.trip-events" schema={TripEventSchema} bootstrapServers="kafka:9092" consumerGroup="rides-tracking-events" />}
-      on="rideId"
-      between={{ lower: "-5 MINUTE", upper: "5 MINUTE" }}
-    />
-    <MatchRecognize
-      pattern="request accept? pickup dropoff"
-      define={{
+    {requests}
+    {events}
+    {MatchRecognize({
+      input: joined,
+      pattern: "request accept? pickup dropoff",
+      define: {
         request: "status = 'requested'",
         accept: "status = 'accepted'",
         pickup: "status = 'pickup'",
         dropoff: "status = 'dropoff'",
-      }}
-    />
+      },
+      measures: {
+        rideId: 'LAST(rideId)',
+        driverId: 'LAST(driverId)',
+        tripStatus: 'LAST(status)',
+        pickupTime: "FIRST(eventTime, pickup)",
+        dropoffTime: "LAST(eventTime, dropoff)",
+      },
+    })}
     <Route>
-      <JdbcSink table="completed_trips" url="jdbc:postgresql://postgres:5432/flink_sink" condition="status = 'dropoff'" />
-      <KafkaSink topic="rides.driver-alerts" bootstrapServers="kafka:9092" condition="status = 'cancelled'" />
+      <Route.Branch condition="tripStatus = 'dropoff'">
+        <JdbcSink table="completed_trips" url="jdbc:postgresql://postgres:5432/flink_sink" />
+      </Route.Branch>
+      <Route.Branch condition="tripStatus = 'cancelled'">
+        <KafkaSink topic="rides.driver-alerts" bootstrapServers="kafka:9092" />
+      </Route.Branch>
     </Route>
   </Pipeline>
 );
@@ -91,8 +120,36 @@ export default (
       content: `import {
   Pipeline, KafkaSource, KafkaSink,
   TumbleWindow, Aggregate, BroadcastJoin,
-} from 'flink-reactor';
+} from '@flink-reactor/dsl';
 import { RideRequestSchema, SurgeZoneSchema } from '@/schemas/rides';
+
+const requests = KafkaSource({
+  topic: "rides.requests",
+  schema: RideRequestSchema,
+  bootstrapServers: "kafka:9092",
+  consumerGroup: "rides-surge",
+});
+
+const surgeZones = KafkaSource({
+  topic: "rides.surge-zones",
+  schema: SurgeZoneSchema,
+  bootstrapServers: "kafka:9092",
+  consumerGroup: "rides-surge-config",
+});
+
+const windowed = TumbleWindow({ size: "1 MINUTE", on: "requestTime", children: requests });
+
+const demand = Aggregate({
+  groupBy: ['zoneId'],
+  select: { zoneId: 'zoneId', demandCount: 'COUNT(*)', windowEnd: 'WINDOW_END' },
+  children: windowed,
+});
+
+const surgeResult = BroadcastJoin({
+  left: demand,
+  right: surgeZones,
+  on: "demand.zoneId = surgeZones.zoneId",
+});
 
 export default (
   <Pipeline
@@ -108,14 +165,10 @@ export default (
       "s3.path.style.access": "true",
     }}
   >
-    <KafkaSource topic="rides.requests" schema={RideRequestSchema} bootstrapServers="kafka:9092" consumerGroup="rides-surge" />
-    <TumbleWindow size="1 MINUTE" on="requestTime" />
-    <Aggregate groupBy={['zoneId']} select={{ zoneId: 'zoneId', demandCount: 'COUNT(*)', windowEnd: 'WINDOW_END' }} />
-    <BroadcastJoin
-      rightSource={<KafkaSource topic="rides.surge-zones" schema={SurgeZoneSchema} bootstrapServers="kafka:9092" consumerGroup="rides-surge-config" />}
-      on="zoneId"
-    />
-    <KafkaSink topic="rides.surge-zones" bootstrapServers="kafka:9092" />
+    {requests}
+    {surgeZones}
+    {surgeResult}
+    <KafkaSink topic="rides.surge-prices" bootstrapServers="kafka:9092" />
   </Pipeline>
 );
 `,

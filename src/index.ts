@@ -1,5 +1,5 @@
 // ── FlinkReactor public API ──────────────────────────────────────────
-// This is the library entry point for `import { ... } from 'flink-reactor'`.
+// This is the library entry point for `import { ... } from '@flink-reactor/dsl'`.
 
 export type { CatalogSourceProps } from "./components/catalog-source.js"
 // Components: catalog source
@@ -47,6 +47,7 @@ export {
   Rename,
 } from "./components/field-transforms.js"
 export type {
+  BroadcastJoinProps,
   IntervalBounds,
   IntervalJoinProps,
   JoinHints,
@@ -57,6 +58,7 @@ export type {
 } from "./components/joins.js"
 // Components: joins
 export {
+  BroadcastJoin,
   IntervalJoin,
   Join,
   LookupJoin,
@@ -115,7 +117,6 @@ export type {
   RollingPolicy,
   SinkFormat,
 } from "./components/sinks.js"
-
 // Components: sinks
 export {
   FileSystemSink,
@@ -126,6 +127,7 @@ export {
   PaimonSink,
 } from "./components/sinks.js"
 export type {
+  DataGenSourceProps,
   GenericSourceProps,
   JdbcSourceProps,
   KafkaFormat,
@@ -133,7 +135,15 @@ export type {
   KafkaStartupMode,
 } from "./components/sources.js"
 // Components: sources
-export { GenericSource, JdbcSource, KafkaSource } from "./components/sources.js"
+export {
+  DataGenSource,
+  GenericSource,
+  JdbcSource,
+  KafkaSource,
+} from "./components/sources.js"
+export type { StatementSetProps } from "./components/statement-set.js"
+// Components: statement set
+export { StatementSet } from "./components/statement-set.js"
 export type {
   AggregateProps,
   DeduplicateProps,

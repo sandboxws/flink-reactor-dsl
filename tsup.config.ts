@@ -1,7 +1,10 @@
+import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { defineConfig } from "tsup"
 
 const srcAlias = { "@": resolve("src") }
+const pkg = JSON.parse(readFileSync("package.json", "utf-8"))
+const dslVersion = pkg.version as string
 
 export default defineConfig([
   // Library entry — importable as `import { ... } from '@flink-reactor/dsl'`
@@ -34,6 +37,10 @@ export default defineConfig([
     },
     esbuildOptions(options) {
       options.alias = srcAlias
+      options.define = {
+        ...options.define,
+        __DSL_VERSION__: JSON.stringify(dslVersion),
+      }
     },
   },
   // Browser entry — importable as `import { ... } from '@flink-reactor/dsl/browser'`

@@ -8,7 +8,7 @@ export function getGroceryDeliveryTemplates(
     ...sharedFiles(opts),
     {
       path: "schemas/grocery.ts",
-      content: `import { Schema, Field } from 'flink-reactor';
+      content: `import { Schema, Field } from '@flink-reactor/dsl';
 
 export const GroceryOrderSchema = Schema({
   fields: {
@@ -50,9 +50,31 @@ export const RatingSchema = Schema({
       path: "pipelines/grocery-order-fulfillment/index.tsx",
       content: `import {
   Pipeline, KafkaSource, KafkaSink, JdbcSink,
-  TemporalJoin, Route, StatementSet,
-} from 'flink-reactor';
+  TemporalJoin, Route,
+} from '@flink-reactor/dsl';
 import { GroceryOrderSchema, StoreInventorySchema } from '@/schemas/grocery';
+
+const orders = KafkaSource({
+  topic: "grocery.orders",
+  schema: GroceryOrderSchema,
+  bootstrapServers: "kafka:9092",
+  consumerGroup: "grocery-fulfillment",
+});
+
+const inventory = KafkaSource({
+  topic: "grocery.store-inventory",
+  schema: StoreInventorySchema,
+  format: "debezium-json",
+  bootstrapServers: "kafka:9092",
+  consumerGroup: "grocery-inventory",
+});
+
+const enriched = TemporalJoin({
+  stream: orders,
+  temporal: inventory,
+  on: "storeId = storeId",
+  asOf: "orderTime",
+});
 
 export default (
   <Pipeline
@@ -68,17 +90,17 @@ export default (
       "s3.path.style.access": "true",
     }}
   >
-    <KafkaSource topic="grocery.orders" schema={GroceryOrderSchema} bootstrapServers="kafka:9092" consumerGroup="grocery-fulfillment" />
-    <TemporalJoin
-      rightSource={<KafkaSource topic="grocery.store-inventory" schema={StoreInventorySchema} format="debezium-json" bootstrapServers="kafka:9092" consumerGroup="grocery-inventory" />}
-      on="storeId"
-    />
-    <StatementSet>
-      <Route>
-        <JdbcSink table="fulfillment_queue" url="jdbc:postgresql://postgres:5432/flink_sink" condition="stockLevel > 0" />
-        <KafkaSink topic="grocery.substitution-alerts" bootstrapServers="kafka:9092" condition="stockLevel = 0" />
-      </Route>
-    </StatementSet>
+    {orders}
+    {inventory}
+    {enriched}
+    <Route>
+      <Route.Branch condition="stockLevel > 0">
+        <JdbcSink table="fulfillment_queue" url="jdbc:postgresql://postgres:5432/flink_sink" />
+      </Route.Branch>
+      <Route.Branch condition="stockLevel = 0">
+        <KafkaSink topic="grocery.substitution-alerts" bootstrapServers="kafka:9092" />
+      </Route.Branch>
+    </Route>
   </Pipeline>
 );
 `,
@@ -88,7 +110,7 @@ export default (
       content: `import {
   Pipeline, KafkaSource, JdbcSink,
   Deduplicate, TumbleWindow, Aggregate,
-} from 'flink-reactor';
+} from '@flink-reactor/dsl';
 import { RatingSchema } from '@/schemas/grocery';
 
 export default (
@@ -106,7 +128,7 @@ export default (
     }}
   >
     <KafkaSource topic="grocery.ratings" schema={RatingSchema} bootstrapServers="kafka:9092" consumerGroup="grocery-rankings" />
-    <Deduplicate on="orderId" keepFirst />
+    <Deduplicate key={['orderId']} order="ratingTime" keep="first" />
     <TumbleWindow size="15 MINUTE" on="ratingTime" />
     <Aggregate
       groupBy={['storeId']}
@@ -117,7 +139,7 @@ export default (
         windowEnd: 'WINDOW_END',
       }}
     />
-    <JdbcSink table="store_rankings" url="jdbc:postgresql://postgres:5432/flink_sink" mode="upsert" />
+    <JdbcSink table="store_rankings" url="jdbc:postgresql://postgres:5432/flink_sink" upsertMode keyFields={['storeId']} />
   </Pipeline>
 );
 `,

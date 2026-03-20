@@ -1,9 +1,10 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import type { Command } from "commander"
+import { type Command, Option } from "commander"
 import { Effect } from "effect"
 import pc from "picocolors"
 import { runCommand } from "@/cli/effect-runner.js"
+import { DSL_VERSION } from "@/cli/templates/shared.js"
 import { CliError } from "@/core/errors.js"
 
 export function registerGenerateCommand(program: Command): void {
@@ -15,10 +16,10 @@ export function registerGenerateCommand(program: Command): void {
   generate
     .command("pipeline")
     .argument("<name>", "Pipeline name")
-    .option(
-      "-t, --template <template>",
-      "Pipeline template (blank, kafka, jdbc)",
-      "blank",
+    .addOption(
+      new Option("-t, --template <template>", "Pipeline template")
+        .choices(["blank", "kafka", "jdbc"])
+        .default("blank"),
     )
     .description("Generate a new pipeline")
     .action(async (name: string, opts: Record<string, string>) => {
@@ -204,7 +205,7 @@ export default (
   }
 
   const testContent = `import { describe, it, expect } from 'vitest';
-// import { synth } from 'flink-reactor/testing';
+// import { synth } from '@flink-reactor/dsl/testing';
 
 describe('${name} pipeline', () => {
   it.todo('synthesizes valid Flink SQL');
@@ -285,7 +286,7 @@ export function generateApp(name: string): void {
     private: true,
     type: "module",
     dependencies: {
-      "@flink-reactor/dsl": "^0.1.0",
+      "@flink-reactor/dsl": `^${DSL_VERSION}`,
     },
     devDependencies: {
       typescript: "^5.7.0",
@@ -342,7 +343,7 @@ export function generatePackage(name: string): void {
     type: "module",
     main: "index.ts",
     dependencies: {
-      "@flink-reactor/dsl": "^0.1.0",
+      "@flink-reactor/dsl": `^${DSL_VERSION}`,
     },
   }
 

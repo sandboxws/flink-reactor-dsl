@@ -8,7 +8,7 @@ export function getRealtimeAnalyticsTemplates(
     ...sharedFiles(opts),
     {
       path: "schemas/page-views.ts",
-      content: `import { Schema, Field } from 'flink-reactor';
+      content: `import { Schema, Field } from '@flink-reactor/dsl';
 
 export const PageViewSchema = Schema({
   fields: {
@@ -31,7 +31,7 @@ export const PageViewStatsSchema = Schema({
     },
     {
       path: "pipelines/page-view-analytics/index.tsx",
-      content: `import { Pipeline, KafkaSource, TumbleWindow, Aggregate, JdbcSink } from 'flink-reactor';
+      content: `import { Pipeline, KafkaSource, TumbleWindow, Aggregate, JdbcSink } from '@flink-reactor/dsl';
 import { PageViewSchema } from '@/schemas/page-views';
 
 export default (
@@ -63,7 +63,7 @@ export default (
     {
       path: "tests/pipelines/page-view-analytics.test.ts",
       content: `import { describe, it, expect } from 'vitest';
-// import { synth } from 'flink-reactor/testing';
+// import { synth } from '@flink-reactor/dsl/testing';
 
 describe('page-view-analytics pipeline', () => {
   it.todo('synthesizes valid Flink SQL with windowed aggregation');

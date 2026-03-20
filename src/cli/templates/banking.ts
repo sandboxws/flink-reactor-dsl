@@ -6,7 +6,7 @@ export function getBankingTemplates(opts: ScaffoldOptions): TemplateFile[] {
     ...sharedFiles(opts),
     {
       path: "schemas/banking.ts",
-      content: `import { Schema, Field } from 'flink-reactor';
+      content: `import { Schema, Field } from '@flink-reactor/dsl';
 
 export const TransactionSchema = Schema({
   fields: {
@@ -39,8 +39,43 @@ export const AccountSchema = Schema({
       content: `import {
   Pipeline, KafkaSource, KafkaSink,
   MatchRecognize, TemporalJoin,
-} from 'flink-reactor';
+} from '@flink-reactor/dsl';
 import { TransactionSchema, AccountSchema } from '@/schemas/banking';
+
+const transactions = KafkaSource({
+  topic: "bank.transactions",
+  schema: TransactionSchema,
+  bootstrapServers: "kafka:9092",
+  consumerGroup: "bank-fraud",
+});
+
+const accounts = KafkaSource({
+  topic: "bank.accounts",
+  schema: AccountSchema,
+  format: "debezium-json",
+  bootstrapServers: "kafka:9092",
+  consumerGroup: "bank-fraud-accounts",
+});
+
+const fraudPatterns = MatchRecognize({
+  input: transactions,
+  pattern: "high{3,}",
+  define: { high: "amount > 1000" },
+  measures: {
+    accountId: 'FIRST(accountId)',
+    txnCount: 'COUNT(*)',
+    totalAmount: 'SUM(amount)',
+    firstTxn: 'FIRST(txnTime)',
+    lastTxn: 'LAST(txnTime)',
+  },
+});
+
+const enriched = TemporalJoin({
+  stream: fraudPatterns,
+  temporal: accounts,
+  on: "accountId = accountId",
+  asOf: "lastTxn",
+});
 
 export default (
   <Pipeline
@@ -56,23 +91,9 @@ export default (
       "s3.path.style.access": "true",
     }}
   >
-    <KafkaSource topic="bank.transactions" schema={TransactionSchema} bootstrapServers="kafka:9092" consumerGroup="bank-fraud" />
-    <MatchRecognize
-      pattern="high{3,}"
-      within="5 MINUTE"
-      define={{ high: "amount > 1000" }}
-      measures={{
-        accountId: 'FIRST(accountId)',
-        txnCount: 'COUNT(*)',
-        totalAmount: 'SUM(amount)',
-        firstTxn: 'FIRST(txnTime)',
-        lastTxn: 'LAST(txnTime)',
-      }}
-    />
-    <TemporalJoin
-      rightSource={<KafkaSource topic="bank.accounts" schema={AccountSchema} format="debezium-json" bootstrapServers="kafka:9092" consumerGroup="bank-fraud-accounts" />}
-      on="accountId"
-    />
+    {transactions}
+    {accounts}
+    {enriched}
     <KafkaSink topic="bank.fraud-alerts" bootstrapServers="kafka:9092" />
   </Pipeline>
 );
@@ -82,8 +103,8 @@ export default (
       path: "pipelines/bank-compliance-agg/index.tsx",
       content: `import {
   Pipeline, KafkaSource, KafkaSink, JdbcSink,
-  TumbleWindow, Aggregate, Filter, StatementSet,
-} from 'flink-reactor';
+  TumbleWindow, Aggregate, Route,
+} from '@flink-reactor/dsl';
 import { TransactionSchema } from '@/schemas/banking';
 
 export default (
@@ -102,16 +123,19 @@ export default (
   >
     <KafkaSource topic="bank.transactions" schema={TransactionSchema} bootstrapServers="kafka:9092" consumerGroup="bank-compliance" />
     <TumbleWindow size="1 HOUR" on="txnTime" />
-    <StatementSet>
-      <Aggregate groupBy={['accountId']} select={{ accountId: 'accountId', totalAmount: 'SUM(amount)', txnCount: 'COUNT(*)', windowEnd: 'WINDOW_END' }} />
-      <JdbcSink table="large_txn_report" url="jdbc:postgresql://postgres:5432/flink_sink" />
-
-      <Aggregate groupBy={['country']} select={{ country: 'country', crossBorderCount: 'COUNT(*)', totalVolume: 'SUM(amount)', windowEnd: 'WINDOW_END' }} />
-      <JdbcSink table="cross_border_report" url="jdbc:postgresql://postgres:5432/flink_sink" />
-
-      <Filter condition="amount > 10000" />
-      <KafkaSink topic="bank.compliance-reports" bootstrapServers="kafka:9092" />
-    </StatementSet>
+    <Route>
+      <Route.Branch condition="1 = 1">
+        <Aggregate groupBy={['accountId']} select={{ accountId: 'accountId', totalAmount: 'SUM(amount)', txnCount: 'COUNT(*)', windowEnd: 'WINDOW_END' }} />
+        <JdbcSink table="large_txn_report" url="jdbc:postgresql://postgres:5432/flink_sink" />
+      </Route.Branch>
+      <Route.Branch condition="1 = 1">
+        <Aggregate groupBy={['country']} select={{ country: 'country', crossBorderCount: 'COUNT(*)', totalVolume: 'SUM(amount)', windowEnd: 'WINDOW_END' }} />
+        <JdbcSink table="cross_border_report" url="jdbc:postgresql://postgres:5432/flink_sink" />
+      </Route.Branch>
+      <Route.Branch condition="amount > 10000">
+        <KafkaSink topic="bank.compliance-reports" bootstrapServers="kafka:9092" />
+      </Route.Branch>
+    </Route>
   </Pipeline>
 );
 `,

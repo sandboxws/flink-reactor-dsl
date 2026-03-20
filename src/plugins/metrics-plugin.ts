@@ -83,7 +83,7 @@ const REPORTER_FACTORIES: Record<string, string> = {
  *
  * @example
  * ```ts
- * import { metricsPlugin } from 'flink-reactor/plugins';
+ * import { metricsPlugin } from '@flink-reactor/dsl/plugins';
  *
  * export default defineConfig({
  *   plugins: [

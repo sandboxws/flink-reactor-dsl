@@ -9,7 +9,7 @@ export function getEcommerceTemplates(opts: ScaffoldOptions): TemplateFile[] {
 
     {
       path: "schemas/ecommerce.ts",
-      content: `import { Schema, Field } from 'flink-reactor';
+      content: `import { Schema, Field } from '@flink-reactor/dsl';
 
 export const OrderSchema = Schema({
   fields: {
@@ -69,8 +69,44 @@ export const CustomerSchema = Schema({
   KafkaSink,
   IntervalJoin,
   TemporalJoin,
-} from 'flink-reactor';
+} from '@flink-reactor/dsl';
 import { OrderSchema, OrderItemSchema, ProductSchema } from '@/schemas/ecommerce';
+
+const orders = KafkaSource({
+  topic: "ecom.orders",
+  schema: OrderSchema,
+  bootstrapServers: "kafka:9092",
+  consumerGroup: "ecom-enrichment-orders",
+});
+
+const items = KafkaSource({
+  topic: "ecom.order-items",
+  schema: OrderItemSchema,
+  bootstrapServers: "kafka:9092",
+  consumerGroup: "ecom-enrichment-items",
+});
+
+const products = KafkaSource({
+  topic: "ecom.products",
+  schema: ProductSchema,
+  format: "debezium-json",
+  bootstrapServers: "kafka:9092",
+  consumerGroup: "ecom-enrichment-products",
+});
+
+const ordersWithItems = IntervalJoin({
+  left: orders,
+  right: items,
+  on: "orders.orderId = items.orderId",
+  interval: { from: "orders.orderTime", to: "orders.orderTime + INTERVAL '30' SECOND" },
+});
+
+const enriched = TemporalJoin({
+  stream: ordersWithItems,
+  temporal: products,
+  on: "productId = productId",
+  asOf: "orderTime",
+});
 
 export default (
   <Pipeline
@@ -87,36 +123,10 @@ export default (
       "s3.path.style.access": "true",
     }}
   >
-    <KafkaSource
-      topic="ecom.orders"
-      schema={OrderSchema}
-      bootstrapServers="kafka:9092"
-      consumerGroup="ecom-enrichment-orders"
-    />
-    <IntervalJoin
-      rightSource={
-        <KafkaSource
-          topic="ecom.order-items"
-          schema={OrderItemSchema}
-          bootstrapServers="kafka:9092"
-          consumerGroup="ecom-enrichment-items"
-        />
-      }
-      on="orderId"
-      between={{ lower: "-30 SECOND", upper: "30 SECOND" }}
-    />
-    <TemporalJoin
-      rightSource={
-        <KafkaSource
-          topic="ecom.products"
-          schema={ProductSchema}
-          format="debezium-json"
-          bootstrapServers="kafka:9092"
-          consumerGroup="ecom-enrichment-products"
-        />
-      }
-      on="productId"
-    />
+    {orders}
+    {items}
+    {products}
+    {enriched}
     <KafkaSink
       topic="ecom.order-enriched"
       bootstrapServers="kafka:9092"
@@ -137,9 +147,8 @@ export default (
   JdbcSink,
   SlideWindow,
   Aggregate,
-  Filter,
-  StatementSet,
-} from 'flink-reactor';
+  Route,
+} from '@flink-reactor/dsl';
 import { OrderSchema } from '@/schemas/ecommerce';
 
 export default (
@@ -163,31 +172,31 @@ export default (
       bootstrapServers="kafka:9092"
       consumerGroup="ecom-revenue"
     />
-    <StatementSet>
-      {/* Branch 1: Revenue per category → PostgreSQL */}
-      <SlideWindow size="5 MINUTE" slide="1 MINUTE" on="orderTime" />
-      <Aggregate
-        groupBy={['category']}
-        select={{
-          category: 'category',
-          totalRevenue: 'SUM(amount)',
-          orderCount: 'COUNT(*)',
-          windowStart: 'WINDOW_START',
-          windowEnd: 'WINDOW_END',
-        }}
-      />
-      <JdbcSink
-        table="revenue_by_category"
-        url="jdbc:postgresql://postgres:5432/flink_sink"
-      />
-
-      {/* Branch 2: High-value order alerts → Kafka */}
-      <Filter condition="amount > 500" />
-      <KafkaSink
-        topic="ecom.revenue-alerts"
-        bootstrapServers="kafka:9092"
-      />
-    </StatementSet>
+    <Route>
+      <Route.Branch condition="1 = 1">
+        <SlideWindow size="5 MINUTE" slide="1 MINUTE" on="orderTime" />
+        <Aggregate
+          groupBy={['category']}
+          select={{
+            category: 'category',
+            totalRevenue: 'SUM(amount)',
+            orderCount: 'COUNT(*)',
+            windowStart: 'WINDOW_START',
+            windowEnd: 'WINDOW_END',
+          }}
+        />
+        <JdbcSink
+          table="revenue_by_category"
+          url="jdbc:postgresql://postgres:5432/flink_sink"
+        />
+      </Route.Branch>
+      <Route.Branch condition="amount > 500">
+        <KafkaSink
+          topic="ecom.revenue-alerts"
+          bootstrapServers="kafka:9092"
+        />
+      </Route.Branch>
+    </Route>
   </Pipeline>
 );
 `,
@@ -204,8 +213,15 @@ export default (
   LookupJoin,
   SessionWindow,
   Aggregate,
-} from 'flink-reactor';
+} from '@flink-reactor/dsl';
 import { OrderSchema, CustomerSchema } from '@/schemas/ecommerce';
+
+const orders = KafkaSource({
+  topic: "ecom.orders",
+  schema: OrderSchema,
+  bootstrapServers: "kafka:9092",
+  consumerGroup: "ecom-customer360",
+});
 
 export default (
   <Pipeline
@@ -222,24 +238,13 @@ export default (
       "s3.path.style.access": "true",
     }}
   >
-    <KafkaSource
-      topic="ecom.orders"
-      schema={OrderSchema}
-      bootstrapServers="kafka:9092"
-      consumerGroup="ecom-customer360"
-    />
-    <LookupJoin
-      rightSource={
-        <KafkaSource
-          topic="ecom.customers"
-          schema={CustomerSchema}
-          format="debezium-json"
-          bootstrapServers="kafka:9092"
-          consumerGroup="ecom-customer360-dim"
-        />
-      }
-      on="customerId"
-    />
+    {orders}
+    {LookupJoin({
+      input: orders,
+      table: "customers",
+      url: "jdbc:postgresql://postgres:5432/flink_sink",
+      on: "customerId = customerId",
+    })}
     <SessionWindow gap="30 MINUTE" on="orderTime" />
     <Aggregate
       groupBy={['customerId', 'name', 'tier']}
@@ -256,7 +261,8 @@ export default (
     <JdbcSink
       table="customer_sessions"
       url="jdbc:postgresql://postgres:5432/flink_sink"
-      mode="upsert"
+      upsertMode
+      keyFields={['customerId']}
     />
   </Pipeline>
 );
@@ -272,7 +278,7 @@ export default (
   DataGenSource,
   KafkaSink,
   StatementSet,
-} from 'flink-reactor';
+} from '@flink-reactor/dsl';
 import { OrderSchema, OrderItemSchema, ProductSchema, CustomerSchema } from '@/schemas/ecommerce';
 
 export default (

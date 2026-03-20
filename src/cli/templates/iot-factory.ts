@@ -6,7 +6,7 @@ export function getIotFactoryTemplates(opts: ScaffoldOptions): TemplateFile[] {
     ...sharedFiles(opts),
     {
       path: "schemas/iot.ts",
-      content: `import { Schema, Field } from 'flink-reactor';
+      content: `import { Schema, Field } from '@flink-reactor/dsl';
 
 export const SensorReadingSchema = Schema({
   fields: {
@@ -38,8 +38,46 @@ export const DeviceRegistrySchema = Schema({
       content: `import {
   Pipeline, KafkaSource, KafkaSink, JdbcSink,
   SlideWindow, Aggregate, TemporalJoin, Route,
-} from 'flink-reactor';
+} from '@flink-reactor/dsl';
 import { SensorReadingSchema, DeviceRegistrySchema } from '@/schemas/iot';
+
+const readings = KafkaSource({
+  topic: "iot.sensor-readings",
+  schema: SensorReadingSchema,
+  bootstrapServers: "kafka:9092",
+  consumerGroup: "iot-maintenance",
+});
+
+const devices = KafkaSource({
+  topic: "iot.device-registry",
+  schema: DeviceRegistrySchema,
+  format: "debezium-json",
+  bootstrapServers: "kafka:9092",
+  consumerGroup: "iot-device-dim",
+});
+
+const windowed = SlideWindow({ size: "5 MINUTE", slide: "30 SECOND", on: "readingTime", children: readings });
+
+const stats = Aggregate({
+  groupBy: ['deviceId', 'sensorType'],
+  select: {
+    deviceId: 'deviceId',
+    sensorType: 'sensorType',
+    avgValue: 'AVG(value)',
+    stddevValue: 'STDDEV_POP(value)',
+    maxValue: 'MAX(value)',
+    readingCount: 'COUNT(*)',
+    windowEnd: 'WINDOW_END',
+  },
+  children: windowed,
+});
+
+const enriched = TemporalJoin({
+  stream: stats,
+  temporal: devices,
+  on: "deviceId = deviceId",
+  asOf: "windowEnd",
+});
 
 export default (
   <Pipeline
@@ -55,27 +93,16 @@ export default (
       "s3.path.style.access": "true",
     }}
   >
-    <KafkaSource topic="iot.sensor-readings" schema={SensorReadingSchema} bootstrapServers="kafka:9092" consumerGroup="iot-maintenance" />
-    <SlideWindow size="5 MINUTE" slide="30 SECOND" on="readingTime" />
-    <Aggregate
-      groupBy={['deviceId', 'sensorType']}
-      select={{
-        deviceId: 'deviceId',
-        sensorType: 'sensorType',
-        avgValue: 'AVG(value)',
-        stddevValue: 'STDDEV_POP(value)',
-        maxValue: 'MAX(value)',
-        readingCount: 'COUNT(*)',
-        windowEnd: 'WINDOW_END',
-      }}
-    />
-    <TemporalJoin
-      rightSource={<KafkaSource topic="iot.device-registry" schema={DeviceRegistrySchema} format="debezium-json" bootstrapServers="kafka:9092" consumerGroup="iot-device-dim" />}
-      on="deviceId"
-    />
+    {readings}
+    {devices}
+    {enriched}
     <Route>
-      <KafkaSink topic="iot.maintenance-alerts" bootstrapServers="kafka:9092" condition="stddevValue > thresholdTemp" />
-      <JdbcSink table="sensor_dashboard" url="jdbc:postgresql://postgres:5432/flink_sink" />
+      <Route.Branch condition="stddevValue > thresholdTemp">
+        <KafkaSink topic="iot.maintenance-alerts" bootstrapServers="kafka:9092" />
+      </Route.Branch>
+      <Route.Branch condition="1 = 1">
+        <JdbcSink table="sensor_dashboard" url="jdbc:postgresql://postgres:5432/flink_sink" />
+      </Route.Branch>
     </Route>
   </Pipeline>
 );
@@ -85,7 +112,7 @@ export default (
       path: "pipelines/pump-iot/index.tsx",
       content: `import {
   Pipeline, DataGenSource, KafkaSink, StatementSet,
-} from 'flink-reactor';
+} from '@flink-reactor/dsl';
 import { SensorReadingSchema, DeviceRegistrySchema } from '@/schemas/iot';
 
 export default (

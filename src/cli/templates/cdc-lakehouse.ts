@@ -8,7 +8,7 @@ export function getCdcLakehouseTemplates(
     ...sharedFiles(opts),
     {
       path: "schemas/orders.ts",
-      content: `import { Schema, Field } from 'flink-reactor';
+      content: `import { Schema, Field } from '@flink-reactor/dsl';
 
 export const OrderSchema = Schema({
   fields: {
@@ -26,7 +26,7 @@ export const OrderSchema = Schema({
     },
     {
       path: "pipelines/cdc-to-lakehouse/index.tsx",
-      content: `import { Pipeline, KafkaSource, PaimonCatalog, PaimonSink } from 'flink-reactor';
+      content: `import { Pipeline, KafkaSource, PaimonCatalog, PaimonSink } from '@flink-reactor/dsl';
 import { OrderSchema } from '@/schemas/orders';
 
 const lakehouse = PaimonCatalog({ name: 'lakehouse', warehouse: 's3://my-bucket/warehouse' });
@@ -54,7 +54,7 @@ export default (
     {
       path: "tests/pipelines/cdc-to-lakehouse.test.ts",
       content: `import { describe, it, expect } from 'vitest';
-// import { synth } from 'flink-reactor/testing';
+// import { synth } from '@flink-reactor/dsl/testing';
 
 describe('cdc-to-lakehouse pipeline', () => {
   it.todo('synthesizes valid Flink SQL with Debezium source');

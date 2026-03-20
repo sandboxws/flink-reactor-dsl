@@ -12,7 +12,7 @@ import { dirname, join, resolve } from "node:path"
 import { pipeline } from "node:stream/promises"
 import { fileURLToPath } from "node:url"
 import * as clack from "@clack/prompts"
-import type { Command } from "commander"
+import { type Command, Option } from "commander"
 import { Effect } from "effect"
 import pc from "picocolors"
 import type { CdcDomain } from "@/cli/cluster/cdc-publisher.js"
@@ -63,10 +63,10 @@ export function registerClusterCommand(program: Command): void {
     )
     .option("--port <port>", "Flink REST port", "8081")
     .option("--seed", "Submit example pipelines after startup")
-    .option(
-      "--domain <domain>",
-      "Filter seed data by domain: ecommerce, iot, or all",
-      "all",
+    .addOption(
+      new Option("--domain <domain>", "Filter seed data by domain")
+        .choices(["ecommerce", "iot", "all"])
+        .default("all"),
     )
     .option("--no-timescaledb", "Use plain PostgreSQL instead of TimescaleDB")
     .action(
@@ -115,14 +115,18 @@ export function registerClusterCommand(program: Command): void {
   cluster
     .command("seed")
     .description("Submit example SQL pipelines and publish CDC data")
-    .option(
-      "--only <category>",
-      "Filter by category: streaming, batch, cdc, or cdc-kafka",
+    .addOption(
+      new Option("--only <category>", "Filter by category").choices([
+        "streaming",
+        "batch",
+        "cdc",
+        "cdc-kafka",
+      ]),
     )
-    .option(
-      "--domain <domain>",
-      "Filter by domain: ecommerce, iot, or all",
-      "all",
+    .addOption(
+      new Option("--domain <domain>", "Filter by domain")
+        .choices(["ecommerce", "iot", "all"])
+        .default("all"),
     )
     .action(async (opts: { only?: string; domain: string }) => {
       await runCommand(

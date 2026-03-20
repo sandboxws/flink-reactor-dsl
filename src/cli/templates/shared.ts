@@ -1,5 +1,10 @@
 import type { ScaffoldOptions, TemplateFile } from "@/cli/commands/new.js"
 
+// Injected at build time by tsup/esbuild — falls back for tsx/vitest
+declare const __DSL_VERSION__: string
+export const DSL_VERSION: string =
+  typeof __DSL_VERSION__ !== "undefined" ? __DSL_VERSION__ : "0.1.0"
+
 export function makePackageJson(
   opts: ScaffoldOptions,
   extra?: Record<string, unknown>,
@@ -13,7 +18,7 @@ export function makePackageJson(
   }
 
   const dependencies: Record<string, string> = {
-    "@flink-reactor/dsl": "^0.1.0",
+    "@flink-reactor/dsl": `^${DSL_VERSION}`,
   }
 
   const pkg: Record<string, unknown> = {
