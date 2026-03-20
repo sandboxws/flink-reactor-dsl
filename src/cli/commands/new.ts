@@ -7,10 +7,15 @@ import { Effect } from "effect"
 import Handlebars from "handlebars"
 import pc from "picocolors"
 import { runCommand } from "@/cli/effect-runner.js"
+import { getBankingTemplates } from "@/cli/templates/banking.js"
 import { getCdcLakehouseTemplates } from "@/cli/templates/cdc-lakehouse.js"
+import { getEcommerceTemplates } from "@/cli/templates/ecommerce.js"
+import { getGroceryDeliveryTemplates } from "@/cli/templates/grocery-delivery.js"
+import { getIotFactoryTemplates } from "@/cli/templates/iot-factory.js"
 import { getMinimalTemplates } from "@/cli/templates/minimal.js"
 import { getMonorepoTemplates } from "@/cli/templates/monorepo.js"
 import { getRealtimeAnalyticsTemplates } from "@/cli/templates/realtime-analytics.js"
+import { getRideSharingTemplates } from "@/cli/templates/ride-sharing.js"
 import { getStarterTemplates } from "@/cli/templates/starter.js"
 import { CliError } from "@/core/errors.js"
 
@@ -20,6 +25,11 @@ export type TemplateName =
   | "cdc-lakehouse"
   | "realtime-analytics"
   | "monorepo"
+  | "ecommerce"
+  | "ride-sharing"
+  | "grocery-delivery"
+  | "banking"
+  | "iot-factory"
 export type PackageManager = "pnpm" | "npm" | "yarn"
 export type FlinkVersion = "1.20" | "2.0" | "2.1" | "2.2"
 
@@ -46,6 +56,11 @@ const TEMPLATE_FACTORIES: Record<TemplateName, TemplateFactory> = {
   "cdc-lakehouse": getCdcLakehouseTemplates,
   "realtime-analytics": getRealtimeAnalyticsTemplates,
   monorepo: getMonorepoTemplates,
+  ecommerce: getEcommerceTemplates,
+  "ride-sharing": getRideSharingTemplates,
+  "grocery-delivery": getGroceryDeliveryTemplates,
+  banking: getBankingTemplates,
+  "iot-factory": getIotFactoryTemplates,
 }
 
 const TEMPLATE_DESCRIPTIONS: Record<TemplateName, string> = {
@@ -54,6 +69,12 @@ const TEMPLATE_DESCRIPTIONS: Record<TemplateName, string> = {
   "cdc-lakehouse": "Debezium CDC → Paimon/Iceberg lakehouse",
   "realtime-analytics": "Kafka → windowed aggregation → JDBC",
   monorepo: "pnpm workspace with packages/ and apps/",
+  ecommerce: "3-way joins, Top-N, session windows (3 pipelines + pump)",
+  "ride-sharing": "CEP trip tracking, broadcast surge pricing (2 pipelines)",
+  "grocery-delivery":
+    "CDC inventory, dedup + Top-N store rankings (2 pipelines)",
+  banking: "MATCH_RECOGNIZE fraud detection, compliance fan-out (2 pipelines)",
+  "iot-factory": "Sliding window anomaly detection (1 pipeline + pump)",
 }
 
 export function registerNewCommand(program: Command): void {
@@ -259,6 +280,31 @@ async function promptTemplate(): Promise<TemplateName | symbol> {
         label: "Monorepo",
         hint: TEMPLATE_DESCRIPTIONS.monorepo,
       },
+      {
+        value: "ecommerce",
+        label: "E-Commerce",
+        hint: TEMPLATE_DESCRIPTIONS.ecommerce,
+      },
+      {
+        value: "ride-sharing",
+        label: "Ride-Sharing",
+        hint: TEMPLATE_DESCRIPTIONS["ride-sharing"],
+      },
+      {
+        value: "grocery-delivery",
+        label: "Grocery Delivery",
+        hint: TEMPLATE_DESCRIPTIONS["grocery-delivery"],
+      },
+      {
+        value: "banking",
+        label: "Banking / FinTech",
+        hint: TEMPLATE_DESCRIPTIONS.banking,
+      },
+      {
+        value: "iot-factory",
+        label: "IoT / Smart Factory",
+        hint: TEMPLATE_DESCRIPTIONS["iot-factory"],
+      },
     ],
   }) as Promise<TemplateName | symbol>
 }
@@ -293,6 +339,11 @@ function validateTemplate(value: string | undefined): TemplateName | null {
     "cdc-lakehouse",
     "realtime-analytics",
     "monorepo",
+    "ecommerce",
+    "ride-sharing",
+    "grocery-delivery",
+    "banking",
+    "iot-factory",
   ]
   return valid.includes(value as TemplateName) ? (value as TemplateName) : null
 }
