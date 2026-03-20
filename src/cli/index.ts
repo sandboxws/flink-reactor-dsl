@@ -8,7 +8,11 @@ import { registerGenerateCommand } from "./commands/generate.js"
 import { registerGraphCommand } from "./commands/graph.js"
 import { registerInstallCommand } from "./commands/install.js"
 import { registerNewCommand } from "./commands/new.js"
+import { registerResumeCommand } from "./commands/resume.js"
+import { registerSavepointCommand } from "./commands/savepoint.js"
 import { registerSchemaCommand } from "./commands/schema.js"
+import { registerStatusCommand } from "./commands/status.js"
+import { registerStopCommand } from "./commands/stop.js"
 import { registerSynthCommand } from "./commands/synth.js"
 import { registerUpgradeCommand } from "./commands/upgrade.js"
 import { registerValidateCommand } from "./commands/validate.js"
@@ -81,6 +85,12 @@ export function createProgram(): Command {
   registerClusterCommand(program)
   registerSchemaCommand(program)
   registerUpgradeCommand(program)
+
+  // Lifecycle commands
+  registerStopCommand(program)
+  registerResumeCommand(program)
+  registerSavepointCommand(program)
+  registerStatusCommand(program)
 
   return program
 }
