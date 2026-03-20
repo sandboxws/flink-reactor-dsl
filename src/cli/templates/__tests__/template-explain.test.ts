@@ -19,7 +19,11 @@ const FIXTURES: [string, string, string][] = [
     "Kafka → TumbleWindow → Aggregate → JDBC",
   ],
   // CDC Lakehouse
-  ["cdc-to-lakehouse", "cdc-lakehouse", "Debezium CDC → PaimonSink"],
+  [
+    "cdc-to-lakehouse",
+    "cdc-lakehouse",
+    "Debezium CDC → IcebergSink (v2 upsert)",
+  ],
   // E-Commerce (4 pipelines)
   ["ecom-order-enrichment", "ecommerce", "3-way join (interval + temporal)"],
   [
@@ -95,7 +99,7 @@ const FIXTURES: [string, string, string][] = [
 // or with pre-existing codegen issues needing deeper fixes
 const SKIP = new Set([
   // ── Missing catalog connectors in local cluster ───────────────────
-  "cdc-to-lakehouse", // Paimon catalog connector
+  "cdc-to-lakehouse", // Iceberg REST catalog connector
   "lakehouse-ingest", // Iceberg REST catalog connector
   "medallion-bronze", // Iceberg REST catalog connector
   "medallion-silver", // Iceberg REST catalog connector

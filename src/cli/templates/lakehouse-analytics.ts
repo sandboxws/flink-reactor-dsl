@@ -6,6 +6,34 @@ export function getLakehouseAnalyticsTemplates(
 ): TemplateFile[] {
   return [
     ...sharedFiles(opts),
+    {
+      path: "flink-reactor.config.ts",
+      content: `import { defineConfig } from '@flink-reactor/dsl';
+
+export default defineConfig({
+  flink: { version: '${opts.flinkVersion}' },
+
+  environments: {
+    minikube: {
+      cluster: { url: 'http://localhost:8081' },
+      kafka: { bootstrapServers: 'kafka:9092' },
+      sim: {
+        init: {
+          iceberg: { databases: ['bronze', 'silver', 'gold'] },
+          kafka: { topics: ['orders.cdc'] },
+        },
+      },
+      pipelines: { '*': { parallelism: 4 } },
+    },
+    production: {
+      cluster: { url: 'https://flink-prod:8081' },
+      kubernetes: { namespace: 'flink-prod' },
+      pipelines: { '*': { parallelism: 4 } },
+    },
+  },
+});
+`,
+    },
 
     // ── Schemas ──────────────────────────────────────────────────────
 

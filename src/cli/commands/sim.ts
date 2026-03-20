@@ -6,7 +6,9 @@ import * as clack from "@clack/prompts"
 import type { Command } from "commander"
 import { Effect } from "effect"
 import pc from "picocolors"
+import { loadConfig } from "@/cli/discovery.js"
 import { runCommand } from "@/cli/effect-runner.js"
+import type { SimInitConfig } from "@/core/config.js"
 import { CliError } from "@/core/errors.js"
 
 // ── Resource path resolution ─────────────────────────────────────────
@@ -61,6 +63,11 @@ export function registerSimCommand(program: Command): void {
     )
     .option("--namespace <ns>", "Target namespace", DEFAULT_NAMESPACE)
     .option("--no-operator", "Skip Flink Operator installation")
+    .option(
+      "-e, --env <name>",
+      "Environment name from flink-reactor.config.ts (reads sim.init)",
+    )
+    .option("--no-init", "Skip resource initialization even if config exists")
     .action(
       async (opts: {
         cpus: string
@@ -69,6 +76,8 @@ export function registerSimCommand(program: Command): void {
         k8sVersion: string
         namespace: string
         operator: boolean
+        env?: string
+        init: boolean
       }) => {
         await runCommand(
           Effect.tryPromise({
@@ -182,6 +191,8 @@ async function runSimUp(opts: {
   k8sVersion: string
   namespace: string
   operator: boolean
+  env?: string
+  init: boolean
 }): Promise<void> {
   clack.intro(pc.bgCyan(pc.black(" flink-reactor sim up ")))
 
@@ -323,6 +334,13 @@ async function runSimUp(opts: {
     console.log(pc.dim(`  Check with: kubectl get pods -n ${opts.namespace}`))
   }
 
+  // ── Step 6: Config-driven init ──────────────────────────────────
+  if (opts.init) {
+    await runInitFromConfig(opts.env, opts.namespace)
+  } else {
+    console.log(`  ${pc.dim("⊘")} Resource init skipped (--no-init)`)
+  }
+
   // ── Summary ──────────────────────────────────────────────────────
   console.log("")
   console.log(pc.bold("  Next steps:"))
@@ -360,6 +378,147 @@ async function runSimUp(opts: {
   console.log("")
 
   clack.outro(pc.green("Simulation infrastructure deployed!"))
+}
+
+// ── Config-driven init ────────────────────────────────────────────────
+
+async function runInitFromConfig(
+  envName: string | undefined,
+  namespace: string,
+): Promise<void> {
+  const config = await loadConfig(process.cwd())
+  if (!config) {
+    console.log(
+      `  ${pc.dim("⊘")} No flink-reactor.config.ts found, skipping init`,
+    )
+    return
+  }
+
+  // Resolve environment — prefer explicit --env, fall back to "minikube"
+  const resolvedEnv = envName ?? "minikube"
+  const envEntry = config.environments?.[resolvedEnv]
+
+  if (!envEntry?.sim?.init) {
+    console.log(
+      `  ${pc.dim("⊘")} No sim.init in environment "${resolvedEnv}", skipping init`,
+    )
+    return
+  }
+
+  const initConfig = envEntry.sim.init
+  await runInit(initConfig, namespace)
+}
+
+async function runInit(init: SimInitConfig, namespace: string): Promise<void> {
+  const databases = init.iceberg?.databases ?? []
+  const topics = init.kafka?.topics ?? []
+
+  if (databases.length === 0 && topics.length === 0) return
+
+  console.log("")
+
+  // ── Create Kafka topics ──────────────────────────────────────────
+  if (topics.length > 0) {
+    const spinner = clack.spinner()
+    spinner.start(`Creating ${topics.length} Kafka topic(s)...`)
+
+    let created = 0
+    let skipped = 0
+
+    for (const topic of topics) {
+      try {
+        execSync(
+          [
+            `kubectl exec -n ${namespace} deploy/kafka --`,
+            `/opt/kafka/bin/kafka-topics.sh`,
+            `--create`,
+            `--if-not-exists`,
+            `--topic ${topic}`,
+            `--bootstrap-server localhost:9092`,
+            `--partitions 3`,
+            `--replication-factor 1`,
+          ].join(" "),
+          { stdio: "pipe", timeout: 15_000 },
+        )
+        created++
+      } catch {
+        skipped++
+      }
+    }
+
+    spinner.stop(
+      pc.green(
+        `Kafka topics: ${created} created${skipped > 0 ? `, ${skipped} skipped` : ""}`,
+      ),
+    )
+  }
+
+  // ── Create Iceberg databases ─────────────────────────────────────
+  if (databases.length > 0) {
+    const spinner = clack.spinner()
+    spinner.start(`Creating ${databases.length} Iceberg database(s)...`)
+
+    let created = 0
+    let skipped = 0
+
+    for (const db of databases) {
+      try {
+        // Use kubectl exec to curl the SQL Gateway REST API from within the cluster
+        const sql = `CREATE CATALOG IF NOT EXISTS lakehouse WITH ('type' = 'iceberg', 'catalog-type' = 'rest', 'uri' = 'http://iceberg-rest:8181', 'warehouse' = 's3://flink-state/warehouse', 's3.endpoint' = 'http://seaweedfs.flink-demo.svc:8333', 's3.path-style-access' = 'true', 's3.access-key' = 'admin', 's3.secret-key' = 'admin'); USE CATALOG lakehouse; CREATE DATABASE IF NOT EXISTS ${db};`
+        execSqlViaGateway(sql, namespace)
+        created++
+      } catch {
+        skipped++
+      }
+    }
+
+    spinner.stop(
+      pc.green(
+        `Iceberg databases: ${created} created${skipped > 0 ? `, ${skipped} skipped` : ""}`,
+      ),
+    )
+  }
+}
+
+/**
+ * Execute SQL statements via the SQL Gateway REST API using kubectl exec + curl.
+ * Runs from within the cluster so no port-forward is needed.
+ */
+function execSqlViaGateway(sql: string, namespace: string): void {
+  // Open a session
+  const openResult = execSync(
+    `kubectl exec -n ${namespace} deploy/flink-sql-gateway -- curl -s -X POST http://localhost:8083/v1/sessions -H 'Content-Type: application/json' -d '{}'`,
+    { stdio: "pipe", encoding: "utf-8", timeout: 15_000 },
+  )
+  const sessionHandle = JSON.parse(openResult).sessionHandle as string
+
+  try {
+    // Split on semicolons and execute each statement
+    const statements = sql
+      .split(";")
+      .map((s) => s.trim())
+      .filter(Boolean)
+
+    for (const stmt of statements) {
+      const payload = JSON.stringify({ statement: `${stmt};` })
+      execSync(
+        `kubectl exec -n ${namespace} deploy/flink-sql-gateway -- curl -s -X POST http://localhost:8083/v1/sessions/${sessionHandle}/statements -H 'Content-Type: application/json' -d '${payload.replace(/'/g, "'\\''")}'`,
+        { stdio: "pipe", timeout: 15_000 },
+      )
+      // Brief pause to let the statement execute
+      execSync("sleep 1", { stdio: "pipe" })
+    }
+  } finally {
+    // Close session (best-effort)
+    try {
+      execSync(
+        `kubectl exec -n ${namespace} deploy/flink-sql-gateway -- curl -s -X DELETE http://localhost:8083/v1/sessions/${sessionHandle}`,
+        { stdio: "pipe", timeout: 5_000 },
+      )
+    } catch {
+      // Best-effort cleanup
+    }
+  }
 }
 
 // ── sim down ──────────────────────────────────────────────────────────

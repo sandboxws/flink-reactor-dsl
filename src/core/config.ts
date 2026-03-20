@@ -88,6 +88,21 @@ export interface ConsoleConfig {
   readonly url?: string | EnvVarRef
 }
 
+// ── Simulation init configuration ───────────────────────────────────
+
+export interface SimInitConfig {
+  readonly iceberg?: {
+    readonly databases?: readonly string[]
+  }
+  readonly kafka?: {
+    readonly topics?: readonly string[]
+  }
+}
+
+export interface SimConfig {
+  readonly init?: SimInitConfig
+}
+
 // ── Environment entry ───────────────────────────────────────────────
 
 export interface EnvironmentEntry {
@@ -103,6 +118,8 @@ export interface EnvironmentEntry {
   readonly dashboard?: DashboardSection
   readonly console?: ConsoleConfig
   readonly pipelines?: Record<string, PipelineOverrides>
+  /** Simulation stack configuration (used by `flink-reactor sim up`) */
+  readonly sim?: SimConfig
 }
 
 // ── FlinkReactorConfig ───────────────────────────────────────────────

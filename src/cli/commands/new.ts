@@ -79,7 +79,7 @@ const TEMPLATE_FACTORIES: Record<TemplateName, TemplateFactory> = {
 const TEMPLATE_DESCRIPTIONS: Record<TemplateName, string> = {
   starter: "Kafka source → transform → Kafka sink",
   minimal: "Empty project structure",
-  "cdc-lakehouse": "Debezium CDC → Paimon/Iceberg lakehouse",
+  "cdc-lakehouse": "Debezium CDC → Iceberg lakehouse (upsert)",
   "realtime-analytics": "Kafka → windowed aggregation → JDBC",
   monorepo: "pnpm workspace with packages/ and apps/",
   ecommerce: "3-way joins, Top-N, session windows (3 pipelines + pump)",

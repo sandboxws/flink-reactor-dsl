@@ -106,7 +106,7 @@ describe("scaffoldProject", () => {
         "utf-8",
       )
       expect(pipeline).toContain("debezium-json")
-      expect(pipeline).toContain("<PaimonSink")
+      expect(pipeline).toContain("<IcebergSink")
     })
   })
 

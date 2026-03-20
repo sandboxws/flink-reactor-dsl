@@ -204,6 +204,8 @@ export type {
   FlinkReactorConfig,
   InfraConfig,
   PipelineOverrides,
+  SimConfig,
+  SimInitConfig,
 } from "./core/config.js"
 // Core: config & environment
 export { defineConfig } from "./core/config.js"

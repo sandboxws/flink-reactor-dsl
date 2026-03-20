@@ -1,6 +1,6 @@
-import { PaimonCatalog } from "@/components/catalogs"
+import { IcebergCatalog } from "@/components/catalogs"
 import { Pipeline } from "@/components/pipeline"
-import { PaimonSink } from "@/components/sinks"
+import { IcebergSink } from "@/components/sinks"
 import { KafkaSource } from "@/components/sources"
 import { createElement } from "@/core/jsx-runtime"
 import { Field, Schema } from "@/core/schema"
@@ -18,14 +18,29 @@ const OrderSchema = Schema({
   primaryKey: { columns: ["orderId"] },
 })
 
-const lakehouse = PaimonCatalog({
+const iceberg = IcebergCatalog({
   name: "lakehouse",
-  warehouse: "s3://my-bucket/warehouse",
+  catalogType: "rest",
+  uri: "http://iceberg-rest:8181",
 })
 
 export default (
-  <Pipeline name="cdc-to-lakehouse">
-    {lakehouse.node}
+  <Pipeline
+    name="cdc-to-lakehouse"
+    mode="streaming"
+    parallelism={2}
+    stateBackend="rocksdb"
+    checkpoint={{ interval: "30s", mode: "exactly-once" }}
+    flinkConfig={{
+      "s3.endpoint": "http://seaweedfs.flink-demo.svc:8333",
+      "s3.path.style.access": "true",
+      "s3.access-key": "admin",
+      "s3.secret-key": "admin",
+      "state.checkpoints.dir": "s3://flink-state/checkpoints/cdc-to-lakehouse",
+      "state.savepoints.dir": "s3://flink-state/savepoints/cdc-to-lakehouse",
+    }}
+  >
+    {iceberg.node}
     <KafkaSource
       topic="dbserver1.inventory.orders"
       schema={OrderSchema}
@@ -33,11 +48,13 @@ export default (
       bootstrapServers="kafka:9092"
       consumerGroup="cdc-lakehouse"
     />
-    <PaimonSink
-      catalog={lakehouse.handle}
+    <IcebergSink
+      catalog={iceberg.handle}
       database="inventory"
       table="orders"
       primaryKey={["orderId"]}
+      formatVersion={2}
+      upsertEnabled
     />
   </Pipeline>
 )
