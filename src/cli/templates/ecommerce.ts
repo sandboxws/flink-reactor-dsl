@@ -4,6 +4,42 @@ import { sharedFiles } from "./shared.js"
 export function getEcommerceTemplates(opts: ScaffoldOptions): TemplateFile[] {
   return [
     ...sharedFiles(opts),
+    {
+      path: "flink-reactor.config.ts",
+      content: `import { defineConfig } from '@flink-reactor/dsl';
+
+export default defineConfig({
+  flink: { version: '${opts.flinkVersion}' },
+
+  environments: {
+    minikube: {
+      cluster: { url: 'http://localhost:8081' },
+      kafka: { bootstrapServers: 'kafka:9092' },
+      sim: {
+        init: {
+          kafka: {
+            topics: [
+              'ecom.orders',
+              'ecom.order-items',
+              'ecom.products',
+              'ecom.customers',
+              'ecom.order-enriched',
+              'ecom.revenue-alerts',
+            ],
+          },
+        },
+      },
+      pipelines: { '*': { parallelism: 2 } },
+    },
+    production: {
+      cluster: { url: 'https://flink-prod:8081' },
+      kubernetes: { namespace: 'flink-prod' },
+      pipelines: { '*': { parallelism: 4 } },
+    },
+  },
+});
+`,
+    },
 
     // ── Schemas ──────────────────────────────────────────────────────
 

@@ -7,6 +7,40 @@ export function getGroceryDeliveryTemplates(
   return [
     ...sharedFiles(opts),
     {
+      path: "flink-reactor.config.ts",
+      content: `import { defineConfig } from '@flink-reactor/dsl';
+
+export default defineConfig({
+  flink: { version: '${opts.flinkVersion}' },
+
+  environments: {
+    minikube: {
+      cluster: { url: 'http://localhost:8081' },
+      kafka: { bootstrapServers: 'kafka:9092' },
+      sim: {
+        init: {
+          kafka: {
+            topics: [
+              'grocery.orders',
+              'grocery.store-inventory',
+              'grocery.ratings',
+              'grocery.substitution-alerts',
+            ],
+          },
+        },
+      },
+      pipelines: { '*': { parallelism: 2 } },
+    },
+    production: {
+      cluster: { url: 'https://flink-prod:8081' },
+      kubernetes: { namespace: 'flink-prod' },
+      pipelines: { '*': { parallelism: 4 } },
+    },
+  },
+});
+`,
+    },
+    {
       path: "schemas/grocery.ts",
       content: `import { Schema, Field } from '@flink-reactor/dsl';
 
