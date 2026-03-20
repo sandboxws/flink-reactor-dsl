@@ -189,3 +189,49 @@ export function IntervalJoin(props: IntervalJoinProps): ConstructNode {
     ...childArray,
   )
 }
+
+// ── Broadcast Join ─────────────────────────────────────────────────
+
+export interface BroadcastJoinProps extends BaseComponentProps {
+  /** Left input stream (the large/driving stream) */
+  readonly left: ConstructNode
+  /** Right input stream (the small/broadcast side) */
+  readonly right: ConstructNode
+  /** SQL join condition (e.g. "a.zone_id = b.zone_id") */
+  readonly on: string
+  /** Join type (default: 'inner') */
+  readonly type?: "inner" | "left" | "right" | "full"
+  /** Enable operator tailing for this join */
+  readonly tap?: boolean | TapConfig
+  readonly children?: ConstructNode | ConstructNode[]
+}
+
+/**
+ * Broadcast join: stream-to-stream join with a BROADCAST hint on
+ * the right input. Use when one side is small enough to broadcast
+ * to all parallel instances (e.g. dimension/config tables).
+ *
+ * Generates a regular JOIN with `/*+ BROADCAST(right) *​/` hint.
+ */
+export function BroadcastJoin(props: BroadcastJoinProps): ConstructNode {
+  if (!props.left || !props.right) {
+    throw new Error("BroadcastJoin requires both left and right inputs")
+  }
+
+  const { children, left, right, ...rest } = props
+  const childArray =
+    children == null ? [] : Array.isArray(children) ? children : [children]
+
+  return createElement(
+    "Join",
+    {
+      ...rest,
+      left: left.id,
+      right: right.id,
+      hints: { broadcast: "right" as const },
+    },
+    left,
+    right,
+    ...childArray,
+  )
+}

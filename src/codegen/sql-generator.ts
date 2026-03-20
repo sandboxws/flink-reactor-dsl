@@ -456,6 +456,8 @@ function connectorTypeFor(component: string): string {
     case "JdbcSource":
     case "JdbcSink":
       return "jdbc"
+    case "DataGenSource":
+      return "datagen"
     case "FileSystemSink":
       return "filesystem"
     case "IcebergSink":
@@ -1055,6 +1057,7 @@ function generateSourceWithClause(node: ConstructNode): string {
       }
       break
     case "GenericSource":
+    case "DataGenSource":
       withProps.connector = props.connector as string
       if (props.format) withProps.format = props.format as string
       if (props.options) {
@@ -1818,6 +1821,14 @@ function collectSinkDml(
     return
   }
 
+  // StatementSet is a transparent passthrough — recurse into children
+  if (node.component === "StatementSet") {
+    for (const child of node.children) {
+      collectSinkDml(child, nodeIndex, entries, pluginSql, node)
+    }
+    return
+  }
+
   // SideOutput generates two INSERT statements (main + side)
   if (node.component === "SideOutput") {
     collectSideOutputDml(node, nodeIndex, entries, pluginSql)
@@ -2143,6 +2154,7 @@ function buildQuery(
     case "KafkaSource":
     case "JdbcSource":
     case "GenericSource":
+    case "DataGenSource":
       if (node.children.length > 0) {
         // Source wraps child transforms (e.g. <KafkaSource><Map/></KafkaSource>)
         // Build query by chaining children on top of the source reference.
@@ -2399,7 +2411,20 @@ function buildAggregateQuery(
   const select = node.props.select as Record<string, string>
   const groupBySet = new Set(groupBy)
 
-  const groupCols = groupBy.map(q).join(", ")
+  // Detect window TVF metadata columns referenced in select expressions.
+  // When the upstream is a windowed TVF (TUMBLE/HOP/SESSION), Flink requires
+  // window_start and window_end to appear in GROUP BY if used in SELECT.
+  const windowMetaCols = ["window_start", "window_end"] as const
+  const referencedWindowCols = windowMetaCols.filter((wc) =>
+    Object.values(select).some((expr) => expr === wc),
+  )
+
+  const groupColParts = groupBy.map(q)
+  for (const wc of referencedWindowCols) {
+    groupColParts.push(wc)
+  }
+  const groupCols = groupColParts.join(", ")
+
   const projections = [
     ...groupBy.map(q),
     // Skip select entries that duplicate a groupBy column

@@ -165,3 +165,59 @@ export function GenericSource<T extends Record<string, FlinkType>>(
 
   return createElement("GenericSource", { ...rest, _nameHint }, ...childArray)
 }
+
+// ── DataGenSource ──────────────────────────────────────────────────
+
+export interface DataGenSourceProps<
+  T extends Record<string, FlinkType> = Record<string, FlinkType>,
+> extends BaseComponentProps {
+  /** Optional SQL table name. Defaults to "datagen". */
+  readonly name?: string
+  readonly schema: SchemaDefinition<T>
+  /** Rows emitted per second (maps to 'rows-per-second'). */
+  readonly rowsPerSecond?: number
+  /** Number of fields generated per second. */
+  readonly fieldsPerSecond?: number
+  /** Total number of rows to generate (unbounded if omitted). */
+  readonly numberOfRows?: number
+  /** Enable operator tailing for this source */
+  readonly tap?: boolean | TapConfig
+  readonly children?: ConstructNode | ConstructNode[]
+}
+
+/**
+ * DataGen source: Flink's built-in datagen connector for synthetic data.
+ *
+ * No external JAR required — the datagen connector ships with Flink.
+ * Wraps GenericSource with `connector: "datagen"` and named props
+ * for `rowsPerSecond`, `fieldsPerSecond`, and `numberOfRows`.
+ */
+export function DataGenSource<T extends Record<string, FlinkType>>(
+  props: DataGenSourceProps<T>,
+): ConstructNode {
+  requireProps("DataGenSource", props, ["schema"])
+  const {
+    children,
+    name,
+    rowsPerSecond,
+    fieldsPerSecond,
+    numberOfRows,
+    ...rest
+  } = props
+  const childArray =
+    children == null ? [] : Array.isArray(children) ? children : [children]
+
+  const options: Record<string, string> = {}
+  if (rowsPerSecond != null) options["rows-per-second"] = String(rowsPerSecond)
+  if (fieldsPerSecond != null)
+    options["fields-per-second"] = String(fieldsPerSecond)
+  if (numberOfRows != null) options["number-of-rows"] = String(numberOfRows)
+
+  const _nameHint = name ?? "datagen"
+
+  return createElement(
+    "DataGenSource",
+    { ...rest, connector: "datagen", options, _nameHint },
+    ...childArray,
+  )
+}
