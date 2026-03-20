@@ -146,6 +146,7 @@ export type { StatementSetProps } from "./components/statement-set.js"
 export { StatementSet } from "./components/statement-set.js"
 export type {
   AggregateProps,
+  BaseTransformProps,
   DeduplicateProps,
   FilterProps,
   FlatMapProps,
