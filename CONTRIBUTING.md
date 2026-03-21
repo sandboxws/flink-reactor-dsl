@@ -88,6 +88,83 @@ Key principles:
 | `packages/create-fr-app/` | Project scaffolder |
 | `packages/ts-plugin/` | TypeScript language service plugin |
 
+## Release & Publishing
+
+Releases are automated via GitHub Actions — you never publish manually from your machine.
+
+### How it works
+
+This repo uses [Changesets](https://github.com/changesets/changesets) to manage versioning and publishing. The workflow has two phases:
+
+**1. Create a changeset (you do this locally)**
+
+When your PR includes a user-facing change, run:
+
+```bash
+pnpm changeset
+```
+
+This prompts you to select the affected packages and the semver bump type (patch, minor, or major). It creates a markdown file in `.changeset/` describing the change. Commit this file with your PR.
+
+> Not every PR needs a changeset — skip it for internal refactors, CI changes, or docs-only updates that don't affect published packages.
+
+**2. Merge to `main` (GitHub Actions takes over)**
+
+When your PR merges, the [Release workflow](.github/workflows/release.yml) runs automatically:
+
+```
+PR merges to main
+       │
+       ▼
+┌─────────────────────────────────┐
+│  Pending changesets exist?      │
+│                                 │
+│  YES → Opens/updates a         │
+│        "Version Packages" PR    │
+│        (bumps versions +        │
+│         updates changelogs)     │
+│                                 │
+│  NO  → Publishes all packages   │
+│        to npm                   │
+└─────────────────────────────────┘
+```
+
+- When changesets accumulate, the action maintains a **"Version Packages" PR** that batches all pending version bumps and changelog updates.
+- When that PR is merged (no more pending changesets), the action **publishes to npm**.
+
+### What gets published
+
+| Package | npm name | Location |
+|---------|----------|----------|
+| Core DSL | `@flink-reactor/dsl` | root |
+| Scaffolder | `@flink-reactor/create-fr-app` | `packages/create-fr-app/` |
+| TS Plugin | `@flink-reactor/ts-plugin` | `packages/ts-plugin/` |
+
+The root package (`@flink-reactor/dsl`) is published separately via [`scripts/publish-root.mjs`](scripts/publish-root.mjs) because Changesets only auto-publishes workspace member packages under `packages/`.
+
+### Local testing with Verdaccio
+
+To test packages locally before a real release, publish to a local [Verdaccio](https://verdaccio.org/) registry:
+
+```bash
+pnpm local:publish
+```
+
+This builds all packages, starts a Verdaccio server at `http://localhost:4873`, and publishes everything there. Install from it with:
+
+```bash
+npm install @flink-reactor/dsl --registry http://localhost:4873
+```
+
+### Commands reference
+
+| Command | Description |
+|---------|-------------|
+| `pnpm changeset` | Create a new changeset |
+| `pnpm version-packages` | Apply pending changesets (bump versions + changelogs) |
+| `pnpm release` | Publish to npm (run by CI, not locally) |
+| `pnpm local:publish` | Publish to local Verdaccio for testing |
+
 ## Code of Conduct
 
 This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.

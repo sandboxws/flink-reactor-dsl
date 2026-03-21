@@ -502,23 +502,7 @@ Differences between versions (config key renames, JDBC connector structure) are 
 
 ## <img src="assets/icons/heart-handshake.svg" width="24" height="24" style="vertical-align: middle; margin-bottom: 2px;"> Contributing
 
-We welcome contributions of all kinds. First-time contributors will be asked to sign our [Contributor License Agreement](.github/CLA.md) via a PR comment.
-
-```bash
-# Clone and install
-git clone https://github.com/sandboxws/flink-reactor-dsl.git
-cd flink-reactor-dsl
-pnpm install
-
-# Run tests
-pnpm test
-
-# Lint and format
-pnpm lint
-pnpm format
-```
-
-### <img src="assets/icons/git-branch.svg" width="20" height="20" style="vertical-align: middle; margin-bottom: 2px;"> Ways to contribute
+We welcome contributions of all kinds — bug reports, feature suggestions, and PRs. See the **[Contributing Guide](CONTRIBUTING.md)** for setup instructions, development workflow, and release process.
 
 - **Report bugs** — [open an issue](https://github.com/sandboxws/flink-reactor-dsl/issues/new)
 - **Suggest features** — [start a discussion](https://github.com/sandboxws/flink-reactor-dsl/issues)
