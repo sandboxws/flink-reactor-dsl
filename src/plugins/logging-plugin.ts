@@ -66,7 +66,7 @@ const DEFAULT_LEVEL = "INFO"
  *
  * @example
  * ```ts
- * import { loggingPlugin } from 'flink-reactor/plugins';
+ * import { loggingPlugin } from '@flink-reactor/dsl/plugins';
  *
  * export default defineConfig({
  *   plugins: [

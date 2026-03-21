@@ -122,7 +122,7 @@ function generateTapName(componentName: string, nodeId: string): string {
 
 /**
  * Generate a deterministic-prefix consumer group ID.
- * Pattern: `flink-reactor-tap-{pipelineName}-{nodeId}-{shortHash}`
+ * Pattern: `fr-tap-{pipelineName}-{nodeId}-{shortHash}`
  *
  * The hash is derived from the pipeline name and node ID for determinism.
  * A session-unique suffix should be appended at query execution time.
@@ -138,7 +138,7 @@ export function buildConsumerGroupId(
     return `${prefix}-${nodeId}-${shortHash}`
   }
 
-  return `flink-reactor-tap-${pipelineName}-${nodeId}-${shortHash}`
+  return `fr-tap-${pipelineName}-${nodeId}-${shortHash}`
 }
 
 /**

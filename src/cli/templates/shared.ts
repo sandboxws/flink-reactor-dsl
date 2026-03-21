@@ -1,5 +1,10 @@
 import type { ScaffoldOptions, TemplateFile } from "@/cli/commands/new.js"
 
+// Injected at build time by tsup/esbuild — falls back for tsx/vitest
+declare const __DSL_VERSION__: string
+export const DSL_VERSION: string =
+  typeof __DSL_VERSION__ !== "undefined" ? __DSL_VERSION__ : "0.1.0"
+
 export function makePackageJson(
   opts: ScaffoldOptions,
   extra?: Record<string, unknown>,
@@ -13,7 +18,7 @@ export function makePackageJson(
   }
 
   const dependencies: Record<string, string> = {
-    "flink-reactor": "^0.1.0",
+    "@flink-reactor/dsl": `^${DSL_VERSION}`,
   }
 
   const pkg: Record<string, unknown> = {
@@ -45,7 +50,7 @@ export function makeTsconfig(_opts: ScaffoldOptions): string {
       forceConsistentCasingInFileNames: true,
       resolveJsonModule: true,
       jsx: "react-jsx",
-      jsxImportSource: "flink-reactor",
+      jsxImportSource: "@flink-reactor/dsl",
       baseUrl: ".",
       paths: {
         "@/*": ["./*"],
@@ -57,7 +62,7 @@ export function makeTsconfig(_opts: ScaffoldOptions): string {
 }
 
 export function makeConfig(opts: ScaffoldOptions): string {
-  return `import { defineConfig } from 'flink-reactor'
+  return `import { defineConfig } from '@flink-reactor/dsl'
 
 export default defineConfig({
   flink: { version: '${opts.flinkVersion}' },
@@ -89,7 +94,7 @@ dist/
 }
 
 export function makeDevEnv(_opts: ScaffoldOptions): string {
-  return `import { defineEnvironment } from 'flink-reactor'
+  return `import { defineEnvironment } from '@flink-reactor/dsl'
 
 export default defineEnvironment({
   name: 'dev',

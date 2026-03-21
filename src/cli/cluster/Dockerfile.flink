@@ -11,3 +11,9 @@ RUN wget -q -P /opt/flink/lib/ \
   https://repo1.maven.org/maven2/org/apache/flink/flink-connector-jdbc-postgres/4.0.0-2.0/flink-connector-jdbc-postgres-4.0.0-2.0.jar \
   && wget -q -P /opt/flink/lib/ \
   https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.4/postgresql-42.7.4.jar
+
+# Download Iceberg Flink runtime + AWS bundle for S3FileIO
+RUN wget -q -P /opt/flink/lib/ \
+  https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-flink-runtime-1.20/1.8.1/iceberg-flink-runtime-1.20-1.8.1.jar \
+  && wget -q -P /opt/flink/lib/ \
+  https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-aws-bundle/1.8.1/iceberg-aws-bundle-1.8.1.jar

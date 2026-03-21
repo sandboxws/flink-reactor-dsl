@@ -7,14 +7,33 @@ import type {
   TapConfig,
 } from "@/core/types.js"
 
-// ── Filter ──────────────────────────────────────────────────────────
+// ── Shared base props for all transforms ────────────────────────────
 
-export interface FilterProps extends BaseComponentProps {
-  /** SQL WHERE expression (e.g. "amount > 100 AND status = 'active'") */
-  readonly condition: string
+export interface BaseTransformProps extends BaseComponentProps {
   /** Enable operator tailing for this transform */
   readonly tap?: boolean | TapConfig
   readonly children?: ConstructNode | ConstructNode[]
+}
+
+/**
+ * Shared component constructor: destructures children from props
+ * and delegates to createElement.
+ */
+function createComponent<P extends BaseTransformProps>(
+  name: string,
+  props: P,
+): ConstructNode {
+  const { children, ...rest } = props
+  const childArray =
+    children == null ? [] : Array.isArray(children) ? children : [children]
+  return createElement(name, { ...rest }, ...childArray)
+}
+
+// ── Filter ──────────────────────────────────────────────────────────
+
+export interface FilterProps extends BaseTransformProps {
+  /** SQL WHERE expression (e.g. "amount > 100 AND status = 'active'") */
+  readonly condition: string
 }
 
 /**
@@ -22,21 +41,14 @@ export interface FilterProps extends BaseComponentProps {
  * Preserves the input schema unchanged.
  */
 export function Filter(props: FilterProps): ConstructNode {
-  const { children, ...rest } = props
-  const childArray =
-    children == null ? [] : Array.isArray(children) ? children : [children]
-
-  return createElement("Filter", { ...rest }, ...childArray)
+  return createComponent("Filter", props)
 }
 
 // ── Map ─────────────────────────────────────────────────────────────
 
-export interface MapProps extends BaseComponentProps {
+export interface MapProps extends BaseTransformProps {
   /** Record mapping output field names to SQL expressions */
   readonly select: Record<string, string>
-  /** Enable operator tailing for this transform */
-  readonly tap?: boolean | TapConfig
-  readonly children?: ConstructNode | ConstructNode[]
 }
 
 /**
@@ -44,23 +56,16 @@ export interface MapProps extends BaseComponentProps {
  * Produces a stream with the projected schema.
  */
 export function Map(props: MapProps): ConstructNode {
-  const { children, ...rest } = props
-  const childArray =
-    children == null ? [] : Array.isArray(children) ? children : [children]
-
-  return createElement("Map", { ...rest }, ...childArray)
+  return createComponent("Map", props)
 }
 
 // ── FlatMap ─────────────────────────────────────────────────────────
 
-export interface FlatMapProps extends BaseComponentProps {
+export interface FlatMapProps extends BaseTransformProps {
   /** Field name to expand (array or map column) */
   readonly unnest: string
   /** Output field schema for the unnested elements */
   readonly as: Record<string, FlinkType>
-  /** Enable operator tailing for this transform */
-  readonly tap?: boolean | TapConfig
-  readonly children?: ConstructNode | ConstructNode[]
 }
 
 /**
@@ -68,23 +73,16 @@ export interface FlatMapProps extends BaseComponentProps {
  * Each element of the collection becomes a separate row.
  */
 export function FlatMap(props: FlatMapProps): ConstructNode {
-  const { children, ...rest } = props
-  const childArray =
-    children == null ? [] : Array.isArray(children) ? children : [children]
-
-  return createElement("FlatMap", { ...rest }, ...childArray)
+  return createComponent("FlatMap", props)
 }
 
 // ── Aggregate ───────────────────────────────────────────────────────
 
-export interface AggregateProps extends BaseComponentProps {
+export interface AggregateProps extends BaseTransformProps {
   /** Fields to group by */
   readonly groupBy: readonly string[]
   /** Record mapping output fields to aggregate expressions (e.g. 'COUNT(*)', 'SUM(amount)') */
   readonly select: Record<string, string>
-  /** Enable operator tailing for this transform */
-  readonly tap?: boolean | TapConfig
-  readonly children?: ConstructNode | ConstructNode[]
 }
 
 /**
@@ -92,21 +90,14 @@ export interface AggregateProps extends BaseComponentProps {
  * Produces a stream with the output schema defined by select.
  */
 export function Aggregate(props: AggregateProps): ConstructNode {
-  const { children, ...rest } = props
-  const childArray =
-    children == null ? [] : Array.isArray(children) ? children : [children]
-
-  return createElement("Aggregate", { ...rest }, ...childArray)
+  return createComponent("Aggregate", props)
 }
 
 // ── Union ───────────────────────────────────────────────────────────
 
-export interface UnionProps extends BaseComponentProps {
+export interface UnionProps extends BaseTransformProps {
   /** Input schemas to validate compatibility (set by the framework during synthesis) */
   readonly inputs?: readonly SchemaDefinition[]
-  /** Enable operator tailing for this transform */
-  readonly tap?: boolean | TapConfig
-  readonly children?: ConstructNode | ConstructNode[]
 }
 
 /**
@@ -121,11 +112,7 @@ export function Union(props: UnionProps): ConstructNode {
     validateUnionSchemas(props.inputs)
   }
 
-  const { children, ...rest } = props
-  const childArray =
-    children == null ? [] : Array.isArray(children) ? children : [children]
-
-  return createElement("Union", { ...rest }, ...childArray)
+  return createComponent("Union", props)
 }
 
 function validateUnionSchemas(schemas: readonly SchemaDefinition[]): void {
@@ -153,16 +140,13 @@ function validateUnionSchemas(schemas: readonly SchemaDefinition[]): void {
 
 // ── Deduplicate ─────────────────────────────────────────────────────
 
-export interface DeduplicateProps extends BaseComponentProps {
+export interface DeduplicateProps extends BaseTransformProps {
   /** Fields forming the deduplication key */
   readonly key: readonly string[]
   /** Field to order by for selecting which row to keep */
   readonly order: string
   /** Keep the first or last row per key */
   readonly keep: "first" | "last"
-  /** Enable operator tailing for this transform */
-  readonly tap?: boolean | TapConfig
-  readonly children?: ConstructNode | ConstructNode[]
 }
 
 /**
@@ -172,25 +156,18 @@ export interface DeduplicateProps extends BaseComponentProps {
  * Generates: ROW_NUMBER() OVER (PARTITION BY key ORDER BY order [ASC|DESC]) WHERE rownum = 1
  */
 export function Deduplicate(props: DeduplicateProps): ConstructNode {
-  const { children, ...rest } = props
-  const childArray =
-    children == null ? [] : Array.isArray(children) ? children : [children]
-
-  return createElement("Deduplicate", { ...rest }, ...childArray)
+  return createComponent("Deduplicate", props)
 }
 
 // ── TopN ────────────────────────────────────────────────────────────
 
-export interface TopNProps extends BaseComponentProps {
+export interface TopNProps extends BaseTransformProps {
   /** Fields to partition the ranking by */
   readonly partitionBy: readonly string[]
   /** Ordering specification: field name → ASC or DESC */
   readonly orderBy: Record<string, "ASC" | "DESC">
   /** Number of top rows to keep per partition */
   readonly n: number
-  /** Enable operator tailing for this transform */
-  readonly tap?: boolean | TapConfig
-  readonly children?: ConstructNode | ConstructNode[]
 }
 
 /**
@@ -199,9 +176,5 @@ export interface TopNProps extends BaseComponentProps {
  * Generates: ROW_NUMBER() OVER (PARTITION BY ... ORDER BY ...) WHERE rownum <= n
  */
 export function TopN(props: TopNProps): ConstructNode {
-  const { children, ...rest } = props
-  const childArray =
-    children == null ? [] : Array.isArray(children) ? children : [children]
-
-  return createElement("TopN", { ...rest }, ...childArray)
+  return createComponent("TopN", props)
 }

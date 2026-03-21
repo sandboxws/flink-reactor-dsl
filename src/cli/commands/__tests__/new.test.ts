@@ -56,7 +56,7 @@ describe("scaffoldProject", () => {
         readFileSync(join(projectDir, "package.json"), "utf-8"),
       )
       expect(pkg.name).toBe("test-project")
-      expect(pkg.dependencies["flink-reactor"]).toBeDefined()
+      expect(pkg.dependencies["@flink-reactor/dsl"]).toBeDefined()
     })
 
     it("includes flink version in config", () => {
@@ -106,7 +106,7 @@ describe("scaffoldProject", () => {
         "utf-8",
       )
       expect(pipeline).toContain("debezium-json")
-      expect(pipeline).toContain("<PaimonSink")
+      expect(pipeline).toContain("<IcebergSink")
     })
   })
 

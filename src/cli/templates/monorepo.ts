@@ -1,5 +1,5 @@
 import type { ScaffoldOptions, TemplateFile } from "@/cli/commands/new.js"
-import { makeConfig, makeGitignore } from "./shared.js"
+import { DSL_VERSION, makeConfig, makeGitignore } from "./shared.js"
 
 export function getMonorepoTemplates(opts: ScaffoldOptions): TemplateFile[] {
   const workspacePkg = {
@@ -22,7 +22,7 @@ export function getMonorepoTemplates(opts: ScaffoldOptions): TemplateFile[] {
     type: "module",
     main: "index.ts",
     dependencies: {
-      "flink-reactor": "^0.1.0",
+      "@flink-reactor/dsl": `^${DSL_VERSION}`,
     },
   }
 
@@ -33,7 +33,7 @@ export function getMonorepoTemplates(opts: ScaffoldOptions): TemplateFile[] {
     type: "module",
     main: "index.ts",
     dependencies: {
-      "flink-reactor": "^0.1.0",
+      "@flink-reactor/dsl": `^${DSL_VERSION}`,
       [`@${opts.projectName}/schemas`]: "workspace:*",
     },
   }
@@ -44,7 +44,7 @@ export function getMonorepoTemplates(opts: ScaffoldOptions): TemplateFile[] {
     private: true,
     type: "module",
     dependencies: {
-      "flink-reactor": "^0.1.0",
+      "@flink-reactor/dsl": `^${DSL_VERSION}`,
       [`@${opts.projectName}/schemas`]: "workspace:*",
       [`@${opts.projectName}/patterns`]: "workspace:*",
     },
@@ -66,7 +66,7 @@ export function getMonorepoTemplates(opts: ScaffoldOptions): TemplateFile[] {
       forceConsistentCasingInFileNames: true,
       resolveJsonModule: true,
       jsx: "react-jsx",
-      jsxImportSource: "flink-reactor",
+      jsxImportSource: "@flink-reactor/dsl",
       baseUrl: ".",
       paths: {
         "@/*": ["./*"],
@@ -99,7 +99,7 @@ export function getMonorepoTemplates(opts: ScaffoldOptions): TemplateFile[] {
     {
       path: "packages/schemas/index.ts",
       content: `// Export shared schemas here
-// import { Schema, Field } from 'flink-reactor';
+// import { Schema, Field } from '@flink-reactor/dsl';
 `,
     },
 
@@ -125,7 +125,7 @@ export function getMonorepoTemplates(opts: ScaffoldOptions): TemplateFile[] {
     },
     {
       path: "apps/default-app/env/dev.ts",
-      content: `import { defineEnvironment } from 'flink-reactor';
+      content: `import { defineEnvironment } from '@flink-reactor/dsl';
 
 export default defineEnvironment({
   name: 'dev',

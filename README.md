@@ -502,23 +502,7 @@ Differences between versions (config key renames, JDBC connector structure) are 
 
 ## <img src="assets/icons/heart-handshake.svg" width="24" height="24" style="vertical-align: middle; margin-bottom: 2px;"> Contributing
 
-We welcome contributions of all kinds. First-time contributors will be asked to sign our [Contributor License Agreement](.github/CLA.md) via a PR comment.
-
-```bash
-# Clone and install
-git clone https://github.com/sandboxws/flink-reactor-dsl.git
-cd flink-reactor-dsl
-pnpm install
-
-# Run tests
-pnpm test
-
-# Lint and format
-pnpm lint
-pnpm format
-```
-
-### <img src="assets/icons/git-branch.svg" width="20" height="20" style="vertical-align: middle; margin-bottom: 2px;"> Ways to contribute
+We welcome contributions of all kinds — bug reports, feature suggestions, and PRs. See the **[Contributing Guide](CONTRIBUTING.md)** for setup instructions, development workflow, and release process.
 
 - **Report bugs** — [open an issue](https://github.com/sandboxws/flink-reactor-dsl/issues/new)
 - **Suggest features** — [start a discussion](https://github.com/sandboxws/flink-reactor-dsl/issues)
@@ -528,10 +512,19 @@ pnpm format
 
 ## <img src="assets/icons/scale.svg" width="24" height="24" style="vertical-align: middle; margin-bottom: 2px;"> License
 
-Licensed under [BSL 1.1](./LICENSE).
+This project uses a **split license model**:
 
+| Package | License | npm |
+|---------|---------|-----|
+| `@flink-reactor/dsl` (core DSL) | [BSL 1.1](./LICENSE) | [![npm](https://img.shields.io/npm/v/@flink-reactor/dsl?color=d97085&label=)](https://www.npmjs.com/package/@flink-reactor/dsl) |
+| `@flink-reactor/create-fr-app` | [MIT](./packages/create-fr-app/LICENSE) | [![npm](https://img.shields.io/npm/v/@flink-reactor/create-fr-app?color=d97085&label=)](https://www.npmjs.com/package/@flink-reactor/create-fr-app) |
+| `@flink-reactor/ts-plugin` | [MIT](./packages/ts-plugin/LICENSE) | [![npm](https://img.shields.io/npm/v/@flink-reactor/ts-plugin?color=d97085&label=)](https://www.npmjs.com/package/@flink-reactor/ts-plugin) |
+
+**Core DSL (BSL 1.1):**
 - **Internal production use is always free** — use FlinkReactor to build and run your own pipelines without restriction.
 - **Commercial license required** to offer FlinkReactor (or a derivative) as a managed service, hosted platform, or API to third parties.
 - **Converts to [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) on 2030-03-10** — after the change date, this version becomes fully open source.
+
+**Tooling packages (MIT):** The scaffolder and TypeScript plugin are MIT-licensed — use them freely in any context.
 
 For commercial licensing inquiries, see [flink-reactor-platform](https://github.com/sandboxws/flink-reactor-platform).

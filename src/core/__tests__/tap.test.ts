@@ -39,7 +39,7 @@ const OrderSchema = Schema({
 describe("buildConsumerGroupId", () => {
   it("generates correct format with pipeline name and node ID", () => {
     const id = buildConsumerGroupId("ecommerce", "sink_1")
-    expect(id).toMatch(/^flink-reactor-tap-ecommerce-sink_1-[0-9a-f]{8}$/)
+    expect(id).toMatch(/^fr-tap-ecommerce-sink_1-[0-9a-f]{8}$/)
   })
 
   it("is deterministic for the same inputs", () => {
@@ -124,7 +124,7 @@ describe("Kafka source tap observation SQL", () => {
       "orders",
       schema,
       connectorProps,
-      "flink-reactor-tap-test-orders-abc12345",
+      "fr-tap-test-orders-abc12345",
       {
         name: "KafkaSource (orders)",
         groupIdPrefix: "",
@@ -154,7 +154,7 @@ describe("Kafka sink tap observation SQL", () => {
       "large_orders",
       schema,
       connectorProps,
-      "flink-reactor-tap-test-large_orders-def56789",
+      "fr-tap-test-large_orders-def56789",
       {
         name: "KafkaSink (large-orders)",
         groupIdPrefix: "",
@@ -184,7 +184,7 @@ describe("Kafka tap with timestamp offset mode", () => {
       "orders",
       schema,
       connectorProps,
-      "flink-reactor-tap-test-orders-abc12345",
+      "fr-tap-test-orders-abc12345",
       {
         name: "KafkaSource (orders)",
         groupIdPrefix: "",
@@ -215,7 +215,7 @@ describe("JDBC sink tap observation SQL", () => {
       "users",
       schema,
       connectorProps,
-      "flink-reactor-tap-test-users-abc12345",
+      "fr-tap-test-users-abc12345",
       {
         name: "JdbcSink (users)",
         groupIdPrefix: "",

@@ -83,12 +83,14 @@
     {
       "includes": [
         "src/examples/**/*.tsx",
+        "src/cli/templates/__tests__/fixtures/**/*.tsx",
         "src/core/__tests__/jsx-types.test-d.tsx",
         "src/components/__tests__/jsx-children-types.test-d.tsx"
       ],
       "linter": {
         "rules": {
-          "correctness": { "noUnusedImports": "off" }
+          "correctness": { "noUnusedImports": "off" },
+          "style": { "noDefaultExport": "off" }
         }
       }
     },

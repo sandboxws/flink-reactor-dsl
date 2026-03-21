@@ -36,7 +36,7 @@ export interface SynthOptions {
  *
  * @example
  * ```ts
- * import { synth } from 'flink-reactor/testing';
+ * import { synth } from '@flink-reactor/dsl/testing';
  *
  * it('produces correct SQL', () => {
  *   const result = synth(<OrderProcessing />);
@@ -106,7 +106,7 @@ export function synth(
  *
  * @example
  * ```ts
- * import { synthEffect } from 'flink-reactor/testing';
+ * import { synthEffect } from '@flink-reactor/dsl/testing';
  *
  * it('produces correct SQL', async () => {
  *   const result = await Effect.runPromise(synthEffect(<OrderProcessing />));

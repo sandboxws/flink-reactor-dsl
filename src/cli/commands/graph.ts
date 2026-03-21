@@ -1,7 +1,7 @@
 import { execSync } from "node:child_process"
 import { writeFileSync } from "node:fs"
 import { join } from "node:path"
-import type { Command } from "commander"
+import { type Command, Option } from "commander"
 import { Effect } from "effect"
 import pc from "picocolors"
 import { loadPipeline, resolveProjectContext } from "@/cli/discovery.js"
@@ -19,7 +19,11 @@ export function registerGraphCommand(program: Command): void {
     .command("graph")
     .description("Visualize pipeline DAG")
     .option("-p, --pipeline <name>", "Graph a specific pipeline")
-    .option("-f, --format <format>", "Output format (ascii, dot, svg)", "ascii")
+    .addOption(
+      new Option("-f, --format <format>", "Output format")
+        .choices(["ascii", "dot", "svg"])
+        .default("ascii"),
+    )
     .option("--open", "Open SVG in browser (with --format svg)")
     .action(
       async (opts: { pipeline?: string; format: string; open?: boolean }) => {

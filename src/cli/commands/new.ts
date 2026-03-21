@@ -2,15 +2,22 @@ import { execSync } from "node:child_process"
 import { existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import * as clack from "@clack/prompts"
-import type { Command } from "commander"
+import { type Command, Option } from "commander"
 import { Effect } from "effect"
 import Handlebars from "handlebars"
 import pc from "picocolors"
 import { runCommand } from "@/cli/effect-runner.js"
+import { getBankingTemplates } from "@/cli/templates/banking.js"
 import { getCdcLakehouseTemplates } from "@/cli/templates/cdc-lakehouse.js"
+import { getEcommerceTemplates } from "@/cli/templates/ecommerce.js"
+import { getGroceryDeliveryTemplates } from "@/cli/templates/grocery-delivery.js"
+import { getIotFactoryTemplates } from "@/cli/templates/iot-factory.js"
+import { getLakehouseAnalyticsTemplates } from "@/cli/templates/lakehouse-analytics.js"
+import { getLakehouseIngestionTemplates } from "@/cli/templates/lakehouse-ingestion.js"
 import { getMinimalTemplates } from "@/cli/templates/minimal.js"
 import { getMonorepoTemplates } from "@/cli/templates/monorepo.js"
 import { getRealtimeAnalyticsTemplates } from "@/cli/templates/realtime-analytics.js"
+import { getRideSharingTemplates } from "@/cli/templates/ride-sharing.js"
 import { getStarterTemplates } from "@/cli/templates/starter.js"
 import { CliError } from "@/core/errors.js"
 
@@ -20,6 +27,13 @@ export type TemplateName =
   | "cdc-lakehouse"
   | "realtime-analytics"
   | "monorepo"
+  | "ecommerce"
+  | "ride-sharing"
+  | "grocery-delivery"
+  | "banking"
+  | "iot-factory"
+  | "lakehouse-ingestion"
+  | "lakehouse-analytics"
 export type PackageManager = "pnpm" | "npm" | "yarn"
 export type FlinkVersion = "1.20" | "2.0" | "2.1" | "2.2"
 
@@ -31,6 +45,13 @@ export interface ScaffoldOptions {
   gitInit: boolean
   installDeps: boolean
   registry?: string
+}
+
+export type RegistryChoice = "npm" | "verdaccio"
+
+const REGISTRY_URLS: Record<RegistryChoice, string | undefined> = {
+  npm: undefined,
+  verdaccio: "http://localhost:4873",
 }
 
 export interface TemplateFile {
@@ -46,27 +67,61 @@ const TEMPLATE_FACTORIES: Record<TemplateName, TemplateFactory> = {
   "cdc-lakehouse": getCdcLakehouseTemplates,
   "realtime-analytics": getRealtimeAnalyticsTemplates,
   monorepo: getMonorepoTemplates,
+  ecommerce: getEcommerceTemplates,
+  "ride-sharing": getRideSharingTemplates,
+  "grocery-delivery": getGroceryDeliveryTemplates,
+  banking: getBankingTemplates,
+  "iot-factory": getIotFactoryTemplates,
+  "lakehouse-ingestion": getLakehouseIngestionTemplates,
+  "lakehouse-analytics": getLakehouseAnalyticsTemplates,
 }
 
 const TEMPLATE_DESCRIPTIONS: Record<TemplateName, string> = {
   starter: "Kafka source → transform → Kafka sink",
   minimal: "Empty project structure",
-  "cdc-lakehouse": "Debezium CDC → Paimon/Iceberg lakehouse",
+  "cdc-lakehouse": "Debezium CDC → Iceberg lakehouse (upsert)",
   "realtime-analytics": "Kafka → windowed aggregation → JDBC",
   monorepo: "pnpm workspace with packages/ and apps/",
+  ecommerce: "3-way joins, Top-N, session windows (3 pipelines + pump)",
+  "ride-sharing": "CEP trip tracking, broadcast surge pricing (2 pipelines)",
+  "grocery-delivery":
+    "CDC inventory, dedup + Top-N store rankings (2 pipelines)",
+  banking: "MATCH_RECOGNIZE fraud detection, compliance fan-out (2 pipelines)",
+  "iot-factory": "Sliding window anomaly detection (1 pipeline + pump)",
+  "lakehouse-ingestion":
+    "Multi-topic Kafka → Iceberg raw landing (3 tables + pump)",
+  "lakehouse-analytics":
+    "Medallion architecture: bronze → silver → gold with Iceberg (3 pipelines + pump)",
 }
 
 export function registerNewCommand(program: Command): void {
+  const TEMPLATE_NAMES = Object.keys(TEMPLATE_FACTORIES) as TemplateName[]
+  const PM_CHOICES: PackageManager[] = ["pnpm", "npm", "yarn"]
+  const FLINK_VERSION_CHOICES: FlinkVersion[] = ["1.20", "2.0", "2.1", "2.2"]
+
   program
     .command("new")
     .argument("<project-name>", "Name of the new project")
-    .option("-t, --template <template>", "Project template")
-    .option("--pm <pm>", "Package manager (pnpm, npm, yarn)")
-    .option("--flink-version <version>", "Flink version (1.20, 2.0, 2.1, 2.2)")
+    .addOption(
+      new Option("-t, --template <template>", "Project template").choices(
+        TEMPLATE_NAMES,
+      ),
+    )
+    .addOption(new Option("--pm <pm>", "Package manager").choices(PM_CHOICES))
+    .addOption(
+      new Option("--flink-version <version>", "Flink version").choices(
+        FLINK_VERSION_CHOICES,
+      ),
+    )
+    .addOption(
+      new Option("--registry <registry>", "npm registry").choices([
+        "npm",
+        "verdaccio",
+      ]),
+    )
     .option("-y, --yes", "Use defaults, skip prompts")
     .option("--no-git", "Skip git initialization")
     .option("--no-install", "Skip dependency installation")
-    .option("--registry <url>", "npm registry URL (writes .npmrc in project)")
     .description("Create a new FlinkReactor project")
     .action(async (projectName: string, opts: Record<string, unknown>) => {
       await runCommand(
@@ -110,6 +165,7 @@ export async function runNewCommand(
   let options: ScaffoldOptions
 
   if (nonInteractive) {
+    const registryChoice = opts.registry as RegistryChoice | undefined
     options = {
       projectName,
       template: validateTemplate(opts.template as string) ?? "starter",
@@ -117,7 +173,7 @@ export async function runNewCommand(
       flinkVersion: validateFlinkVersion(opts.flinkVersion as string) ?? "2.0",
       gitInit: opts.git !== false,
       installDeps: opts.install !== false,
-      registry: opts.registry as string | undefined,
+      registry: registryChoice ? REGISTRY_URLS[registryChoice] : undefined,
     }
   } else {
     const collected = await collectOptions(projectName, opts)
@@ -149,16 +205,6 @@ export async function runNewCommand(
   console.log("")
   console.log(pc.green("Project created successfully!"))
   console.log("")
-  if (options.template !== "minimal") {
-    console.log(
-      pc.dim(
-        "  Dashboard included! Run `" +
-          options.pm +
-          " run dashboard` to start it.",
-      ),
-    )
-    console.log("")
-  }
   console.log(`  ${pc.dim("cd")} ${projectName}`)
   console.log(`  ${pc.dim(options.pm)} run dev`)
   console.log("")
@@ -197,6 +243,18 @@ async function collectOptions(
     return null
   }
 
+  let registry: string | undefined
+  if (cliOpts.registry) {
+    registry = REGISTRY_URLS[cliOpts.registry as RegistryChoice]
+  } else {
+    const registryChoice = await promptRegistry()
+    if (clack.isCancel(registryChoice)) {
+      clack.cancel("Operation cancelled.")
+      return null
+    }
+    registry = REGISTRY_URLS[registryChoice as RegistryChoice]
+  }
+
   const gitInit = await clack.confirm({
     message: "Initialize a git repository?",
     initialValue: true,
@@ -226,7 +284,7 @@ async function collectOptions(
     flinkVersion: flinkVersion as FlinkVersion,
     gitInit: gitInit as boolean,
     installDeps: installDeps as boolean,
-    registry: cliOpts.registry as string | undefined,
+    registry,
   }
 }
 
@@ -259,6 +317,31 @@ async function promptTemplate(): Promise<TemplateName | symbol> {
         label: "Monorepo",
         hint: TEMPLATE_DESCRIPTIONS.monorepo,
       },
+      {
+        value: "ecommerce",
+        label: "E-Commerce",
+        hint: TEMPLATE_DESCRIPTIONS.ecommerce,
+      },
+      {
+        value: "ride-sharing",
+        label: "Ride-Sharing",
+        hint: TEMPLATE_DESCRIPTIONS["ride-sharing"],
+      },
+      {
+        value: "grocery-delivery",
+        label: "Grocery Delivery",
+        hint: TEMPLATE_DESCRIPTIONS["grocery-delivery"],
+      },
+      {
+        value: "banking",
+        label: "Banking / FinTech",
+        hint: TEMPLATE_DESCRIPTIONS.banking,
+      },
+      {
+        value: "iot-factory",
+        label: "IoT / Smart Factory",
+        hint: TEMPLATE_DESCRIPTIONS["iot-factory"],
+      },
     ],
   }) as Promise<TemplateName | symbol>
 }
@@ -286,6 +369,20 @@ async function promptFlinkVersion(): Promise<FlinkVersion | symbol> {
   }) as Promise<FlinkVersion | symbol>
 }
 
+async function promptRegistry(): Promise<RegistryChoice | symbol> {
+  return clack.select({
+    message: "npm registry?",
+    options: [
+      { value: "npm", label: "npm", hint: "public registry" },
+      {
+        value: "verdaccio",
+        label: "Verdaccio",
+        hint: "local registry (localhost:4873)",
+      },
+    ],
+  }) as Promise<RegistryChoice | symbol>
+}
+
 function validateTemplate(value: string | undefined): TemplateName | null {
   const valid: TemplateName[] = [
     "starter",
@@ -293,6 +390,13 @@ function validateTemplate(value: string | undefined): TemplateName | null {
     "cdc-lakehouse",
     "realtime-analytics",
     "monorepo",
+    "ecommerce",
+    "ride-sharing",
+    "grocery-delivery",
+    "banking",
+    "iot-factory",
+    "lakehouse-ingestion",
+    "lakehouse-analytics",
   ]
   return valid.includes(value as TemplateName) ? (value as TemplateName) : null
 }

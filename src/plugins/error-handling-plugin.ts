@@ -115,7 +115,7 @@ function hasUpstreamGuard(
  *
  * @example
  * ```ts
- * import { errorHandlingPlugin } from 'flink-reactor/plugins';
+ * import { errorHandlingPlugin } from '@flink-reactor/dsl/plugins';
  *
  * export default defineConfig({
  *   plugins: [

@@ -1,0 +1,97 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: reactor-server-config
+  namespace: flink-demo
+data:
+  minikube.yml: |
+    app:
+      debug: false
+    server:
+      host: "0.0.0.0"
+      port: 8080
+    flink:
+      rest_url: "http://flink-demo-rest:8081"
+      sql_gateway_url: "http://flink-sql-gateway:8083"
+    health:
+      interval: "15s"
+    log:
+      level: "info"
+      format: "json"
+    storage:
+      enabled: true
+      dsn: "postgres://reactor:reactor@postgres:5432/reactor?sslmode=disable"
+    instruments:
+      - name: "demo-kafka"
+        type: "kafka"
+        config:
+          brokers: "kafka:9092"
+      - name: "pagila"
+        type: "database"
+        config:
+          driver: "postgres"
+          dsn: "postgres://reactor:reactor@postgres:5432/pagila?sslmode=disable"
+      - name: "chinook"
+        type: "database"
+        config:
+          driver: "postgres"
+          dsn: "postgres://reactor:reactor@postgres:5432/chinook?sslmode=disable"
+      - name: "employees"
+        type: "database"
+        config:
+          driver: "postgres"
+          dsn: "postgres://reactor:reactor@postgres:5432/employees?sslmode=disable"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reactor-server
+  namespace: flink-demo
+  labels:
+    app: reactor-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: reactor-server
+  template:
+    metadata:
+      labels:
+        app: reactor-server
+    spec:
+      containers:
+        - name: reactor-server
+          image: reactor-server:latest
+          imagePullPolicy: Never
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: REACTOR_ENV
+              value: "minikube"
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
+      volumes:
+        - name: config
+          configMap:
+            name: reactor-server-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: reactor-server
+  namespace: flink-demo
+spec:
+  selector:
+    app: reactor-server
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080

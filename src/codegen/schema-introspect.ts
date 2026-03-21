@@ -115,7 +115,8 @@ export function resolveNodeSchema(
   switch (node.component) {
     case "KafkaSource":
     case "JdbcSource":
-    case "GenericSource": {
+    case "GenericSource":
+    case "DataGenSource": {
       const schema = node.props.schema as SchemaDefinition | undefined
       if (!schema) return null
       return Object.entries(schema.fields).map(([name, type]) => ({

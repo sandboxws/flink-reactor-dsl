@@ -82,6 +82,27 @@ export interface DashboardSection {
   readonly observability?: DashboardObservabilityConfig
 }
 
+// ── Console configuration ────────────────────────────────────────────
+
+export interface ConsoleConfig {
+  readonly url?: string | EnvVarRef
+}
+
+// ── Simulation init configuration ───────────────────────────────────
+
+export interface SimInitConfig {
+  readonly iceberg?: {
+    readonly databases?: readonly string[]
+  }
+  readonly kafka?: {
+    readonly topics?: readonly string[]
+  }
+}
+
+export interface SimConfig {
+  readonly init?: SimInitConfig
+}
+
 // ── Environment entry ───────────────────────────────────────────────
 
 export interface EnvironmentEntry {
@@ -95,7 +116,10 @@ export interface EnvironmentEntry {
   }
   readonly connectors?: ConnectorConfig
   readonly dashboard?: DashboardSection
+  readonly console?: ConsoleConfig
   readonly pipelines?: Record<string, PipelineOverrides>
+  /** Simulation stack configuration (used by `flink-reactor sim up`) */
+  readonly sim?: SimConfig
 }
 
 // ── FlinkReactorConfig ───────────────────────────────────────────────
@@ -119,6 +143,8 @@ export interface FlinkReactorConfig {
   readonly cluster?: ClusterConfig
   /** Default dashboard settings */
   readonly dashboard?: DashboardSection
+  /** Console (reactor-server) connection for tap manifest push */
+  readonly console?: ConsoleConfig
   /** Named environments with overrides */
   readonly environments?: Record<string, EnvironmentEntry>
 
@@ -137,7 +163,7 @@ export interface FlinkReactorConfig {
  *
  * @example
  * ```ts
- * import { defineConfig, env } from 'flink-reactor';
+ * import { defineConfig, env } from '@flink-reactor/dsl';
  *
  * export default defineConfig({
  *   flink: { version: '2.0' },

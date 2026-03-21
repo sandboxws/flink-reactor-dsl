@@ -54,7 +54,7 @@ function getJiti(projectDir: string): Jiti {
   if (!instance) {
     const aliasTarget = resolveAtAlias(key)
     instance = createJiti(import.meta.url, {
-      jsx: { runtime: "automatic", importSource: "flink-reactor" },
+      jsx: { runtime: "automatic", importSource: "@flink-reactor/dsl" },
       alias: { "@": aliasTarget },
     })
     jitiCache.set(key, instance)

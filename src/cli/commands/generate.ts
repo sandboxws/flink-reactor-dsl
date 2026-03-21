@@ -1,9 +1,10 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import type { Command } from "commander"
+import { type Command, Option } from "commander"
 import { Effect } from "effect"
 import pc from "picocolors"
 import { runCommand } from "@/cli/effect-runner.js"
+import { DSL_VERSION } from "@/cli/templates/shared.js"
 import { CliError } from "@/core/errors.js"
 
 export function registerGenerateCommand(program: Command): void {
@@ -15,10 +16,10 @@ export function registerGenerateCommand(program: Command): void {
   generate
     .command("pipeline")
     .argument("<name>", "Pipeline name")
-    .option(
-      "-t, --template <template>",
-      "Pipeline template (blank, kafka, jdbc)",
-      "blank",
+    .addOption(
+      new Option("-t, --template <template>", "Pipeline template")
+        .choices(["blank", "kafka", "jdbc"])
+        .default("blank"),
     )
     .description("Generate a new pipeline")
     .action(async (name: string, opts: Record<string, string>) => {
@@ -153,7 +154,7 @@ export function generatePipeline(name: string, template: string): void {
 
   switch (template) {
     case "kafka":
-      content = `import { Pipeline, KafkaSource, KafkaSink } from 'flink-reactor';
+      content = `import { Pipeline, KafkaSource, KafkaSink } from '@flink-reactor/dsl';
 
 export default (
   <Pipeline name="${name}">
@@ -173,7 +174,7 @@ export default (
       break
 
     case "jdbc":
-      content = `import { Pipeline, KafkaSource, JdbcSink } from 'flink-reactor';
+      content = `import { Pipeline, KafkaSource, JdbcSink } from '@flink-reactor/dsl';
 
 export default (
   <Pipeline name="${name}">
@@ -193,7 +194,7 @@ export default (
       break
 
     default: // blank
-      content = `import { Pipeline } from 'flink-reactor';
+      content = `import { Pipeline } from '@flink-reactor/dsl';
 
 export default (
   <Pipeline name="${name}">
@@ -204,7 +205,7 @@ export default (
   }
 
   const testContent = `import { describe, it, expect } from 'vitest';
-// import { synth } from 'flink-reactor/testing';
+// import { synth } from '@flink-reactor/dsl/testing';
 
 describe('${name} pipeline', () => {
   it.todo('synthesizes valid Flink SQL');
@@ -219,7 +220,7 @@ export function generateSchema(name: string): void {
   const filePath = join(process.cwd(), "schemas", `${name}.ts`)
   const pascalName = toPascalCase(name)
 
-  const content = `import { Schema, Field } from 'flink-reactor';
+  const content = `import { Schema, Field } from '@flink-reactor/dsl';
 
 export const ${pascalName}Schema = Schema({
   fields: {
@@ -236,7 +237,7 @@ export const ${pascalName}Schema = Schema({
 export function generateEnv(name: string): void {
   const filePath = join(process.cwd(), "env", `${name}.ts`)
 
-  const content = `import { defineEnvironment } from 'flink-reactor';
+  const content = `import { defineEnvironment } from '@flink-reactor/dsl';
 
 export default defineEnvironment({
   name: '${name}',
@@ -285,7 +286,7 @@ export function generateApp(name: string): void {
     private: true,
     type: "module",
     dependencies: {
-      "flink-reactor": "^0.1.0",
+      "@flink-reactor/dsl": `^${DSL_VERSION}`,
     },
     devDependencies: {
       typescript: "^5.7.0",
@@ -299,14 +300,14 @@ export function generateApp(name: string): void {
   )
   writeIfNotExists(
     join(appDir, "flink-reactor.config.ts"),
-    `import { defineConfig } from 'flink-reactor';
+    `import { defineConfig } from '@flink-reactor/dsl';
 
 export default defineConfig({});
 `,
   )
   writeIfNotExists(
     join(appDir, "env", "dev.ts"),
-    `import { defineEnvironment } from 'flink-reactor';
+    `import { defineEnvironment } from '@flink-reactor/dsl';
 
 export default defineEnvironment({
   name: 'dev',
@@ -342,7 +343,7 @@ export function generatePackage(name: string): void {
     type: "module",
     main: "index.ts",
     dependencies: {
-      "flink-reactor": "^0.1.0",
+      "@flink-reactor/dsl": `^${DSL_VERSION}`,
     },
   }
 
