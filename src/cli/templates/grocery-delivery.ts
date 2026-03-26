@@ -20,12 +20,60 @@ export default defineConfig({
       sim: {
         init: {
           kafka: {
-            topics: [
-              'grocery.orders',
-              'grocery.store-inventory',
-              'grocery.ratings',
-              'grocery.substitution-alerts',
-            ],
+            topics: ['grocery.substitution-alerts'],
+            catalogs: [{
+              name: 'grocery',
+              tables: [
+                {
+                  table: 'orders',
+                  topic: 'grocery.orders',
+                  format: 'json',
+                  columns: {
+                    orderId: 'STRING',
+                    storeId: 'STRING',
+                    customerId: 'STRING',
+                    itemCount: 'INT',
+                    totalAmount: 'DOUBLE',
+                    orderTime: 'TIMESTAMP(3)',
+                  },
+                  watermark: { column: 'orderTime', expression: "orderTime - INTERVAL '5' SECOND" },
+                },
+                {
+                  table: 'store_inventory',
+                  topic: 'grocery.store-inventory',
+                  format: 'debezium-json',
+                  columns: {
+                    storeId: 'STRING',
+                    productId: 'STRING',
+                    stockLevel: 'INT',
+                    substitutionId: 'STRING',
+                    updateTime: 'TIMESTAMP(3)',
+                  },
+                  primaryKey: ['storeId', 'productId'],
+                },
+                {
+                  table: 'ratings',
+                  topic: 'grocery.ratings',
+                  format: 'json',
+                  columns: {
+                    orderId: 'STRING',
+                    storeId: 'STRING',
+                    shopperRating: 'DOUBLE',
+                    storeRating: 'DOUBLE',
+                    itemQuality: 'DOUBLE',
+                    ratingTime: 'TIMESTAMP(3)',
+                  },
+                  watermark: { column: 'ratingTime', expression: "ratingTime - INTERVAL '5' SECOND" },
+                },
+              ],
+            }],
+          },
+          jdbc: {
+            catalogs: [{
+              name: 'flink_sink',
+              baseUrl: 'jdbc:postgresql://postgres:5432/',
+              defaultDatabase: 'flink_sink',
+            }],
           },
         },
       },

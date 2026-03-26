@@ -18,11 +18,47 @@ export default defineConfig({
       sim: {
         init: {
           kafka: {
-            topics: [
-              'iot.sensor-readings',
-              'iot.device-registry',
-              'iot.maintenance-alerts',
-            ],
+            topics: ['iot.maintenance-alerts'],
+            catalogs: [{
+              name: 'iot',
+              tables: [
+                {
+                  table: 'sensor_readings',
+                  topic: 'iot.sensor-readings',
+                  format: 'json',
+                  columns: {
+                    deviceId: 'STRING',
+                    sensorType: 'STRING',
+                    value: 'DOUBLE',
+                    unit: 'STRING',
+                    readingTime: 'TIMESTAMP(3)',
+                  },
+                  watermark: { column: 'readingTime', expression: "readingTime - INTERVAL '5' SECOND" },
+                },
+                {
+                  table: 'device_registry',
+                  topic: 'iot.device-registry',
+                  format: 'debezium-json',
+                  columns: {
+                    deviceId: 'STRING',
+                    location: 'STRING',
+                    firmwareVersion: 'STRING',
+                    installDate: 'STRING',
+                    thresholdTemp: 'DOUBLE',
+                    thresholdVibration: 'DOUBLE',
+                    updateTime: 'TIMESTAMP(3)',
+                  },
+                  primaryKey: ['deviceId'],
+                },
+              ],
+            }],
+          },
+          jdbc: {
+            catalogs: [{
+              name: 'flink_sink',
+              baseUrl: 'jdbc:postgresql://postgres:5432/',
+              defaultDatabase: 'flink_sink',
+            }],
           },
         },
       },

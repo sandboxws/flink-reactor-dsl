@@ -18,14 +18,73 @@ export default defineConfig({
       sim: {
         init: {
           kafka: {
-            topics: [
-              'ecom.orders',
-              'ecom.order-items',
-              'ecom.products',
-              'ecom.customers',
-              'ecom.order-enriched',
-              'ecom.revenue-alerts',
-            ],
+            topics: ['ecom.order-enriched', 'ecom.revenue-alerts'],
+            catalogs: [{
+              name: 'ecom',
+              tables: [
+                {
+                  table: 'orders',
+                  topic: 'ecom.orders',
+                  format: 'json',
+                  columns: {
+                    orderId: 'STRING',
+                    customerId: 'STRING',
+                    amount: 'DOUBLE',
+                    currency: 'STRING',
+                    status: 'STRING',
+                    orderTime: 'TIMESTAMP(3)',
+                  },
+                  watermark: { column: 'orderTime', expression: "orderTime - INTERVAL '5' SECOND" },
+                },
+                {
+                  table: 'order_items',
+                  topic: 'ecom.order-items',
+                  format: 'json',
+                  columns: {
+                    orderId: 'STRING',
+                    productId: 'STRING',
+                    quantity: 'INT',
+                    unitPrice: 'DOUBLE',
+                    itemTime: 'TIMESTAMP(3)',
+                  },
+                  watermark: { column: 'itemTime', expression: "itemTime - INTERVAL '5' SECOND" },
+                },
+                {
+                  table: 'products',
+                  topic: 'ecom.products',
+                  format: 'debezium-json',
+                  columns: {
+                    productId: 'STRING',
+                    name: 'STRING',
+                    category: 'STRING',
+                    price: 'DOUBLE',
+                    stock: 'INT',
+                    updateTime: 'TIMESTAMP(3)',
+                  },
+                  primaryKey: ['productId'],
+                },
+                {
+                  table: 'customers',
+                  topic: 'ecom.customers',
+                  format: 'debezium-json',
+                  columns: {
+                    customerId: 'STRING',
+                    name: 'STRING',
+                    email: 'STRING',
+                    tier: 'STRING',
+                    updateTime: 'TIMESTAMP(3)',
+                  },
+                  primaryKey: ['customerId'],
+                },
+              ],
+            }],
+          },
+          jdbc: {
+            catalogs: [{
+              name: 'flink_sink',
+              baseUrl: 'jdbc:postgresql://postgres:5432/',
+              defaultDatabase: 'flink_sink',
+            }],
           },
         },
       },

@@ -273,6 +273,9 @@ export async function runClusterUp(opts: {
   const pgService = pgProfile === "timescaledb" ? "postgres" : "postgres-plain"
   await initPostgresDatabases(compose, pgService, pgProfile === "timescaledb")
 
+  // Initialize Flink SQL catalogs and tables from project config
+  await initFlinkCatalogs(parseInt(opts.port, 10))
+
   console.log("")
   console.log(
     `  ${pc.green("✓")} Flink UI:     ${pc.dim(`http://localhost:${opts.port}`)}`,
@@ -282,7 +285,7 @@ export async function runClusterUp(opts: {
   )
   console.log(`  ${pc.green("✓")} Kafka:        ${pc.dim("localhost:9094")}`)
   console.log(
-    `  ${pc.green("✓")} PostgreSQL:   ${pc.dim("localhost:5433 (pagila, chinook, employees)")}`,
+    `  ${pc.green("✓")} PostgreSQL:   ${pc.dim("localhost:5433 (pagila, chinook, employees, flink_sink)")}`,
   )
   console.log("")
 
@@ -592,7 +595,19 @@ export async function runClusterSubmit(
   spinner.start(`Submitting ${pc.dim(sqlFile)}...`)
 
   try {
-    const result = await client.submitSqlFile(filePath)
+    // Auto-prepend init SQL by writing a combined temp file
+    // This ensures catalogs are created in the same session as the user's SQL
+    let submitPath = filePath
+    const cachedInitPath = initSqlPath()
+    if (existsSync(cachedInitPath)) {
+      const initSql = readFileSync(cachedInitPath, "utf-8")
+      const userSql = readFileSync(filePath, "utf-8")
+      const combinedPath = join(tmpdir(), "flink-reactor-combined-submit.sql")
+      writeFileSync(combinedPath, `${initSql}\n\n${userSql}`, "utf-8")
+      submitPath = combinedPath
+    }
+
+    const result = await client.submitSqlFile(submitPath)
 
     if (result.status === "ERROR") {
       spinner.stop(pc.red("Statement failed."))
@@ -681,9 +696,120 @@ function killCdcPublisher(): void {
   }
 }
 
+// ── Flink SQL catalog initialization ─────────────────────────────────
+
+function initSqlPath(): string {
+  return join(tmpdir(), "flink-reactor-init.sql")
+}
+
+async function initFlinkCatalogs(_flinkPort: number): Promise<void> {
+  const { loadConfig } = await import("@/cli/discovery.js")
+  const { generateInitSql } = await import("@/cli/cluster/init-sql.js")
+
+  const spinner = clack.spinner()
+  spinner.start("Registering Flink SQL catalogs and tables...")
+
+  try {
+    // Load project config if available
+    const config = await loadConfig(process.cwd())
+    let initConfig =
+      config?.environments?.docker?.sim?.init ??
+      config?.environments?.development?.sim?.init ??
+      config?.environments?.minikube?.sim?.init
+
+    // Fall back to first environment with sim.init
+    if (!initConfig && config?.environments) {
+      for (const env of Object.values(config.environments)) {
+        if (env.sim?.init) {
+          initConfig = env.sim.init
+          break
+        }
+      }
+    }
+
+    const ctx = {
+      kafkaBootstrapServers: "kafka:9092",
+      postgresHost: "postgres",
+      postgresPort: 5432,
+      postgresUser: "reactor",
+      postgresPassword: "reactor",
+    }
+
+    const result = generateInitSql(initConfig, ctx, {
+      includeBuiltinJdbc: true,
+    })
+
+    if (result.ddl.length === 0 && result.seeding.length === 0) {
+      spinner.stop(pc.dim("No catalogs to register."))
+      return
+    }
+
+    // Cache DDL for auto-prepend in cluster submit
+    if (result.ddl.length > 0) {
+      writeFileSync(initSqlPath(), result.ddl.join("\n\n"), "utf-8")
+    }
+
+    // Submit DDL + seeding via SQL Gateway
+    const { SqlGatewayClient } = await import(
+      "@/cli/cluster/sql-gateway-client.js"
+    )
+    const client = new SqlGatewayClient("http://localhost:8083")
+    const sessionHandle = await client.openSession()
+
+    let catalogCount = 0
+    let tableCount = 0
+
+    // Submit DDL statements (CREATE CATALOG, CREATE TABLE)
+    for (const stmt of result.ddl) {
+      const opHandle = await client.submitStatement(sessionHandle, stmt)
+      // Wait for DDL to complete
+      for (let i = 0; i < 30; i++) {
+        const status = await client.getOperationStatus(sessionHandle, opHandle)
+        if (
+          status !== "RUNNING" &&
+          status !== "INITIALIZED" &&
+          status !== "PENDING"
+        )
+          break
+        await new Promise((r) => setTimeout(r, 500))
+      }
+
+      if (stmt.includes("CREATE CATALOG")) catalogCount++
+      if (stmt.includes("CREATE TABLE")) tableCount++
+    }
+
+    // Submit DataGen seeding statements (streaming — session stays open)
+    let seedingCount = 0
+    for (const stmt of result.seeding) {
+      await client.submitStatement(sessionHandle, stmt)
+      if (stmt.includes("INSERT INTO")) {
+        seedingCount++
+        // Brief pause to let the job start
+        await new Promise((r) => setTimeout(r, 500))
+      }
+    }
+
+    // Don't close the session — streaming DataGen jobs would be cancelled
+    const parts = []
+    if (catalogCount > 0) parts.push(`${catalogCount} catalogs`)
+    if (tableCount > 0) parts.push(`${tableCount} tables`)
+    if (seedingCount > 0) parts.push(`${seedingCount} DataGen jobs`)
+
+    spinner.stop(pc.green(`Registered ${parts.join(", ")}.`))
+  } catch (err) {
+    spinner.stop(pc.yellow("Catalog initialization failed (non-critical)."))
+    if (err instanceof Error) {
+      console.log(pc.dim(`  ${err.message}`))
+    }
+  }
+}
+
 // ── PostgreSQL initialization ────────────────────────────────────────
 
 const SAMPLE_DATABASES = ["pagila", "chinook", "employees"] as const
+
+/** Databases created without data dumps (empty, used as pipeline sink targets) */
+const EMPTY_DATABASES = ["flink_sink"] as const
 
 /** Schema to check for table counts — employees uses a custom schema */
 const DB_SCHEMA: Record<string, string> = {
@@ -719,7 +845,7 @@ async function initPostgresDatabases(
     }
 
     // Create databases if they don't exist
-    for (const db of SAMPLE_DATABASES) {
+    for (const db of [...SAMPLE_DATABASES, ...EMPTY_DATABASES]) {
       try {
         psql("postgres", `CREATE DATABASE ${db}`)
       } catch {

@@ -291,7 +291,49 @@ async function runSimUp(opts: {
     }
   }
 
-  // ── Step 4: Apply manifests ──────────────────────────────────────
+  // ── Step 4: Generate init SQL ConfigMap (before manifests) ──────
+  let initConfig: SimInitConfig | undefined
+  if (opts.init) {
+    const config = await loadConfig(process.cwd())
+    if (config) {
+      const resolvedEnv = opts.env ?? "minikube"
+      const envEntry = config.environments?.[resolvedEnv]
+      initConfig = envEntry?.sim?.init
+    }
+
+    if (initConfig?.kafka?.catalogs || initConfig?.jdbc?.catalogs) {
+      const { generateInitSql } = await import("@/cli/cluster/init-sql.js")
+      const initResult = generateInitSql(initConfig, {
+        kafkaBootstrapServers: "kafka:9092",
+        postgresHost: `postgres.${opts.namespace}.svc`,
+        postgresPort: 5432,
+        postgresUser: "reactor",
+        postgresPassword: "reactor",
+      })
+
+      if (initResult.ddl.length > 0) {
+        const initSqlContent = initResult.ddl.join("\n\n")
+        const cmSpinner = clack.spinner()
+        cmSpinner.start("Creating init SQL ConfigMap...")
+        try {
+          // Escape single quotes for shell
+          const escaped = initSqlContent.replace(/'/g, "'\\''")
+          execSync(
+            `kubectl create configmap flink-init-sql --from-literal=init-catalogs.sql='${escaped}' -n ${opts.namespace} --dry-run=client -o yaml | kubectl apply -f -`,
+            { stdio: "pipe" },
+          )
+          cmSpinner.stop(pc.green("Init SQL ConfigMap created."))
+        } catch (err) {
+          cmSpinner.stop(
+            pc.yellow("Failed to create init SQL ConfigMap (non-critical)."),
+          )
+          if (err instanceof Error) console.log(pc.dim(`  ${err.message}`))
+        }
+      }
+    }
+  }
+
+  // ── Step 5: Apply manifests ──────────────────────────────────────
   const manifests = manifestsDir()
   if (!existsSync(manifests)) {
     console.error(pc.red(`Manifests directory not found: ${manifests}`))
@@ -316,7 +358,7 @@ async function runSimUp(opts: {
     return
   }
 
-  // ── Step 5: Wait for pods ────────────────────────────────────────
+  // ── Step 6: Wait for pods ────────────────────────────────────────
   const waitSpinner = clack.spinner()
   waitSpinner.start(
     "Waiting for pods to be ready (this may take a few minutes)...",
@@ -334,7 +376,7 @@ async function runSimUp(opts: {
     console.log(pc.dim(`  Check with: kubectl get pods -n ${opts.namespace}`))
   }
 
-  // ── Step 6: Config-driven init ──────────────────────────────────
+  // ── Step 7: Config-driven init ──────────────────────────────────
   if (opts.init) {
     await runInitFromConfig(opts.env, opts.namespace)
   } else {
@@ -412,8 +454,16 @@ async function runInitFromConfig(
 async function runInit(init: SimInitConfig, namespace: string): Promise<void> {
   const databases = init.iceberg?.databases ?? []
   const topics = init.kafka?.topics ?? []
+  const kafkaCatalogs = init.kafka?.catalogs ?? []
+  const jdbcCatalogs = init.jdbc?.catalogs ?? []
 
-  if (databases.length === 0 && topics.length === 0) return
+  if (
+    databases.length === 0 &&
+    topics.length === 0 &&
+    kafkaCatalogs.length === 0 &&
+    jdbcCatalogs.length === 0
+  )
+    return
 
   console.log("")
 
@@ -477,6 +527,67 @@ async function runInit(init: SimInitConfig, namespace: string): Promise<void> {
         `Iceberg databases: ${created} created${skipped > 0 ? `, ${skipped} skipped` : ""}`,
       ),
     )
+  }
+
+  // ── Register Flink SQL catalogs and tables ────────────────────────
+  if (kafkaCatalogs.length > 0 || jdbcCatalogs.length > 0) {
+    const { generateInitSql } = await import("@/cli/cluster/init-sql.js")
+    const initResult = generateInitSql(init, {
+      kafkaBootstrapServers: "kafka:9092",
+      postgresHost: `postgres.${namespace}.svc`,
+      postgresPort: 5432,
+      postgresUser: "reactor",
+      postgresPassword: "reactor",
+    })
+
+    // Submit DDL (CREATE CATALOG, CREATE TABLE)
+    if (initResult.ddl.length > 0) {
+      const ddlSpinner = clack.spinner()
+      ddlSpinner.start("Registering Flink SQL catalogs and tables...")
+
+      let catalogCount = 0
+      let tableCount = 0
+
+      try {
+        const allDdl = initResult.ddl.join("; ")
+        execSqlViaGateway(allDdl, namespace)
+
+        for (const stmt of initResult.ddl) {
+          if (stmt.includes("CREATE CATALOG")) catalogCount++
+          if (stmt.includes("CREATE TABLE")) tableCount++
+        }
+
+        const parts = []
+        if (catalogCount > 0) parts.push(`${catalogCount} catalogs`)
+        if (tableCount > 0) parts.push(`${tableCount} tables`)
+        ddlSpinner.stop(pc.green(`Registered ${parts.join(", ")}.`))
+      } catch (err) {
+        ddlSpinner.stop(
+          pc.yellow("Catalog registration failed (non-critical)."),
+        )
+        if (err instanceof Error) console.log(pc.dim(`  ${err.message}`))
+      }
+    }
+
+    // Submit DataGen seeding (streaming INSERT jobs)
+    if (initResult.seeding.length > 0) {
+      const seedSpinner = clack.spinner()
+      const insertCount = initResult.seeding.filter((s) =>
+        s.includes("INSERT INTO"),
+      ).length
+      seedSpinner.start(`Starting ${insertCount} DataGen seeding job(s)...`)
+
+      try {
+        const allSeeding = initResult.seeding.join("; ")
+        execSqlViaGateway(allSeeding, namespace)
+        seedSpinner.stop(
+          pc.green(`Started ${insertCount} DataGen seeding jobs.`),
+        )
+      } catch (err) {
+        seedSpinner.stop(pc.yellow("DataGen seeding failed (non-critical)."))
+        if (err instanceof Error) console.log(pc.dim(`  ${err.message}`))
+      }
+    }
   }
 }
 

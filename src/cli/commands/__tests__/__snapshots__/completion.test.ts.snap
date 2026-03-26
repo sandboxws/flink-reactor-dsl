@@ -34,6 +34,7 @@ _flink_reactor() {
         'deploy:Deploy pipelines to a Kubernetes cluster'
         'cluster:Manage local Flink dev cluster for dashboard development'
         'schema:Display input and output schemas of a pipeline'
+        'sim:Manage minikube simulation stack (full Flink platform on a single PC)'
         'upgrade:Upgrade FlinkReactor packages to their latest versions'
         'stop:Stop pipelines by suspending their FlinkDeployments (triggers savepoint)'
         'resume:Resume suspended pipelines (restores from last savepoint)'
@@ -77,6 +78,9 @@ _flink_reactor() {
           ;;
         schema)
           _flink_reactor_schema
+          ;;
+        sim)
+          _flink_reactor_sim
           ;;
         upgrade)
           _flink_reactor_upgrade
@@ -344,6 +348,64 @@ _flink_reactor_schema() {
   _arguments \\
     '--json[Output as JSON]' \\
     '1:Path to a .tsx pipeline file, or a pipeline name:_files -g "*.tsx"'
+}
+
+_flink_reactor_sim() {
+  local -a subcommands
+  local curcontext="$curcontext" state line
+  typeset -A opt_args
+
+  _arguments -C \\
+    '1:subcommand:->subcommand' \\
+    '*::args:->args'
+
+  case $state in
+    subcommand)
+      subcommands=(
+        'up:Bootstrap minikube cluster and deploy simulation infrastructure'
+        'down:Tear down simulation infrastructure'
+        'status:Show simulation pod status and resource usage'
+      )
+      _describe 'subcommand' subcommands
+      ;;
+    args)
+      case $line[1] in
+        up)
+          _flink_reactor_sim_up
+          ;;
+        down)
+          _flink_reactor_sim_down
+          ;;
+        status)
+          _flink_reactor_sim_status
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_flink_reactor_sim_up() {
+  _arguments \\
+    '--cpus[CPU cores for minikube]: : ' \\
+    '--memory[Memory in MB for minikube]: : ' \\
+    '--disk[Disk size for minikube]: : ' \\
+    '--k8s-version[Kubernetes version]: : ' \\
+    '--namespace[Target namespace]: : ' \\
+    '--no-operator[Skip Flink Operator installation]' \\
+    '(-e --env)'{-e,--env}'[Environment name from flink-reactor.config.ts (reads sim.init)]: : ' \\
+    '--no-init[Skip resource initialization even if config exists]'
+}
+
+_flink_reactor_sim_down() {
+  _arguments \\
+    '--volumes[Delete persistent volume claims (checkpoint and state data)]' \\
+    '--all[Also stop minikube entirely]' \\
+    '--namespace[Target namespace]: : '
+}
+
+_flink_reactor_sim_status() {
+  _arguments \\
+    '--namespace[Target namespace]: : '
 }
 
 _flink_reactor_upgrade() {

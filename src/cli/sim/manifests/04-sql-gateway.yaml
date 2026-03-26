@@ -32,12 +32,21 @@ spec:
               value: |
                 rest.address: flink-demo-rest
                 rest.port: 8081
+          volumeMounts:
+            - name: init-sql
+              mountPath: /opt/flink/init
+              readOnly: true
           resources:
             requests:
               cpu: 250m
               memory: 512Mi
             limits:
               memory: 512Mi
+      volumes:
+        - name: init-sql
+          configMap:
+            name: flink-init-sql
+            optional: true
 ---
 apiVersion: v1
 kind: Service

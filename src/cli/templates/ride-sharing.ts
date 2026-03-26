@@ -19,11 +19,62 @@ export default defineConfig({
         init: {
           kafka: {
             topics: [
-              'rides.requests',
-              'rides.trip-events',
-              'rides.surge-zones',
               'rides.surge-prices',
               'rides.driver-alerts',
+            ],
+            catalogs: [
+              {
+                name: 'rides',
+                tables: [
+                  {
+                    table: 'requests',
+                    topic: 'rides.requests',
+                    columns: {
+                      rideId: 'STRING',
+                      riderId: 'STRING',
+                      pickupLat: 'DOUBLE',
+                      pickupLng: 'DOUBLE',
+                      dropoffLat: 'DOUBLE',
+                      dropoffLng: 'DOUBLE',
+                      requestTime: 'TIMESTAMP(3)',
+                    },
+                    format: 'json',
+                    watermark: { column: 'requestTime', expression: "requestTime - INTERVAL '5' SECOND" },
+                  },
+                  {
+                    table: 'trip_events',
+                    topic: 'rides.trip-events',
+                    columns: {
+                      rideId: 'STRING',
+                      driverId: 'STRING',
+                      status: 'STRING',
+                      eventTime: 'TIMESTAMP(3)',
+                    },
+                    format: 'json',
+                    watermark: { column: 'eventTime', expression: "eventTime - INTERVAL '5' SECOND" },
+                  },
+                  {
+                    table: 'surge_zones',
+                    topic: 'rides.surge-zones',
+                    columns: {
+                      zoneId: 'STRING',
+                      baseMultiplier: 'DOUBLE',
+                      updateTime: 'TIMESTAMP(3)',
+                    },
+                    format: 'json',
+                    primaryKey: ['zoneId'],
+                  },
+                ],
+              },
+            ],
+          },
+          jdbc: {
+            catalogs: [
+              {
+                name: 'flink_sink',
+                baseUrl: 'jdbc:postgresql://postgres:5432/',
+                defaultDatabase: 'flink_sink',
+              },
             ],
           },
         },

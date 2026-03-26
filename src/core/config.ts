@@ -90,12 +90,61 @@ export interface ConsoleConfig {
 
 // ── Simulation init configuration ───────────────────────────────────
 
+export interface KafkaTableDefinition {
+  /** Flink SQL table name (e.g. 'orders', 'transactions') */
+  readonly table: string
+  /** Kafka topic name (e.g. 'ecom.orders') */
+  readonly topic: string
+  /** Column definitions: field name → Flink SQL type (e.g. { orderId: 'STRING', amount: 'DOUBLE' }) */
+  readonly columns: Record<string, string>
+  /** Watermark definition for event-time processing */
+  readonly watermark?: {
+    readonly column: string
+    readonly expression: string
+  }
+  /** Primary key columns (generates PRIMARY KEY (...) NOT ENFORCED) */
+  readonly primaryKey?: readonly string[]
+  /** Kafka message format (default: 'json') */
+  readonly format?: string
+  /** Kafka consumer startup mode (default: 'earliest-offset') */
+  readonly scanStartupMode?: string
+  /** DataGen rows-per-second for continuous seeding (default: 10, 0 = skip seeding) */
+  readonly rowsPerSecond?: number
+}
+
+export interface KafkaCatalogDefinition {
+  /** Catalog name in Flink SQL (e.g. 'ecom', 'banking', 'iot') */
+  readonly name: string
+  /** Tables registered within this catalog */
+  readonly tables: readonly KafkaTableDefinition[]
+}
+
+export interface JdbcCatalogDefinition {
+  /** Catalog name in Flink SQL (e.g. 'pagila', 'flink_sink') */
+  readonly name: string
+  /** JDBC base URL (e.g. 'jdbc:postgresql://postgres:5432/') */
+  readonly baseUrl: string
+  /** Default database for the catalog */
+  readonly defaultDatabase?: string
+  /** Database username (default: 'reactor') */
+  readonly username?: string
+  /** Database password (default: 'reactor') */
+  readonly password?: string
+}
+
 export interface SimInitConfig {
   readonly iceberg?: {
     readonly databases?: readonly string[]
   }
   readonly kafka?: {
+    /** Just create Kafka topics (no Flink SQL table registration) */
     readonly topics?: readonly string[]
+    /** Per-domain Kafka catalogs with full table schemas */
+    readonly catalogs?: readonly KafkaCatalogDefinition[]
+  }
+  readonly jdbc?: {
+    /** JDBC catalogs for auto-discovering PostgreSQL tables */
+    readonly catalogs?: readonly JdbcCatalogDefinition[]
   }
 }
 

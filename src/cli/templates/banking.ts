@@ -18,12 +18,48 @@ export default defineConfig({
       sim: {
         init: {
           kafka: {
-            topics: [
-              'bank.transactions',
-              'bank.accounts',
-              'bank.fraud-alerts',
-              'bank.compliance-reports',
-            ],
+            topics: ['bank.fraud-alerts', 'bank.compliance-reports'],
+            catalogs: [{
+              name: 'banking',
+              tables: [
+                {
+                  table: 'transactions',
+                  topic: 'bank.transactions',
+                  format: 'json',
+                  columns: {
+                    txnId: 'STRING',
+                    accountId: 'STRING',
+                    amount: 'DOUBLE',
+                    currency: 'STRING',
+                    merchant: 'STRING',
+                    country: 'STRING',
+                    txnTime: 'TIMESTAMP(3)',
+                  },
+                  watermark: { column: 'txnTime', expression: "txnTime - INTERVAL '5' SECOND" },
+                },
+                {
+                  table: 'accounts',
+                  topic: 'bank.accounts',
+                  format: 'debezium-json',
+                  columns: {
+                    accountId: 'STRING',
+                    name: 'STRING',
+                    tier: 'STRING',
+                    status: 'STRING',
+                    balance: 'DOUBLE',
+                    updateTime: 'TIMESTAMP(3)',
+                  },
+                  primaryKey: ['accountId'],
+                },
+              ],
+            }],
+          },
+          jdbc: {
+            catalogs: [{
+              name: 'flink_sink',
+              baseUrl: 'jdbc:postgresql://postgres:5432/',
+              defaultDatabase: 'flink_sink',
+            }],
           },
         },
       },

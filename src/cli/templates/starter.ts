@@ -18,7 +18,23 @@ export default defineConfig({
       sim: {
         init: {
           kafka: {
-            topics: ['cdc.inventory.products', 'in-stock-products'],
+            topics: ['in-stock-products'],
+            catalogs: [{
+              name: 'cdc',
+              tables: [{
+                table: 'inventory_products',
+                topic: 'cdc.inventory.products',
+                format: 'debezium-json',
+                columns: {
+                  id: 'INT',
+                  name: 'STRING',
+                  category: 'STRING',
+                  price: 'DOUBLE',
+                  quantity: 'INT',
+                },
+                primaryKey: ['id'],
+              }],
+            }],
           },
         },
       },

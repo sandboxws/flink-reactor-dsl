@@ -20,7 +20,56 @@ export default defineConfig({
       sim: {
         init: {
           iceberg: { databases: ['raw'] },
-          kafka: { topics: ['lake.events', 'lake.clickstream', 'lake.transactions'] },
+          kafka: {
+            catalogs: [
+              {
+                name: 'lake',
+                tables: [
+                  {
+                    table: 'events',
+                    topic: 'lake.events',
+                    columns: {
+                      eventId: 'STRING',
+                      userId: 'STRING',
+                      eventType: 'STRING',
+                      payload: 'STRING',
+                      eventTime: 'TIMESTAMP(3)',
+                    },
+                    format: 'json',
+                    watermark: { column: 'eventTime', expression: "eventTime - INTERVAL '5' SECOND" },
+                  },
+                  {
+                    table: 'clickstream',
+                    topic: 'lake.clickstream',
+                    columns: {
+                      sessionId: 'STRING',
+                      userId: 'STRING',
+                      pageUrl: 'STRING',
+                      referrer: 'STRING',
+                      userAgent: 'STRING',
+                      clickTime: 'TIMESTAMP(3)',
+                    },
+                    format: 'json',
+                    watermark: { column: 'clickTime', expression: "clickTime - INTERVAL '5' SECOND" },
+                  },
+                  {
+                    table: 'transactions',
+                    topic: 'lake.transactions',
+                    columns: {
+                      txnId: 'STRING',
+                      accountId: 'STRING',
+                      amount: 'DOUBLE',
+                      currency: 'STRING',
+                      txnType: 'STRING',
+                      txnTime: 'TIMESTAMP(3)',
+                    },
+                    format: 'json',
+                    watermark: { column: 'txnTime', expression: "txnTime - INTERVAL '5' SECOND" },
+                  },
+                ],
+              },
+            ],
+          },
         },
       },
       pipelines: { '*': { parallelism: 4 } },

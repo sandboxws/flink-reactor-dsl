@@ -13,6 +13,7 @@ data:
     flink:
       rest_url: "http://flink-demo-rest:8081"
       sql_gateway_url: "http://flink-sql-gateway:8083"
+      init_sql_path: "/opt/flink/init/init-catalogs.sql"
     health:
       interval: "15s"
     log:
@@ -69,6 +70,8 @@ spec:
           env:
             - name: REACTOR_ENV
               value: "minikube"
+            - name: FLINK_INIT_SQL_PATH
+              value: "/opt/flink/init/init-catalogs.sql"
           resources:
             requests:
               cpu: 200m
@@ -78,10 +81,17 @@ spec:
           volumeMounts:
             - name: config
               mountPath: /app/config
+            - name: init-sql
+              mountPath: /opt/flink/init
+              readOnly: true
       volumes:
         - name: config
           configMap:
             name: reactor-server-config
+        - name: init-sql
+          configMap:
+            name: flink-init-sql
+            optional: true
 ---
 apiVersion: v1
 kind: Service

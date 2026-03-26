@@ -20,7 +20,30 @@ export default defineConfig({
       sim: {
         init: {
           iceberg: { databases: ['bronze', 'silver', 'gold'] },
-          kafka: { topics: ['orders.cdc'] },
+          kafka: {
+            catalogs: [
+              {
+                name: 'orders',
+                tables: [
+                  {
+                    table: 'cdc',
+                    topic: 'orders.cdc',
+                    columns: {
+                      orderId: 'STRING',
+                      customerId: 'STRING',
+                      product: 'STRING',
+                      amount: 'DOUBLE',
+                      status: 'STRING',
+                      updatedAt: 'TIMESTAMP(3)',
+                    },
+                    format: 'debezium-json',
+                    primaryKey: ['orderId'],
+                    watermark: { column: 'updatedAt', expression: "updatedAt - INTERVAL '5' SECOND" },
+                  },
+                ],
+              },
+            ],
+          },
         },
       },
       pipelines: { '*': { parallelism: 4 } },

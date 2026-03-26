@@ -19,7 +19,35 @@ export default defineConfig({
       kafka: { bootstrapServers: 'kafka:9092' },
       sim: {
         init: {
-          kafka: { topics: ['page-views'] },
+          kafka: {
+            catalogs: [
+              {
+                name: 'analytics',
+                tables: [
+                  {
+                    table: 'page_views',
+                    topic: 'page-views',
+                    columns: {
+                      userId: 'STRING',
+                      pageUrl: 'STRING',
+                      viewTimestamp: 'TIMESTAMP(3)',
+                    },
+                    format: 'json',
+                    watermark: { column: 'viewTimestamp', expression: "viewTimestamp - INTERVAL '5' SECOND" },
+                  },
+                ],
+              },
+            ],
+          },
+          jdbc: {
+            catalogs: [
+              {
+                name: 'flink_sink',
+                baseUrl: 'jdbc:postgresql://localhost:5432/',
+                defaultDatabase: 'analytics',
+              },
+            ],
+          },
         },
       },
       pipelines: { '*': { parallelism: 2 } },

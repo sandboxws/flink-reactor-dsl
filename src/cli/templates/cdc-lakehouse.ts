@@ -20,7 +20,30 @@ export default defineConfig({
       sim: {
         init: {
           iceberg: { databases: ['inventory'] },
-          kafka: { topics: ['dbserver1.inventory.orders'] },
+          kafka: {
+            catalogs: [
+              {
+                name: 'cdc',
+                tables: [
+                  {
+                    table: 'inventory_orders',
+                    topic: 'dbserver1.inventory.orders',
+                    columns: {
+                      orderId: 'BIGINT',
+                      customerId: 'BIGINT',
+                      product: 'STRING',
+                      amount: 'DECIMAL(10, 2)',
+                      status: 'STRING',
+                      createdAt: 'TIMESTAMP(3)',
+                      updatedAt: 'TIMESTAMP(3)',
+                    },
+                    format: 'debezium-json',
+                    primaryKey: ['orderId'],
+                  },
+                ],
+              },
+            ],
+          },
         },
       },
       pipelines: { '*': { parallelism: 2 } },
