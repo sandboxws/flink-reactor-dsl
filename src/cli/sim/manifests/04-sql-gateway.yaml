@@ -19,19 +19,15 @@ spec:
         - name: sql-gateway
           image: flink-reactor:2.0.1
           command: ["/opt/flink/bin/sql-gateway.sh"]
-          args: ["start-foreground"]
+          args:
+            - "start-foreground"
+            - "-Dsql-gateway.endpoint.rest.address=0.0.0.0"
+            - "-Dsql-gateway.endpoint.rest.port=8083"
+            - "-Drest.address=flink-demo-rest"
+            - "-Drest.port=8081"
           ports:
             - name: rest
               containerPort: 8083
-          env:
-            - name: SQL_GATEWAY_ENDPOINT_REST_ADDRESS
-              value: "0.0.0.0"
-            - name: SQL_GATEWAY_ENDPOINT_REST_PORT
-              value: "8083"
-            - name: FLINK_PROPERTIES
-              value: |
-                rest.address: flink-demo-rest
-                rest.port: 8081
           volumeMounts:
             - name: init-sql
               mountPath: /opt/flink/init

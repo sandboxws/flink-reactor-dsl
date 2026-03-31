@@ -30,7 +30,7 @@ spec:
       containers:
         - name: seaweedfs
           image: chrislusf/seaweedfs:latest
-          args: ["server", "-s3", "-dir=/data"]
+          args: ["server", "-s3", "-s3.config=/etc/seaweedfs/s3.json", "-dir=/data"]
           ports:
             - name: s3
               containerPort: 8333
@@ -47,10 +47,38 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /data
+            - name: s3-config
+              mountPath: /etc/seaweedfs
+              readOnly: true
       volumes:
         - name: data
           persistentVolumeClaim:
             claimName: seaweedfs-data
+        - name: s3-config
+          configMap:
+            name: seaweedfs-s3-config
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: seaweedfs-s3-config
+  namespace: flink-demo
+data:
+  s3.json: |
+    {
+      "identities": [
+        {
+          "name": "admin",
+          "credentials": [
+            {
+              "accessKey": "admin",
+              "secretKey": "admin"
+            }
+          ],
+          "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+        }
+      ]
+    }
 ---
 apiVersion: v1
 kind: Service

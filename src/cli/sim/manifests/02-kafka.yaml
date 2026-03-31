@@ -46,7 +46,7 @@ spec:
             - name: KAFKA_LISTENERS
               value: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093"
             - name: KAFKA_ADVERTISED_LISTENERS
-              value: "PLAINTEXT://kafka.flink-demo.svc:9092"
+              value: "PLAINTEXT://kafka-0.kafka.flink-demo.svc:9092"
             - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
               value: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"
             - name: KAFKA_CONTROLLER_LISTENER_NAMES
@@ -67,10 +67,10 @@ spec:
               value: "flink-demo-kafka-cluster-001"
           resources:
             requests:
-              cpu: "1500m"
-              memory: 6Gi
+              cpu: "500m"
+              memory: 1Gi
             limits:
-              memory: 6Gi
+              memory: 1Gi
           volumeMounts:
             - name: data
               mountPath: /var/lib/kafka/data

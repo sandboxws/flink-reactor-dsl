@@ -39,6 +39,24 @@ const DEFAULT_K8S_VERSION = "v1.31.0"
 const DEFAULT_NAMESPACE = "flink-demo"
 const OPERATOR_NAMESPACE = "flink-system"
 
+/** Pod statuses that indicate a non-recoverable failure. */
+const TERMINAL_POD_STATUSES = new Set([
+  "ImagePullBackOff",
+  "ErrImagePull",
+  "ErrImageNeverPull",
+  "InvalidImageName",
+  "CrashLoopBackOff",
+  "CreateContainerConfigError",
+  "RunContainerError",
+])
+
+const IMAGE_PULL_STATUSES = new Set([
+  "ImagePullBackOff",
+  "ErrImagePull",
+  "ErrImageNeverPull",
+  "InvalidImageName",
+])
+
 // ── Command registration ─────────────────────────────────────────────
 
 export function registerSimCommand(program: Command): void {
@@ -270,7 +288,7 @@ async function runSimUp(opts: {
 
     try {
       execSync(
-        "helm repo add flink-operator https://downloads.apache.org/flink/flink-kubernetes-operator-1.11.0/",
+        "helm repo add flink-operator https://downloads.apache.org/flink/flink-kubernetes-operator-1.14.0/",
         { stdio: "pipe" },
       )
       execSync(
@@ -360,20 +378,76 @@ async function runSimUp(opts: {
 
   // ── Step 6: Wait for pods ────────────────────────────────────────
   const waitSpinner = clack.spinner()
-  waitSpinner.start(
-    "Waiting for pods to be ready (this may take a few minutes)...",
-  )
+  waitSpinner.start("Waiting for pods to be ready...")
 
-  try {
-    // Wait up to 5 minutes for all deployments in the namespace
-    execSync(
-      `kubectl wait --for=condition=available deployment --all -n ${opts.namespace} --timeout=300s`,
-      { stdio: "pipe" },
-    )
+  const POLL_INTERVAL_MS = 3_000
+  const TIMEOUT_MS = 300_000
+  const deadline = Date.now() + TIMEOUT_MS
+  let allReady = false
+  let failed = false
+
+  while (Date.now() < deadline) {
+    try {
+      const pods = getPodStatuses(opts.namespace)
+      const tracked = pods.filter(
+        (p) => p.status !== "Completed" && p.status !== "Succeeded",
+      )
+      const readyCount = tracked.filter((p) => p.isReady).length
+      const failing = tracked.filter((p) => TERMINAL_POD_STATUSES.has(p.status))
+
+      if (tracked.length > 0) {
+        if (readyCount === tracked.length) {
+          allReady = true
+          break
+        }
+        if (failing.length > 0) {
+          failed = true
+          break
+        }
+        waitSpinner.message(`${readyCount}/${tracked.length} pods ready`)
+      }
+    } catch {
+      // kubectl may not be responsive yet
+    }
+
+    await new Promise<void>((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
+  }
+
+  if (allReady) {
     waitSpinner.stop(pc.green("All pods ready."))
-  } catch {
-    waitSpinner.stop(pc.yellow("Some pods may not be ready yet."))
-    console.log(pc.dim(`  Check with: kubectl get pods -n ${opts.namespace}`))
+  } else if (failed) {
+    waitSpinner.stop(pc.red("Some pods failed to start:"))
+    printPodTable(opts.namespace)
+    const pods = safeGetPodStatuses(opts.namespace)
+    const hasImageErrors = pods.some((p) => IMAGE_PULL_STATUSES.has(p.status))
+    if (hasImageErrors) {
+      console.log("")
+      console.log(pc.bold("  Images must be built inside minikube's Docker:"))
+      console.log(pc.dim("    eval $(minikube docker-env)"))
+      console.log(
+        pc.dim(
+          "    docker build -t flink-reactor:2.0.1 -f src/cli/cluster/Dockerfile.flink .",
+        ),
+      )
+      console.log(
+        pc.dim(
+          "    docker build -t flink-reactor-s3:2.0.1 -f src/cli/sim/Dockerfile.flink-s3 .",
+        ),
+      )
+      console.log("")
+      console.log(pc.dim("  Then re-run: flink-reactor sim up"))
+    }
+    console.log("")
+    clack.outro(pc.red("Cluster started but pods are not healthy."))
+    process.exitCode = 1
+    return
+  } else {
+    waitSpinner.stop(pc.yellow("Timed out waiting for pods:"))
+    printPodTable(opts.namespace)
+    console.log("")
+    clack.outro(pc.yellow("Cluster started but some pods are not ready."))
+    process.exitCode = 1
+    return
   }
 
   // ── Step 7: Config-driven init ──────────────────────────────────
@@ -387,36 +461,13 @@ async function runSimUp(opts: {
   console.log("")
   console.log(pc.bold("  Next steps:"))
   console.log("")
-  console.log(pc.dim("  1. Build Flink image (in minikube's Docker):"))
-  console.log(pc.dim("     eval $(minikube docker-env)"))
+  console.log(pc.dim("  Access the console:"))
   console.log(
     pc.dim(
-      "     docker build -t flink-reactor:2.0.1 -f src/cli/cluster/Dockerfile.flink .",
+      `    kubectl port-forward svc/reactor-server 8080:8080 -n ${opts.namespace}`,
     ),
   )
-  console.log(
-    pc.dim(
-      "     docker build -t flink-reactor-s3:2.0.1 -f src/cli/sim/Dockerfile.flink-s3 .",
-    ),
-  )
-  console.log("")
-  console.log(
-    pc.dim("  2. Build reactor-server image (from flink-reactor-console):"),
-  )
-  console.log(
-    pc.dim("     pnpm build && cp -r dashboard/out/ server/dashboard/"),
-  )
-  console.log(
-    pc.dim("     cd server && docker build -t reactor-server:latest ."),
-  )
-  console.log("")
-  console.log(pc.dim("  3. Access the console:"))
-  console.log(
-    pc.dim(
-      `     kubectl port-forward svc/reactor-server 8080:8080 -n ${opts.namespace}`,
-    ),
-  )
-  console.log(pc.dim("     open http://localhost:8080"))
+  console.log(pc.dim("    open http://localhost:8080"))
   console.log("")
 
   clack.outro(pc.green("Simulation infrastructure deployed!"))
@@ -784,6 +835,78 @@ async function runSimStatus(opts: { namespace: string }): Promise<void> {
   }
 
   console.log("")
+}
+
+// ── Pod polling ──────────────────────────────────────────────────────
+
+/** Strip replica-set / job hash suffixes from a K8s pod name. */
+function podShortName(name: string): string {
+  // Deployment pods: <name>-<rs-hash>-<pod-hash>
+  const withoutDeploy = name.replace(/-[a-z0-9]{6,10}-[a-z0-9]{5}$/, "")
+  if (withoutDeploy !== name) return withoutDeploy
+  // Job pods: <name>-<hash>
+  return name.replace(/-[a-z0-9]{5}$/, "")
+}
+
+interface PodInfo {
+  shortName: string
+  ready: string
+  status: string
+  isReady: boolean
+}
+
+function getPodStatuses(namespace: string): PodInfo[] {
+  const output = execSync(`kubectl get pods -n ${namespace} --no-headers`, {
+    stdio: "pipe",
+    encoding: "utf-8",
+  }).trim()
+
+  if (!output) return []
+
+  return output
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const parts = line.trim().split(/\s+/)
+      const [readyN, totalN] = parts[1].split("/").map(Number)
+      return {
+        shortName: podShortName(parts[0]),
+        ready: parts[1],
+        status: parts[2],
+        isReady: parts[2] === "Running" && readyN === totalN,
+      }
+    })
+}
+
+function safeGetPodStatuses(namespace: string): PodInfo[] {
+  try {
+    return getPodStatuses(namespace)
+  } catch {
+    return []
+  }
+}
+
+function printPodTable(namespace: string): void {
+  try {
+    const pods = getPodStatuses(namespace)
+    const tracked = pods.filter(
+      (p) => p.status !== "Completed" && p.status !== "Succeeded",
+    )
+    for (const pod of tracked) {
+      const isFailing = TERMINAL_POD_STATUSES.has(pod.status)
+      const icon = pod.isReady
+        ? pc.green("✓")
+        : isFailing
+          ? pc.red("✗")
+          : pc.yellow("●")
+      const color = pod.isReady ? pc.green : isFailing ? pc.red : pc.yellow
+      console.log(
+        `  ${icon} ${padRight(pod.shortName, 24)} ${color(pod.status)}`,
+      )
+    }
+  } catch {
+    console.log(pc.dim(`  kubectl get pods -n ${namespace}`))
+  }
 }
 
 // ── Utilities ────────────────────────────────────────────────────────
