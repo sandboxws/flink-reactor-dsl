@@ -324,7 +324,54 @@ async function runSimUp(opts: {
     }
   }
 
-  // ── Step 4: Generate init SQL ConfigMap (before manifests) ──────
+  // ── Step 4: Build pg-init image for sample database seeding ─────
+  if (opts.init) {
+    const { ensureSqlDumps, clusterInitDir } = await import(
+      "@/cli/cluster/pg-samples.js"
+    )
+    const initDir = clusterInitDir()
+    await ensureSqlDumps(initDir)
+
+    // Delete stale chinook.sql if it still contains DROP DATABASE
+    const chinookPath = join(initDir, "chinook.sql")
+    if (existsSync(chinookPath)) {
+      const { readFileSync } = await import("node:fs")
+      const head = readFileSync(chinookPath, "utf-8").slice(0, 2000)
+      if (/^DROP DATABASE\b/m.test(head)) {
+        const { unlinkSync } = await import("node:fs")
+        unlinkSync(chinookPath)
+        await ensureSqlDumps(initDir)
+      }
+    }
+
+    const buildSpinner = clack.spinner()
+    buildSpinner.start("Building pg-init image...")
+    try {
+      const dockerEnvOut = execSync("minikube docker-env --shell bash", {
+        stdio: "pipe",
+        encoding: "utf-8",
+      })
+      const envVars: Record<string, string> = {}
+      for (const match of dockerEnvOut.matchAll(/export (\w+)="([^"]+)"/g)) {
+        envVars[match[1]] = match[2]
+      }
+
+      execSync(
+        `docker build -t pg-init:latest -f "${join(simDir(), "Dockerfile.pg-init")}" "${initDir}"`,
+        {
+          stdio: "pipe",
+          env: { ...process.env, ...envVars },
+          timeout: 120_000,
+        },
+      )
+      buildSpinner.stop(pc.green("pg-init image built."))
+    } catch (err) {
+      buildSpinner.stop(pc.yellow("pg-init image build failed (non-critical)."))
+      if (err instanceof Error) console.log(pc.dim(`  ${err.message}`))
+    }
+  }
+
+  // ── Step 5: Generate init SQL ConfigMap (before manifests) ──────
   let initConfig: SimInitConfig | undefined
   if (opts.init) {
     const config = await loadConfig(process.cwd())
@@ -390,6 +437,16 @@ async function runSimUp(opts: {
       return
     }
     nsSpinner.stop(pc.green("Namespace deleted."))
+  }
+
+  // Delete completed init Jobs so they re-run on each sim up
+  try {
+    execSync(
+      `kubectl delete job pg-init -n ${opts.namespace} --ignore-not-found`,
+      { stdio: "pipe", timeout: 10_000 },
+    )
+  } catch {
+    // Namespace may not exist yet — fine
   }
 
   const yamlFiles = readdirSync(manifests)
@@ -465,6 +522,11 @@ async function runSimUp(opts: {
       console.log(
         pc.dim(
           "    docker build -t flink-reactor-s3:2.0.1 -f src/cli/sim/Dockerfile.flink-s3 .",
+        ),
+      )
+      console.log(
+        pc.dim(
+          "    docker build -t pg-init:latest -f src/cli/sim/Dockerfile.pg-init src/cli/cluster/init",
         ),
       )
       console.log("")
@@ -790,9 +852,36 @@ async function runSimDown(opts: {
         `kubectl delete -f "${manifests}" --ignore-not-found --wait=false --timeout=60s`,
         { stdio: "pipe", timeout: 90_000 },
       )
-      spinner.stop(pc.green("Simulation resources deleted."))
     } catch {
-      spinner.stop(pc.yellow("Some resources may already be deleted."))
+      // Some resources may already be deleted
+    }
+
+    // Poll until pods are gone
+    const POLL_INTERVAL_MS = 3_000
+    const TIMEOUT_MS = 120_000
+    const deadline = Date.now() + TIMEOUT_MS
+
+    while (Date.now() < deadline) {
+      const pods = safeGetPodStatuses(opts.namespace)
+      const remaining = pods.filter(
+        (p) => p.status !== "Completed" && p.status !== "Succeeded",
+      )
+
+      if (remaining.length === 0) break
+
+      spinner.message(`Waiting for ${remaining.length} pod(s) to terminate...`)
+      await new Promise<void>((resolve) =>
+        setTimeout(resolve, POLL_INTERVAL_MS),
+      )
+    }
+
+    const leftover = safeGetPodStatuses(opts.namespace).filter(
+      (p) => p.status !== "Completed" && p.status !== "Succeeded",
+    )
+    if (leftover.length === 0) {
+      spinner.stop(pc.green("All pods terminated."))
+    } else {
+      spinner.stop(pc.yellow(`${leftover.length} pod(s) still terminating.`))
     }
   }
 

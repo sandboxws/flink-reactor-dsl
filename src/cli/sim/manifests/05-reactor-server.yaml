@@ -77,6 +77,25 @@ spec:
               ARCH=$(uname -m | sed 's/aarch64/arm64/' | sed 's/x86_64/amd64/')
               wget -O /tools/kubectl "https://dl.k8s.io/release/v1.31.0/bin/linux/${ARCH}/kubectl"
               chmod +x /tools/kubectl
+              cat > /tools/kubeconfig <<'KUBEEOF'
+              apiVersion: v1
+              kind: Config
+              clusters:
+              - cluster:
+                  certificate-authority: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+                  server: https://kubernetes.default.svc
+                name: in-cluster
+              contexts:
+              - context:
+                  cluster: in-cluster
+                  user: service-account
+                name: in-cluster
+              current-context: in-cluster
+              users:
+              - name: service-account
+                user:
+                  tokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+              KUBEEOF
           volumeMounts:
             - name: tools
               mountPath: /tools
@@ -92,6 +111,8 @@ spec:
               value: "minikube"
             - name: FLINK_INIT_SQL_PATH
               value: "/opt/flink/init/init-catalogs.sql"
+            - name: KUBECONFIG
+              value: "/tools/kubeconfig"
             - name: PATH
               value: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/tools"
           resources:

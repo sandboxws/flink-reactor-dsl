@@ -1,0 +1,32 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pg-init
+  namespace: flink-demo
+spec:
+  backoffLimit: 5
+  template:
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+        - name: wait-for-postgres
+          image: timescale/timescaledb:latest-pg17
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h postgres -U reactor; do
+                echo "Waiting for PostgreSQL..."
+                sleep 2
+              done
+      containers:
+        - name: seed
+          image: pg-init:latest
+          imagePullPolicy: Never
+          env:
+            - name: PGHOST
+              value: "postgres"
+            - name: PGUSER
+              value: "reactor"
+            - name: PGPASSWORD
+              value: "reactor"
