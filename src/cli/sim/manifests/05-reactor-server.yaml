@@ -10,6 +10,8 @@ data:
     server:
       host: "0.0.0.0"
       port: 8080
+    spa:
+      static_dir: "/app/dashboard"
     flink:
       rest_url: "http://flink-demo-rest:8081"
       sql_gateway_url: "http://flink-sql-gateway:8083"
@@ -26,7 +28,8 @@ data:
       - name: "demo-kafka"
         type: "kafka"
         config:
-          brokers: "kafka:9092"
+          brokers:
+            - "kafka:9092"
       - name: "pagila"
         type: "database"
         config:
@@ -60,6 +63,23 @@ spec:
       labels:
         app: reactor-server
     spec:
+      serviceAccountName: flink
+      initContainers:
+        - name: wait-for-postgres
+          image: timescale/timescaledb:latest-pg17
+          command: ['sh', '-c', 'until pg_isready -h postgres -U reactor; do echo "waiting for postgres..."; sleep 2; done']
+        - name: install-kubectl
+          image: alpine:3.21
+          command:
+            - sh
+            - -c
+            - |
+              ARCH=$(uname -m | sed 's/aarch64/arm64/' | sed 's/x86_64/amd64/')
+              wget -O /tools/kubectl "https://dl.k8s.io/release/v1.31.0/bin/linux/${ARCH}/kubectl"
+              chmod +x /tools/kubectl
+          volumeMounts:
+            - name: tools
+              mountPath: /tools
       containers:
         - name: reactor-server
           image: reactor-server:latest
@@ -72,6 +92,8 @@ spec:
               value: "minikube"
             - name: FLINK_INIT_SQL_PATH
               value: "/opt/flink/init/init-catalogs.sql"
+            - name: PATH
+              value: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/tools"
           resources:
             requests:
               cpu: 200m
@@ -80,9 +102,12 @@ spec:
               memory: 256Mi
           volumeMounts:
             - name: config
-              mountPath: /app/config
+              mountPath: /config
             - name: init-sql
               mountPath: /opt/flink/init
+              readOnly: true
+            - name: tools
+              mountPath: /tools
               readOnly: true
       volumes:
         - name: config
@@ -92,6 +117,8 @@ spec:
           configMap:
             name: flink-init-sql
             optional: true
+        - name: tools
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

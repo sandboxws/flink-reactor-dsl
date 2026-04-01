@@ -41,7 +41,7 @@ spec:
     spec:
       containers:
         - name: postgres
-          image: postgres:17-alpine
+          image: timescale/timescaledb:latest-pg17
           ports:
             - name: postgres
               containerPort: 5432
@@ -57,9 +57,9 @@ spec:
           resources:
             requests:
               cpu: 500m
-              memory: 2Gi
+              memory: 256Mi
             limits:
-              memory: 2Gi
+              memory: 256Mi
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data

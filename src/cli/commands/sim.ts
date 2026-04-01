@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process"
+import { execSync, spawn } from "node:child_process"
 import { existsSync, readdirSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -172,6 +172,21 @@ function commandExists(cmd: string): boolean {
   try {
     execSync(`command -v ${cmd}`, { stdio: "pipe" })
     return true
+  } catch {
+    return false
+  }
+}
+
+function isNamespaceTerminating(ns: string): boolean {
+  try {
+    const phase = execSync(
+      `kubectl get namespace ${ns} -o jsonpath='{.status.phase}'`,
+      {
+        stdio: "pipe",
+        encoding: "utf-8",
+      },
+    ).trim()
+    return phase === "Terminating"
   } catch {
     return false
   }
@@ -351,12 +366,30 @@ async function runSimUp(opts: {
     }
   }
 
-  // ── Step 5: Apply manifests ──────────────────────────────────────
+  // ── Step 5: Wait for terminating namespace, then apply manifests ─
   const manifests = manifestsDir()
   if (!existsSync(manifests)) {
     console.error(pc.red(`Manifests directory not found: ${manifests}`))
     process.exitCode = 1
     return
+  }
+
+  // If the namespace is being deleted from a previous sim down, wait for it.
+  if (isNamespaceTerminating(opts.namespace)) {
+    const nsSpinner = clack.spinner()
+    nsSpinner.start(
+      `Waiting for namespace ${opts.namespace} to finish deleting...`,
+    )
+    const nsDeadline = Date.now() + 120_000
+    while (Date.now() < nsDeadline && isNamespaceTerminating(opts.namespace)) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 2_000))
+    }
+    if (isNamespaceTerminating(opts.namespace)) {
+      nsSpinner.stop(pc.red("Namespace still terminating after 2 minutes."))
+      process.exitCode = 1
+      return
+    }
+    nsSpinner.stop(pc.green("Namespace deleted."))
   }
 
   const yamlFiles = readdirSync(manifests)
@@ -457,18 +490,34 @@ async function runSimUp(opts: {
     console.log(`  ${pc.dim("⊘")} Resource init skipped (--no-init)`)
   }
 
-  // ── Summary ──────────────────────────────────────────────────────
-  console.log("")
-  console.log(pc.bold("  Next steps:"))
-  console.log("")
-  console.log(pc.dim("  Access the console:"))
-  console.log(
-    pc.dim(
-      `    kubectl port-forward svc/reactor-server 8080:8080 -n ${opts.namespace}`,
-    ),
-  )
-  console.log(pc.dim("    open http://localhost:8080"))
-  console.log("")
+  // ── Step 8: Port-forward services ─────────────────────────────────
+  const portForwards = [
+    {
+      svc: "svc/reactor-server",
+      local: 8080,
+      remote: 8080,
+      label: "Dashboard",
+    },
+    { svc: "svc/postgres", local: 5433, remote: 5432, label: "Postgres" },
+  ]
+
+  for (const pf of portForwards) {
+    const proc = spawn(
+      "kubectl",
+      [
+        "port-forward",
+        pf.svc,
+        `${pf.local}:${pf.remote}`,
+        "-n",
+        opts.namespace,
+      ],
+      { stdio: "ignore", detached: true },
+    )
+    proc.unref()
+    console.log(
+      `  ${pc.green("✓")} Port-forward ${pf.label}: ${pc.cyan(`localhost:${pf.local}`)}`,
+    )
+  }
 
   clack.outro(pc.green("Simulation infrastructure deployed!"))
 }
@@ -703,11 +752,44 @@ async function runSimDown(opts: {
   // Delete manifests (reverse of apply)
   const manifests = manifestsDir()
   if (existsSync(manifests)) {
+    // Delete FlinkDeployments first — their operator finalizer blocks
+    // namespace deletion. Strip finalizers and delete in one shot so the
+    // operator can't re-add the finalizer between the two calls.
+    try {
+      execSync(`kubectl get flinkdeployments -n ${opts.namespace} -o name`, {
+        stdio: "pipe",
+        encoding: "utf-8",
+        timeout: 10_000,
+      })
+        .trim()
+        .split("\n")
+        .filter(Boolean)
+        .forEach((fd) => {
+          try {
+            execSync(
+              `kubectl patch ${fd} -n ${opts.namespace} -p '{"metadata":{"finalizers":null}}' --type=merge`,
+              { stdio: "pipe", timeout: 10_000 },
+            )
+            execSync(
+              `kubectl delete ${fd} -n ${opts.namespace} --ignore-not-found --wait=false`,
+              { stdio: "pipe", timeout: 10_000 },
+            )
+          } catch {
+            // Best effort
+          }
+        })
+    } catch {
+      // No FlinkDeployments or CRD not installed
+    }
+
     spinner.start("Deleting simulation resources...")
     try {
-      execSync(`kubectl delete -f "${manifests}" --ignore-not-found`, {
-        stdio: "pipe",
-      })
+      // --wait=false so kubectl returns immediately instead of blocking
+      // on finalizers. --timeout as a safety net.
+      execSync(
+        `kubectl delete -f "${manifests}" --ignore-not-found --wait=false --timeout=60s`,
+        { stdio: "pipe", timeout: 90_000 },
+      )
       spinner.stop(pc.green("Simulation resources deleted."))
     } catch {
       spinner.stop(pc.yellow("Some resources may already be deleted."))

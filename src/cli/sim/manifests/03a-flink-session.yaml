@@ -1,0 +1,26 @@
+apiVersion: flink.apache.org/v1beta1
+kind: FlinkDeployment
+metadata:
+  name: flink-demo
+  namespace: flink-demo
+spec:
+  image: flink-reactor:2.0.1
+  imagePullPolicy: Never
+  flinkVersion: v2_0
+  flinkConfiguration:
+    taskmanager.numberOfTaskSlots: "4"
+    taskmanager.memory.managed.fraction: "0.1"
+    state.backend.type: hashmap
+    state.checkpoints.dir: file:///tmp/flink-checkpoints
+    state.savepoints.dir: file:///tmp/flink-savepoints
+    execution.checkpointing.interval: "30s"
+  serviceAccount: flink
+  jobManager:
+    resource:
+      memory: "1536m"
+      cpu: 0.25
+  taskManager:
+    resource:
+      memory: "1536m"
+      cpu: 0.25
+    replicas: 1
