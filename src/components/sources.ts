@@ -16,6 +16,7 @@ import type {
 
 const CDC_FORMATS: ReadonlySet<KafkaFormat> = new Set([
   "debezium-json",
+  "debezium-avro",
   "canal-json",
   "maxwell-json",
 ])
@@ -33,6 +34,7 @@ export type KafkaFormat =
   | "avro"
   | "csv"
   | "debezium-json"
+  | "debezium-avro"
   | "canal-json"
   | "maxwell-json"
 
@@ -73,7 +75,7 @@ export interface KafkaSourceProps<
  * Format defaults to 'json'. bootstrapServers falls back to
  * pipeline-level config if not specified here.
  *
- * When a CDC format (debezium-json, canal-json, maxwell-json) is used,
+ * When a CDC format (debezium-json, debezium-avro, canal-json, maxwell-json) is used,
  * the resulting stream carries ChangelogMode 'retract'. Non-CDC formats
  * produce an 'append-only' stream.
  */

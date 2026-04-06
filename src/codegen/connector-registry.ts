@@ -290,6 +290,17 @@ const FORMAT_REGISTRY: readonly FormatEntry[] = [
     builtIn: true,
     artifacts: [],
   },
+  {
+    formatId: "debezium-avro",
+    builtIn: false,
+    artifacts: [
+      {
+        groupId: "org.apache.flink",
+        artifactId: "flink-sql-avro-confluent-registry",
+        version: "1.20.0",
+      },
+    ],
+  },
 ]
 
 // ── Public API ──────────────────────────────────────────────────────
