@@ -2,16 +2,25 @@
   "name": "@flink-reactor/ts-plugin",
   "version": "0.1.0",
   "description": "TypeScript language service plugin providing JSX nesting diagnostics and context-aware completions for flink-reactor",
-  "license": "MIT",
+  "license": "BSL-1.1",
+  "author": "Ahmed El.Hussaini <328866+sandboxws@users.noreply.github.com>",
   "repository": {
     "type": "git",
-    "url": "https://github.com/sandboxws/flink-reactor.git",
+    "url": "https://github.com/sandboxws/flink-reactor-dsl.git",
     "directory": "packages/ts-plugin"
   },
   "bugs": {
-    "url": "https://github.com/sandboxws/flink-reactor/issues"
+    "url": "https://github.com/sandboxws/flink-reactor-dsl/issues"
   },
-  "homepage": "https://github.com/sandboxws/flink-reactor/tree/main/packages/ts-plugin#readme",
+  "homepage": "https://github.com/sandboxws/flink-reactor-dsl/tree/main/packages/ts-plugin#readme",
+  "keywords": [
+    "typescript",
+    "typescript-plugin",
+    "flink",
+    "jsx",
+    "diagnostics",
+    "flink-reactor"
+  ],
   "publishConfig": {
     "access": "public"
   },

@@ -3,16 +3,25 @@
   "version": "0.1.0",
   "description": "CLI to create new apps with the FlinkReactor design system",
   "type": "module",
-  "license": "MIT",
+  "license": "BSL-1.1",
+  "author": "Ahmed El.Hussaini <328866+sandboxws@users.noreply.github.com>",
   "repository": {
     "type": "git",
-    "url": "https://github.com/sandboxws/flink-reactor.git",
+    "url": "https://github.com/sandboxws/flink-reactor-dsl.git",
     "directory": "packages/create-fr-app"
   },
   "bugs": {
-    "url": "https://github.com/sandboxws/flink-reactor/issues"
+    "url": "https://github.com/sandboxws/flink-reactor-dsl/issues"
   },
-  "homepage": "https://github.com/sandboxws/flink-reactor/tree/main/packages/create-fr-app#readme",
+  "homepage": "https://github.com/sandboxws/flink-reactor-dsl/tree/main/packages/create-fr-app#readme",
+  "keywords": [
+    "flink",
+    "scaffolder",
+    "cli",
+    "streaming",
+    "tsx",
+    "flink-reactor"
+  ],
   "publishConfig": {
     "access": "public"
   },

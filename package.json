@@ -42,6 +42,7 @@
     "url": "https://github.com/sandboxws/flink-reactor-dsl/issues"
   },
   "homepage": "https://github.com/sandboxws/flink-reactor-dsl#readme",
+  "author": "Ahmed El.Hussaini <328866+sandboxws@users.noreply.github.com>",
   "scripts": {
     "build": "pnpm -r --filter './packages/*' run build && tsup",
     "dev": "tsup --watch",
