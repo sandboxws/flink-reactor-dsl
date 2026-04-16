@@ -32,6 +32,14 @@ describe("inferChangelogMode", () => {
     expect(inferChangelogMode("maxwell-json")).toBe("retract")
   })
 
+  it("returns retract for debezium-avro", () => {
+    expect(inferChangelogMode("debezium-avro")).toBe("retract")
+  })
+
+  it("returns retract for debezium-protobuf", () => {
+    expect(inferChangelogMode("debezium-protobuf")).toBe("retract")
+  })
+
   it("returns append-only for json", () => {
     expect(inferChangelogMode("json")).toBe("append-only")
   })
@@ -116,6 +124,29 @@ describe("Changelog validation", () => {
     expect(diagnostics[0].message).toContain("does not support")
     expect(diagnostics[0].message).toContain("retract")
     expect(diagnostics[0].nodeId).toBe(sink.id)
+  })
+
+  it("rejects retract stream from debezium-protobuf source into append-only KafkaSink", () => {
+    const ctx = new SynthContext()
+
+    const source = KafkaSource({
+      topic: "db.orders",
+      schema: OrderSchema,
+      format: "debezium-protobuf",
+      schemaRegistryUrl: "http://sr:8081",
+      primaryKey: ["order_id"],
+    })
+
+    const sink = KafkaSink({ topic: "output" })
+
+    ctx.addNode(source)
+    ctx.addNode(sink)
+    ctx.addEdge(source.id, sink.id)
+
+    const diagnostics = validateChangelogModes(ctx)
+    expect(diagnostics).toHaveLength(1)
+    expect(diagnostics[0].severity).toBe("error")
+    expect(diagnostics[0].message).toContain("retract")
   })
 
   it("accepts retract stream connected to JdbcSink with upsertMode=true", () => {

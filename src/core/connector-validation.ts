@@ -24,6 +24,21 @@ type PropertyRule = RequiredRule | ConditionalRule | InfraProvidedRule
 
 // ── Connector property registry ──────────────────────────────────────
 
+const REGISTRY_BACKED_CDC_FORMATS = new Set([
+  "debezium-avro",
+  "debezium-protobuf",
+])
+
+const schemaRegistryRule = (prop: "format"): ConditionalRule => ({
+  kind: "conditional",
+  prop: "schemaRegistryUrl",
+  when: (props) =>
+    typeof props[prop] === "string" &&
+    REGISTRY_BACKED_CDC_FORMATS.has(props[prop] as string),
+  description:
+    "required when `format` is `debezium-avro` or `debezium-protobuf` — the Flink SQL key is `<format>.schema-registry.url`",
+})
+
 const CONNECTOR_REGISTRY: ReadonlyMap<string, readonly PropertyRule[]> =
   new Map<string, PropertyRule[]>([
     [
@@ -32,6 +47,7 @@ const CONNECTOR_REGISTRY: ReadonlyMap<string, readonly PropertyRule[]> =
         { kind: "required", prop: "topic" },
         { kind: "required", prop: "schema" },
         { kind: "infra-provided", prop: "bootstrapServers" },
+        schemaRegistryRule("format"),
       ],
     ],
     [
@@ -39,6 +55,7 @@ const CONNECTOR_REGISTRY: ReadonlyMap<string, readonly PropertyRule[]> =
       [
         { kind: "required", prop: "topic" },
         { kind: "infra-provided", prop: "bootstrapServers" },
+        schemaRegistryRule("format"),
       ],
     ],
     [

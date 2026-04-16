@@ -42,7 +42,8 @@ export interface FormatEntry {
   readonly formatId: string
   /** If true, no extra JARs needed (json, csv) */
   readonly builtIn: boolean
-  readonly artifacts: readonly MavenArtifact[]
+  /** Artifact coordinates split by Flink major version range. */
+  readonly versions: readonly VersionedArtifacts[]
 }
 
 // ── Version helpers ─────────────────────────────────────────────────
@@ -245,59 +246,134 @@ const FORMAT_REGISTRY: readonly FormatEntry[] = [
   {
     formatId: "json",
     builtIn: true,
-    artifacts: [],
+    versions: [],
   },
   {
     formatId: "csv",
     builtIn: true,
-    artifacts: [],
+    versions: [],
   },
   {
     formatId: "avro",
     builtIn: false,
-    artifacts: [
+    versions: [
       {
-        groupId: "org.apache.flink",
-        artifactId: "flink-sql-avro",
-        version: "1.20.0",
+        minVersion: "1.20",
+        maxVersion: "1.20",
+        artifacts: [
+          {
+            groupId: "org.apache.flink",
+            artifactId: "flink-sql-avro",
+            version: "1.20.0",
+          },
+        ],
+      },
+      {
+        minVersion: "2.0",
+        artifacts: [
+          {
+            groupId: "org.apache.flink",
+            artifactId: "flink-sql-avro",
+            version: "2.0.0",
+          },
+        ],
       },
     ],
   },
   {
     formatId: "parquet",
     builtIn: false,
-    artifacts: [
+    versions: [
       {
-        groupId: "org.apache.flink",
-        artifactId: "flink-sql-parquet",
-        version: "1.20.0",
+        minVersion: "1.20",
+        maxVersion: "1.20",
+        artifacts: [
+          {
+            groupId: "org.apache.flink",
+            artifactId: "flink-sql-parquet",
+            version: "1.20.0",
+          },
+        ],
+      },
+      {
+        minVersion: "2.0",
+        artifacts: [
+          {
+            groupId: "org.apache.flink",
+            artifactId: "flink-sql-parquet",
+            version: "2.0.0",
+          },
+        ],
       },
     ],
   },
-  // CDC formats use the Kafka connector directly (debezium-json, canal-json, maxwell-json are built-in)
+  // CDC formats that ship with the Kafka connector (no extra jars)
   {
     formatId: "debezium-json",
     builtIn: true,
-    artifacts: [],
+    versions: [],
   },
   {
     formatId: "canal-json",
     builtIn: true,
-    artifacts: [],
+    versions: [],
   },
   {
     formatId: "maxwell-json",
     builtIn: true,
-    artifacts: [],
+    versions: [],
   },
   {
     formatId: "debezium-avro",
     builtIn: false,
-    artifacts: [
+    versions: [
       {
-        groupId: "org.apache.flink",
-        artifactId: "flink-sql-avro-confluent-registry",
-        version: "1.20.0",
+        minVersion: "1.20",
+        maxVersion: "1.20",
+        artifacts: [
+          {
+            groupId: "org.apache.flink",
+            artifactId: "flink-sql-avro-confluent-registry",
+            version: "1.20.0",
+          },
+        ],
+      },
+      {
+        minVersion: "2.0",
+        artifacts: [
+          {
+            groupId: "org.apache.flink",
+            artifactId: "flink-sql-avro-confluent-registry",
+            version: "2.0.0",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    formatId: "debezium-protobuf",
+    builtIn: false,
+    versions: [
+      {
+        minVersion: "1.20",
+        maxVersion: "1.20",
+        artifacts: [
+          {
+            groupId: "org.apache.flink",
+            artifactId: "flink-sql-protobuf-confluent-registry",
+            version: "1.20.0",
+          },
+        ],
+      },
+      {
+        minVersion: "2.0",
+        artifacts: [
+          {
+            groupId: "org.apache.flink",
+            artifactId: "flink-sql-protobuf-confluent-registry",
+            version: "2.0.0",
+          },
+        ],
       },
     ],
   },
@@ -370,15 +446,28 @@ export function resolveJdbcDialectArtifacts(
 }
 
 /**
- * Resolve format dependencies. Returns artifacts needed for the given format.
- * Built-in formats (json, csv) return an empty array.
+ * Resolve format dependencies. Returns artifacts needed for the given format
+ * at the target Flink major version. Built-in formats (json, csv, debezium-json)
+ * return an empty array. Unknown formats or Flink versions outside every
+ * registered range also return an empty array.
  */
 export function resolveFormatArtifacts(
   formatId: string,
+  flinkVersion: FlinkMajorVersion,
 ): readonly MavenArtifact[] {
   const entry = FORMAT_REGISTRY.find((f) => f.formatId === formatId)
   if (!entry || entry.builtIn) return []
-  return entry.artifacts
+
+  for (const v of entry.versions) {
+    const meetsMin = versionGte(flinkVersion, v.minVersion)
+    const meetsMax =
+      v.maxVersion === undefined || versionLte(flinkVersion, v.maxVersion)
+    if (meetsMin && meetsMax) {
+      return v.artifacts
+    }
+  }
+
+  return []
 }
 
 /**

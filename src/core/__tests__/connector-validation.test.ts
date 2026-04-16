@@ -85,6 +85,82 @@ describe("validateConnectorProperties", () => {
     expect(bsErrors[0].component).toBe("KafkaSource")
   })
 
+  it("errors when debezium-protobuf KafkaSource is missing schemaRegistryUrl", () => {
+    const tree = makePipeline(
+      makeNode("KafkaSource", "Source", {
+        topic: "orders",
+        schema: { columns: [] },
+        bootstrapServers: "kafka:9092",
+        format: "debezium-protobuf",
+      }),
+    )
+
+    const diags = validateConnectorProperties(tree)
+    const srErrors = diags.filter(
+      (d) =>
+        d.severity === "error" &&
+        d.details?.missingProps?.includes("schemaRegistryUrl"),
+    )
+    expect(srErrors).toHaveLength(1)
+    expect(srErrors[0].component).toBe("KafkaSource")
+    expect(srErrors[0].message).toContain("debezium-protobuf")
+    expect(srErrors[0].message).toContain("schema-registry.url")
+  })
+
+  it("errors when debezium-avro KafkaSource is missing schemaRegistryUrl", () => {
+    const tree = makePipeline(
+      makeNode("KafkaSource", "Source", {
+        topic: "orders",
+        schema: { columns: [] },
+        bootstrapServers: "kafka:9092",
+        format: "debezium-avro",
+      }),
+    )
+
+    const diags = validateConnectorProperties(tree)
+    const srErrors = diags.filter(
+      (d) =>
+        d.severity === "error" &&
+        d.details?.missingProps?.includes("schemaRegistryUrl"),
+    )
+    expect(srErrors).toHaveLength(1)
+  })
+
+  it("no error when debezium-protobuf KafkaSource provides schemaRegistryUrl", () => {
+    const tree = makePipeline(
+      makeNode("KafkaSource", "Source", {
+        topic: "orders",
+        schema: { columns: [] },
+        bootstrapServers: "kafka:9092",
+        format: "debezium-protobuf",
+        schemaRegistryUrl: "http://sr:8081",
+      }),
+    )
+
+    const diags = validateConnectorProperties(tree)
+    const srErrors = diags.filter((d) =>
+      d.details?.missingProps?.includes("schemaRegistryUrl"),
+    )
+    expect(srErrors).toHaveLength(0)
+  })
+
+  it("no error for plain JSON KafkaSource without schemaRegistryUrl", () => {
+    const tree = makePipeline(
+      makeNode("KafkaSource", "Source", {
+        topic: "events",
+        schema: { columns: [] },
+        bootstrapServers: "kafka:9092",
+        format: "json",
+      }),
+    )
+
+    const diags = validateConnectorProperties(tree)
+    const srErrors = diags.filter((d) =>
+      d.details?.missingProps?.includes("schemaRegistryUrl"),
+    )
+    expect(srErrors).toHaveLength(0)
+  })
+
   // ── KafkaSink ────────────────────────────────────────────────────
 
   it("errors when KafkaSink is missing topic", () => {

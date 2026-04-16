@@ -246,7 +246,7 @@ export function resolveConnectors(
 
     // Resolve format artifacts
     if (usage.format) {
-      const formatArtifacts = resolveFormatArtifacts(usage.format)
+      const formatArtifacts = resolveFormatArtifacts(usage.format, flinkVersion)
       for (const a of formatArtifacts) {
         trackArtifact(a, nodeIds)
       }

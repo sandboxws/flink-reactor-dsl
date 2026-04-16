@@ -17,6 +17,8 @@ export type SinkFormat =
   | "avro"
   | "csv"
   | "debezium-json"
+  | "debezium-avro"
+  | "debezium-protobuf"
   | "canal-json"
 
 export type FileFormat = "parquet" | "orc" | "csv" | "json"
@@ -34,6 +36,11 @@ export interface KafkaSinkProps extends BaseComponentProps {
   readonly topic: string
   readonly format?: SinkFormat
   readonly bootstrapServers?: string
+  /**
+   * Confluent Schema Registry URL. Required when `format` is `"debezium-avro"`
+   * or `"debezium-protobuf"`.
+   */
+  readonly schemaRegistryUrl?: string
   /** Enable operator tailing for this sink */
   readonly tap?: boolean | TapConfig
   readonly children?: ConstructNode | ConstructNode[]

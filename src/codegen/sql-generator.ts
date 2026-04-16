@@ -758,6 +758,8 @@ function toInsertOnlyFormat(format: string): string {
       return "json"
     case "debezium-avro":
       return "avro"
+    case "debezium-protobuf":
+      return "protobuf"
     default:
       return format
   }
@@ -1020,6 +1022,7 @@ function generateSourceWithClause(node: ConstructNode): string {
         rawFormat === "debezium-json" ||
         rawFormat === "canal-json" ||
         rawFormat === "debezium-avro" ||
+        rawFormat === "debezium-protobuf" ||
         rawFormat === "maxwell-json"
       if (hasPk && !isChangelogFormat) {
         withProps.connector = "upsert-kafka"
@@ -1030,6 +1033,15 @@ function generateSourceWithClause(node: ConstructNode): string {
         withProps.connector = "kafka"
         withProps.topic = props.topic as string
         withProps.format = rawFormat
+      }
+      // Registry-backed CDC formats require a Schema Registry endpoint.
+      // The prop is enforced upstream by validation; emit when present.
+      if (
+        (rawFormat === "debezium-avro" || rawFormat === "debezium-protobuf") &&
+        props.schemaRegistryUrl
+      ) {
+        withProps[`${rawFormat}.schema-registry.url`] =
+          props.schemaRegistryUrl as string
       }
       if (props.bootstrapServers) {
         withProps["properties.bootstrap.servers"] =
@@ -1250,23 +1262,31 @@ function generateSinkWithClause(
         metadata?.changelogMode === "retract" &&
         metadata.primaryKey &&
         metadata.primaryKey.length > 0
+      const rawFormat = (props.format as string) ?? "json"
       if (needsUpsert) {
         withProps.connector = "upsert-kafka"
         withProps.topic = props.topic as string
         withProps["key.format"] = "json"
         // upsert-kafka requires an insert-only value format — strip changelog
         // formats (debezium-json, canal-json) to their base serialization
-        const rawFormat = (props.format as string) ?? "json"
         withProps["value.format"] = toInsertOnlyFormat(rawFormat)
       } else {
         withProps.connector = "kafka"
         withProps.topic = props.topic as string
-        withProps.format = (props.format as string) ?? "json"
+        withProps.format = rawFormat
       }
       // Explicit prop takes priority; fall back to pipeline-level bootstrap
       const bootstrap = (props.bootstrapServers as string) ?? pipelineBootstrap
       if (bootstrap) {
         withProps["properties.bootstrap.servers"] = bootstrap
+      }
+      if (
+        !needsUpsert &&
+        (rawFormat === "debezium-avro" || rawFormat === "debezium-protobuf") &&
+        props.schemaRegistryUrl
+      ) {
+        withProps[`${rawFormat}.schema-registry.url`] =
+          props.schemaRegistryUrl as string
       }
       break
     }

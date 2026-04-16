@@ -600,6 +600,74 @@ SELECT * FROM \`dbserver1_inventory_orders\`;
 "
 `;
 
+exports[`6.8b: CDC source with debezium-protobuf > produces Kafka source DDL with debezium-protobuf format and schema-registry.url 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : cdc-protobuf-pipeline
+-- ====================================================================
+
+SET 'pipeline.name' = 'cdc-protobuf-pipeline';
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : dbserver1_inventory_orders
+-- type        : kafka
+-- topic       : dbserver1.inventory.orders
+-- format      : debezium-protobuf
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`dbserver1_inventory_orders\` (
+  \`order_id\` BIGINT,
+  \`product\` STRING,
+  \`quantity\` INT,
+  \`price\` DECIMAL(10, 2),
+  PRIMARY KEY (\`order_id\`) NOT ENFORCED
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'dbserver1.inventory.orders',
+  'format' = 'debezium-protobuf',
+  'debezium-protobuf.schema-registry.url' = 'http://schema-registry:8081',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : orders_snapshot
+-- type        : jdbc
+-- table       : orders_snapshot
+-- url         : jdbc:postgresql://localhost:5433/warehouse
+-- ====================================================================
+
+CREATE TABLE \`orders_snapshot\` (
+  \`order_id\` BIGINT,
+  \`product\` STRING,
+  \`quantity\` INT,
+  \`price\` DECIMAL(10, 2),
+  PRIMARY KEY (\`order_id\`) NOT ENFORCED
+) WITH (
+  'connector' = 'jdbc',
+  'url' = 'jdbc:postgresql://localhost:5433/warehouse',
+  'table-name' = 'orders_snapshot'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : dbserver1_inventory_orders
+-- output      : orders_snapshot
+-- ====================================================================
+
+INSERT INTO \`orders_snapshot\`
+SELECT * FROM \`dbserver1_inventory_orders\`;
+"
+`;
+
 exports[`6.9: LookupJoin with async config > produces lookup join with proc_time and FOR SYSTEM_TIME AS OF 1`] = `
 "-- ====================================================================
 -- PIPELINE

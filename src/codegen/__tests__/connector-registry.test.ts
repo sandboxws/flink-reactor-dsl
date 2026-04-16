@@ -178,31 +178,58 @@ describe("resolveJdbcDialectArtifacts", () => {
 
 describe("resolveFormatArtifacts", () => {
   it("returns empty for JSON (built-in)", () => {
-    expect(resolveFormatArtifacts("json")).toHaveLength(0)
+    expect(resolveFormatArtifacts("json", "1.20")).toHaveLength(0)
   })
 
   it("returns empty for CSV (built-in)", () => {
-    expect(resolveFormatArtifacts("csv")).toHaveLength(0)
+    expect(resolveFormatArtifacts("csv", "1.20")).toHaveLength(0)
   })
 
-  it("returns Avro JAR for avro format", () => {
-    const artifacts = resolveFormatArtifacts("avro")
+  it("returns 1.20 Avro JAR for avro format on Flink 1.20", () => {
+    const artifacts = resolveFormatArtifacts("avro", "1.20")
     expect(artifacts).toHaveLength(1)
     expect(artifacts[0].artifactId).toBe("flink-sql-avro")
+    expect(artifacts[0].version).toBe("1.20.0")
+  })
+
+  it("returns 2.0 Avro JAR for avro format on Flink 2.x", () => {
+    const artifacts = resolveFormatArtifacts("avro", "2.0")
+    expect(artifacts).toHaveLength(1)
+    expect(artifacts[0].version).toBe("2.0.0")
   })
 
   it("returns Parquet JAR for parquet format", () => {
-    const artifacts = resolveFormatArtifacts("parquet")
+    const artifacts = resolveFormatArtifacts("parquet", "1.20")
     expect(artifacts).toHaveLength(1)
     expect(artifacts[0].artifactId).toBe("flink-sql-parquet")
   })
 
   it("returns empty for debezium-json (built-in CDC)", () => {
-    expect(resolveFormatArtifacts("debezium-json")).toHaveLength(0)
+    expect(resolveFormatArtifacts("debezium-json", "1.20")).toHaveLength(0)
   })
 
   it("returns empty for unknown format", () => {
-    expect(resolveFormatArtifacts("protobuf")).toHaveLength(0)
+    expect(resolveFormatArtifacts("protobuf", "1.20")).toHaveLength(0)
+  })
+
+  it("returns Flink 1.20 Protobuf Confluent Registry artifact", () => {
+    const artifacts = resolveFormatArtifacts("debezium-protobuf", "1.20")
+    expect(artifacts).toHaveLength(1)
+    expect(artifacts[0]).toEqual({
+      groupId: "org.apache.flink",
+      artifactId: "flink-sql-protobuf-confluent-registry",
+      version: "1.20.0",
+    })
+  })
+
+  it("returns Flink 2.x Protobuf Confluent Registry artifact", () => {
+    const artifacts = resolveFormatArtifacts("debezium-protobuf", "2.0")
+    expect(artifacts).toHaveLength(1)
+    expect(artifacts[0]).toEqual({
+      groupId: "org.apache.flink",
+      artifactId: "flink-sql-protobuf-confluent-registry",
+      version: "2.0.0",
+    })
   })
 })
 

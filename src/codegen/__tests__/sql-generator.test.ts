@@ -451,6 +451,48 @@ describe("6.8: CDC source with debezium-json", () => {
   })
 })
 
+// ── 6.8b: CDC source with debezium-protobuf ─────────────────────────
+
+describe("6.8b: CDC source with debezium-protobuf", () => {
+  it("produces Kafka source DDL with debezium-protobuf format and schema-registry.url", () => {
+    const source = KafkaSource({
+      topic: "dbserver1.inventory.orders",
+      format: "debezium-protobuf",
+      bootstrapServers: "kafka:9092",
+      schemaRegistryUrl: "http://schema-registry:8081",
+      schema: Schema({
+        fields: {
+          order_id: Field.BIGINT(),
+          product: Field.STRING(),
+          quantity: Field.INT(),
+          price: Field.DECIMAL(10, 2),
+        },
+        primaryKey: { columns: ["order_id"] },
+      }),
+    })
+
+    const sink = JdbcSink({
+      url: "jdbc:postgresql://localhost:5433/warehouse",
+      table: "orders_snapshot",
+      upsertMode: true,
+      keyFields: ["order_id"],
+      children: [source],
+    })
+
+    const pipeline = Pipeline({
+      name: "cdc-protobuf-pipeline",
+      children: [sink],
+    })
+
+    const result = generateSql(pipeline)
+    expect(result.sql).toMatchSnapshot()
+    expect(result.sql).toContain("'format' = 'debezium-protobuf'")
+    expect(result.sql).toContain(
+      "'debezium-protobuf.schema-registry.url' = 'http://schema-registry:8081'",
+    )
+  })
+})
+
 // ── 6.9: LookupJoin with async config ──────────────────────────────
 
 describe("6.9: LookupJoin with async config", () => {

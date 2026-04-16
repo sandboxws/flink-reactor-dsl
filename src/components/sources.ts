@@ -17,6 +17,7 @@ import type {
 const CDC_FORMATS: ReadonlySet<KafkaFormat> = new Set([
   "debezium-json",
   "debezium-avro",
+  "debezium-protobuf",
   "canal-json",
   "maxwell-json",
 ])
@@ -35,6 +36,7 @@ export type KafkaFormat =
   | "csv"
   | "debezium-json"
   | "debezium-avro"
+  | "debezium-protobuf"
   | "canal-json"
   | "maxwell-json"
 
@@ -64,6 +66,15 @@ export interface KafkaSourceProps<
   readonly startupMode?: KafkaStartupMode
   readonly consumerGroup?: string
   readonly primaryKey?: readonly string[]
+  /**
+   * Confluent Schema Registry URL. Required when `format` is `"debezium-avro"`
+   * or `"debezium-protobuf"` — the Flink deserializer fetches the writer schema
+   * from this endpoint at runtime. The deployment template must expose a
+   * reachable Schema Registry (in-cluster sidecar or external endpoint); see
+   * the Confluent `flink-sql-avro-confluent-registry` /
+   * `flink-sql-protobuf-confluent-registry` format docs for the request shape.
+   */
+  readonly schemaRegistryUrl?: string
   /** Enable operator tailing for this source */
   readonly tap?: boolean | TapConfig
   readonly children?: ConstructNode | ConstructNode[]
@@ -75,9 +86,13 @@ export interface KafkaSourceProps<
  * Format defaults to 'json'. bootstrapServers falls back to
  * pipeline-level config if not specified here.
  *
- * When a CDC format (debezium-json, debezium-avro, canal-json, maxwell-json) is used,
- * the resulting stream carries ChangelogMode 'retract'. Non-CDC formats
- * produce an 'append-only' stream.
+ * When a CDC format (debezium-json, debezium-avro, debezium-protobuf,
+ * canal-json, maxwell-json) is used, the resulting stream carries
+ * ChangelogMode 'retract'. Non-CDC formats produce an 'append-only' stream.
+ *
+ * Registry-backed CDC formats (`debezium-avro`, `debezium-protobuf`) require
+ * a Confluent Schema Registry endpoint — pass `schemaRegistryUrl` and ensure
+ * the FlinkDeployment template reaches a reachable Schema Registry service.
  */
 export function KafkaSource<T extends Record<string, FlinkType>>(
   props: KafkaSourceProps<T>,
