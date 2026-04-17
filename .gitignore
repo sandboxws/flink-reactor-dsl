@@ -390,3 +390,7 @@ openspec/
 src/cli/cluster/init/chinook.sql
 src/cli/cluster/init/employees.sql
 src/cli/cluster/init/pagila.sql
+
+packages/intellij/.intellijPlatform
+packages/intellij/build
+packages/intellij/.gradle
