@@ -3,9 +3,14 @@ import { resolveConnectors } from "@/codegen/connector-resolver.js"
 import { UDF } from "@/components/escape-hatches.js"
 import { Pipeline } from "@/components/pipeline.js"
 import { FileSystemSink, KafkaSink } from "@/components/sinks.js"
-import { JdbcSource, KafkaSource } from "@/components/sources.js"
+import {
+  JdbcSource,
+  KafkaSource,
+  PostgresCdcPipelineSource,
+} from "@/components/sources.js"
 import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
 import { Field, Schema } from "@/core/schema.js"
+import { secretRef } from "@/core/secret-ref.js"
 
 beforeEach(() => {
   resetNodeIdCounter()
@@ -361,5 +366,77 @@ describe("UDF JAR inclusion", () => {
     const udfJars = result.jars.filter((j) => j.artifact.groupId === "local")
     expect(udfJars).toHaveLength(1)
     expect(udfJars[0].jarName).toBe("shared-udf.jar")
+  })
+})
+
+// ── Postgres CDC Pipeline Connector ─────────────────────────────────
+
+describe("PostgresCdcPipelineSource connector resolution", () => {
+  it("resolves flink-cdc-pipeline-connector-postgres:3.6.0 at Flink 1.20", () => {
+    const source = PostgresCdcPipelineSource({
+      hostname: "pg-primary",
+      database: "shop",
+      username: "postgres",
+      password: secretRef("pg-primary-password"),
+      schemaList: ["public"],
+      tableList: ["public.orders"],
+    })
+
+    const pipeline = Pipeline({
+      name: "shop-cdc",
+      children: [FileSystemSink({ path: "/tmp/ignored", children: [source] })],
+    })
+
+    const result = resolveConnectors(pipeline, { flinkVersion: "1.20" })
+    const cdcJar = result.jars.find(
+      (j) => j.artifact.artifactId === "flink-cdc-pipeline-connector-postgres",
+    )
+    expect(cdcJar).toBeDefined()
+    expect(cdcJar?.artifact.version).toBe("3.6.0")
+    expect(cdcJar?.artifact.groupId).toBe("org.apache.flink")
+  })
+
+  it("resolves the same coordinate at Flink 2.0", () => {
+    const source = PostgresCdcPipelineSource({
+      hostname: "pg-primary",
+      database: "shop",
+      username: "postgres",
+      password: secretRef("pg-primary-password"),
+      schemaList: ["public"],
+      tableList: ["public.orders"],
+    })
+
+    const pipeline = Pipeline({
+      name: "shop-cdc",
+      children: [FileSystemSink({ path: "/tmp/ignored", children: [source] })],
+    })
+
+    const result = resolveConnectors(pipeline, { flinkVersion: "2.0" })
+    const cdcJar = result.jars.find(
+      (j) => j.artifact.artifactId === "flink-cdc-pipeline-connector-postgres",
+    )
+    expect(cdcJar?.artifact.version).toBe("3.6.0")
+  })
+
+  it("attributes provenance to the CDC source node", () => {
+    const source = PostgresCdcPipelineSource({
+      hostname: "pg-primary",
+      database: "shop",
+      username: "postgres",
+      password: secretRef("pg-primary-password"),
+      schemaList: ["public"],
+      tableList: ["public.orders"],
+    })
+
+    const pipeline = Pipeline({
+      name: "shop-cdc",
+      children: [FileSystemSink({ path: "/tmp/ignored", children: [source] })],
+    })
+
+    const result = resolveConnectors(pipeline, { flinkVersion: "2.0" })
+    const cdcJar = result.jars.find(
+      (j) => j.artifact.artifactId === "flink-cdc-pipeline-connector-postgres",
+    )
+    expect(cdcJar?.provenance).toContain(source.id)
   })
 })

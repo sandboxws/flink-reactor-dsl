@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { GenericSource, JdbcSource, KafkaSource } from "@/components/sources.js"
+import {
+  GenericSource,
+  JdbcSource,
+  KafkaSource,
+  PostgresCdcPipelineSource,
+} from "@/components/sources.js"
 import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
 import { Field, Schema } from "@/core/schema.js"
+import { secretRef } from "@/core/secret-ref.js"
 
 beforeEach(() => {
   resetNodeIdCounter()
@@ -121,5 +127,107 @@ describe("GenericSource", () => {
     })
 
     expect(node.props.schema).toBe(EventSchema)
+  })
+})
+
+describe("PostgresCdcPipelineSource", () => {
+  it("creates a Source node with hostname/database/tableList", () => {
+    const node = PostgresCdcPipelineSource({
+      hostname: "pg-primary",
+      database: "shop",
+      username: "postgres",
+      password: secretRef("pg-primary-password"),
+      schemaList: ["public"],
+      tableList: ["public.orders"],
+    })
+
+    expect(node.kind).toBe("Source")
+    expect(node.component).toBe("PostgresCdcPipelineSource")
+    expect(node.props.hostname).toBe("pg-primary")
+    expect(node.props.database).toBe("shop")
+    expect(node.props.tableList).toEqual(["public.orders"])
+  })
+
+  it("sets ChangelogMode to 'retract' unconditionally", () => {
+    const node = PostgresCdcPipelineSource({
+      hostname: "pg-primary",
+      database: "shop",
+      username: "postgres",
+      password: secretRef("pg-primary-password"),
+      schemaList: ["public"],
+      tableList: ["public.orders"],
+    })
+
+    expect(node.props.changelogMode).toBe("retract")
+  })
+
+  it("stores the SecretRef password unmodified on the node", () => {
+    const ref = secretRef("pg-primary-password")
+    const node = PostgresCdcPipelineSource({
+      hostname: "pg-primary",
+      database: "shop",
+      username: "postgres",
+      password: ref,
+      schemaList: ["public"],
+      tableList: ["public.orders"],
+    })
+
+    expect(node.props.password).toBe(ref)
+  })
+
+  it("throws when tableList is missing", () => {
+    expect(() =>
+      // biome-ignore lint/suspicious/noExplicitAny: deliberately missing prop
+      PostgresCdcPipelineSource({
+        hostname: "pg-primary",
+        database: "shop",
+        username: "postgres",
+        password: secretRef("pg-primary-password"),
+        schemaList: ["public"],
+      } as any),
+    ).toThrow(/PostgresCdcPipelineSource.*tableList/)
+  })
+
+  it("throws when password is missing", () => {
+    expect(() =>
+      // biome-ignore lint/suspicious/noExplicitAny: deliberately missing prop
+      PostgresCdcPipelineSource({
+        hostname: "pg-primary",
+        database: "shop",
+        username: "postgres",
+        schemaList: ["public"],
+        tableList: ["public.orders"],
+      } as any),
+    ).toThrow(/PostgresCdcPipelineSource.*password/)
+  })
+
+  it("preserves optional snapshot/startup/chunk/parallelism props", () => {
+    const node = PostgresCdcPipelineSource({
+      hostname: "pg-primary",
+      database: "shop",
+      username: "postgres",
+      password: secretRef("pg-primary-password"),
+      schemaList: ["public"],
+      tableList: ["public.orders"],
+      snapshotMode: "initial_only",
+      startupMode: "latest-offset",
+      chunkSize: 100000,
+      parallelism: 8,
+      replicationSlotName: "fr_shop_orders",
+      publicationName: "fr_shop_orders_pub",
+      slotDropOnStop: true,
+      heartbeatIntervalMs: 30000,
+      decodingPluginName: "wal2json",
+    })
+
+    expect(node.props.snapshotMode).toBe("initial_only")
+    expect(node.props.startupMode).toBe("latest-offset")
+    expect(node.props.chunkSize).toBe(100000)
+    expect(node.props.parallelism).toBe(8)
+    expect(node.props.replicationSlotName).toBe("fr_shop_orders")
+    expect(node.props.publicationName).toBe("fr_shop_orders_pub")
+    expect(node.props.slotDropOnStop).toBe(true)
+    expect(node.props.heartbeatIntervalMs).toBe(30000)
+    expect(node.props.decodingPluginName).toBe("wal2json")
   })
 })

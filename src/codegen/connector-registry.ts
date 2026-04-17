@@ -163,6 +163,25 @@ const CONNECTOR_REGISTRY: readonly ConnectorRegistryEntry[] = [
     builtIn: true,
     versions: [],
   },
+
+  // Postgres CDC Pipeline Connector (Flink CDC 3.6, version-independent of
+  // Flink core — the same artifact covers both the Flink 1.20 and 2.x ranges)
+  {
+    connectorId: "postgres-cdc-pipeline",
+    builtIn: false,
+    versions: [
+      {
+        minVersion: "1.20",
+        artifacts: [
+          {
+            groupId: "org.apache.flink",
+            artifactId: "flink-cdc-pipeline-connector-postgres",
+            version: "3.6.0",
+          },
+        ],
+      },
+    ],
+  },
 ]
 
 // ── JDBC Dialect Sub-Registry ───────────────────────────────────────

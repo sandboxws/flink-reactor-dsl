@@ -103,6 +103,34 @@ describe("resolveConnectorArtifacts: FileSystem", () => {
   })
 })
 
+// ── Postgres CDC Pipeline Connector ─────────────────────────────────
+
+describe("resolveConnectorArtifacts: postgres-cdc-pipeline", () => {
+  it("resolves 3.6.0 coordinate at Flink 1.20", () => {
+    const artifacts = resolveConnectorArtifacts("postgres-cdc-pipeline", "1.20")
+    expect(artifacts).toHaveLength(1)
+    expect(artifacts[0]).toEqual({
+      groupId: "org.apache.flink",
+      artifactId: "flink-cdc-pipeline-connector-postgres",
+      version: "3.6.0",
+    })
+  })
+
+  it("resolves the same coordinate at Flink 2.0", () => {
+    const artifacts = resolveConnectorArtifacts("postgres-cdc-pipeline", "2.0")
+    expect(artifacts).toHaveLength(1)
+    expect(artifacts[0].version).toBe("3.6.0")
+  })
+
+  it("resolves the same coordinate at Flink 2.2", () => {
+    const artifacts = resolveConnectorArtifacts("postgres-cdc-pipeline", "2.2")
+    expect(artifacts).toHaveLength(1)
+    expect(artifacts[0].artifactId).toBe(
+      "flink-cdc-pipeline-connector-postgres",
+    )
+  })
+})
+
 // ── JDBC Dialect Sub-Registry ───────────────────────────────────────
 
 describe("detectJdbcDialect", () => {

@@ -4,6 +4,7 @@ import {
   toSqlIdentifier,
 } from "@/core/jsx-runtime.js"
 import type { SchemaDefinition, WatermarkDeclaration } from "@/core/schema.js"
+import type { SecretRef } from "@/core/secret-ref.js"
 import type {
   BaseComponentProps,
   ChangelogMode,
@@ -181,6 +182,148 @@ export function GenericSource<T extends Record<string, FlinkType>>(
   const _nameHint = name ?? toSqlIdentifier(props.connector)
 
   return createElement("GenericSource", { ...rest, _nameHint }, ...childArray)
+}
+
+// ── PostgresCdcPipelineSource ───────────────────────────────────────
+
+/**
+ * Initial-snapshot strategy for `PostgresCdcPipelineSource`.
+ *
+ * - `'initial'`      — full snapshot, then stream from captured LSN (default).
+ * - `'never'`        — skip snapshot, stream from the current WAL position.
+ * - `'initial_only'` — run the snapshot, then exit (useful for one-shot
+ *                      backfills — the companion FlinkDeployment becomes a
+ *                      batch-style bounded job).
+ */
+export type PostgresCdcSnapshotMode = "initial" | "never" | "initial_only"
+
+/**
+ * Streaming-startup offset for `PostgresCdcPipelineSource`.
+ */
+export type PostgresCdcStartupMode =
+  | "initial"
+  | "latest-offset"
+  | "specific-offset"
+  | "timestamp"
+
+export interface PostgresCdcPipelineSourceProps<
+  T extends Record<string, FlinkType> = Record<string, FlinkType>,
+> extends BaseComponentProps {
+  /** Optional SQL-identifier name. Defaults to the pipeline name when omitted. */
+  readonly name?: string
+  readonly hostname: string
+  /** Defaults to `5432`. */
+  readonly port?: number
+  readonly database: string
+  readonly username: string
+  /**
+   * Secret reference for the Postgres password. The cleartext value never
+   * leaves the user-managed Kubernetes Secret — the DSL emits a
+   * `${env:<envName>}` placeholder in the pipeline YAML and an individual
+   * `env` entry in the FlinkDeployment podTemplate.
+   *
+   * A plain string here is rejected at compile time. Use `secretRef(...)`.
+   */
+  readonly password: SecretRef
+  readonly schemaList: readonly string[]
+  readonly tableList: readonly string[]
+  /** Optional — when omitted, a deterministic name is derived from the pipeline. */
+  readonly replicationSlotName?: string
+  /** Optional — when omitted, a deterministic name is derived from the pipeline. */
+  readonly publicationName?: string
+  /** Defaults to `'initial'`. */
+  readonly snapshotMode?: PostgresCdcSnapshotMode
+  /** Defaults to `'initial'`. */
+  readonly startupMode?: PostgresCdcStartupMode
+  /** Logical-decoding plugin. Defaults to `'pgoutput'` (Postgres 10+). */
+  readonly decodingPluginName?: string
+  /** Postgres heartbeat interval, milliseconds. */
+  readonly heartbeatIntervalMs?: number
+  /** Drop the replication slot on job stop. Defaults to `false`. */
+  readonly slotDropOnStop?: boolean
+  /** Row-chunk size for the incremental snapshot fan-out. */
+  readonly chunkSize?: number
+  /**
+   * Optional static schema. When absent, downstream tooling that requires
+   * columns (e.g. `schema --live`) must introspect the Postgres server
+   * directly via `information_schema.columns`.
+   */
+  readonly schema?: SchemaDefinition<T>
+  /** Explicit primary-key hint. Overrides the PK inferred from `tableList`. */
+  readonly primaryKey?: readonly string[]
+  /**
+   * Not supported for Pipeline Connector sources yet — passing `true` here
+   * will raise a synthesis-time diagnostic. Kept on the type so the error
+   * surfaces clearly instead of being silently ignored.
+   */
+  readonly tap?: boolean | TapConfig
+  readonly children?: ConstructNode | ConstructNode[]
+}
+
+/**
+ * Flink CDC 3.6 **Pipeline Connector** Postgres source.
+ *
+ * Unlike the Kafka-hop topology (`KafkaSource({ format: 'debezium-json' })`),
+ * a Pipeline Connector source runs replication-slot / publication-based CDC
+ * directly inside the Flink job — no external Debezium Connect cluster, no
+ * per-record JSON serialization, and end-to-end schema evolution handled by
+ * the CDC runtime. The synthesis engine emits a `pipeline.yaml` artifact
+ * (instead of Flink SQL DDL) and a `FlinkDeployment` CRD that launches the
+ * `flink-cdc-cli.jar` entrypoint with the YAML mounted as a ConfigMap.
+ *
+ * The resulting `Stream` carries ChangelogMode `'retract'` unconditionally
+ * — Pipeline-Connector sources are always CDC, so downstream sinks must be
+ * upsert-capable (e.g. `IcebergSink` with `formatVersion: 2` + `upsertEnabled`,
+ * or `PaimonSink` with a `primaryKey`). The synthesis engine rejects
+ * non-upsert sinks with a diagnostic naming both endpoints.
+ *
+ * ## Replication slot ownership
+ *
+ * If `replicationSlotName` is supplied, it is referenced verbatim and the
+ * user owns the slot's creation / deletion. If omitted, a deterministic name
+ * is derived from the pipeline name so that re-synthesizing the same pipeline
+ * resumes from the same slot. `slotDropOnStop: true` drops the slot when the
+ * job terminates — safe for one-shot `snapshotMode: 'initial_only'` jobs,
+ * but *dangerous* for long-running streaming jobs because it forfeits the
+ * low-water-mark that subsequent runs need to rejoin the WAL.
+ *
+ * ## Publication lifecycle
+ *
+ * `publicationName` behaves the same way as the slot name — bring your own
+ * or the DSL derives one. The publication itself is always user-managed
+ * (the DSL never executes `CREATE PUBLICATION`). Make sure the publication
+ * covers every table named in `tableList`, or CDC will silently drop rows
+ * from unpublished tables.
+ *
+ * ## Version pin
+ *
+ * The connector is pinned to `flink-cdc-pipeline-connector-postgres:3.6.0`
+ * across Flink 1.20 and 2.x (Flink CDC pipeline connectors version
+ * independently of Flink core).
+ */
+export function PostgresCdcPipelineSource<T extends Record<string, FlinkType>>(
+  props: PostgresCdcPipelineSourceProps<T>,
+): ConstructNode {
+  requireProps("PostgresCdcPipelineSource", props, [
+    "hostname",
+    "database",
+    "username",
+    "password",
+    "schemaList",
+    "tableList",
+  ])
+  const { children, name, ...rest } = props
+  const childArray =
+    children == null ? [] : Array.isArray(children) ? children : [children]
+
+  const changelogMode: ChangelogMode = "retract"
+  const _nameHint = name ?? toSqlIdentifier(props.database)
+
+  return createElement(
+    "PostgresCdcPipelineSource",
+    { ...rest, changelogMode, _nameHint },
+    ...childArray,
+  )
 }
 
 // ── DataGenSource ──────────────────────────────────────────────────

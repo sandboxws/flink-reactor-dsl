@@ -19,23 +19,46 @@ export function registerSchemaCommand(program: Command): void {
     .description("Display input and output schemas of a pipeline")
     .argument("<path>", "Path to a .tsx pipeline file, or a pipeline name")
     .option("--json", "Output as JSON")
-    .action(async (pathArg: string, opts: { json?: boolean }) => {
-      await runCommand(
-        Effect.tryPromise({
-          try: () => runSchema(pathArg, opts),
-          catch: (err) =>
-            new CliError({
-              reason: "invalid_args",
-              message: (err as Error).message,
-            }),
-        }),
-      )
-    })
+    .option(
+      "--live",
+      "For Pipeline Connector sources (e.g. PostgresCdcPipelineSource), " +
+        "connect to the live database and introspect column metadata",
+    )
+    .option(
+      "--pg-connection-string <url>",
+      "Postgres connection string (overrides FR_PG_CONNECTION_STRING)",
+    )
+    .action(
+      async (
+        pathArg: string,
+        opts: {
+          json?: boolean
+          live?: boolean
+          pgConnectionString?: string
+        },
+      ) => {
+        await runCommand(
+          Effect.tryPromise({
+            try: () => runSchema(pathArg, opts),
+            catch: (err) =>
+              new CliError({
+                reason: "invalid_args",
+                message: (err as Error).message,
+              }),
+          }),
+        )
+      },
+    )
 }
 
 export async function runSchema(
   pathArg: string,
-  opts: { json?: boolean; projectDir?: string },
+  opts: {
+    json?: boolean
+    projectDir?: string
+    live?: boolean
+    pgConnectionString?: string
+  },
 ): Promise<IntrospectedSchema[]> {
   const projectDir = opts.projectDir ?? process.cwd()
   const filePath = resolveFilePath(pathArg, projectDir)
@@ -55,7 +78,16 @@ export async function runSchema(
     return []
   }
 
-  const schemas = introspectPipelineSchemas(pipelineNode)
+  let schemas = introspectPipelineSchemas(pipelineNode)
+
+  // Live Postgres introspection — opt-in via --live. Merges live-discovered
+  // columns into the displayed schema for any PostgresCdcPipelineSource.
+  if (opts.live) {
+    schemas = await enrichWithLivePostgres(pipelineNode, schemas, {
+      connectionString:
+        opts.pgConnectionString ?? process.env.FR_PG_CONNECTION_STRING,
+    })
+  }
 
   if (schemas.length === 0) {
     console.error(pc.yellow("No schemas found in this pipeline."))
@@ -70,6 +102,84 @@ export async function runSchema(
   }
 
   return schemas
+}
+
+// ── Live Postgres enrichment ────────────────────────────────────────
+
+async function enrichWithLivePostgres(
+  pipelineNode: ConstructNode,
+  schemas: IntrospectedSchema[],
+  opts: { connectionString?: string },
+): Promise<IntrospectedSchema[]> {
+  // Collect all PostgresCdcPipelineSource nodes.
+  const cdcSources: ConstructNode[] = []
+  walkTree(pipelineNode, (n) => {
+    if (n.component === "PostgresCdcPipelineSource") cdcSources.push(n)
+  })
+  if (cdcSources.length === 0) return schemas
+
+  if (!opts.connectionString) {
+    console.error(
+      pc.red(
+        "--live requires a Postgres connection string. Pass --pg-connection-string or set FR_PG_CONNECTION_STRING.",
+      ),
+    )
+    process.exitCode = 1
+    return schemas
+  }
+
+  const { introspectPostgresTables, splitQualifiedTable } = await import(
+    "@/cli/connectors/postgres-introspect.js"
+  )
+
+  const allSchemas = new Set<string>()
+  const allTables = new Set<string>()
+  for (const src of cdcSources) {
+    const schemaList = (src.props.schemaList as readonly string[]) ?? []
+    const tableList = (src.props.tableList as readonly string[]) ?? []
+    for (const s of schemaList) allSchemas.add(s)
+    for (const t of tableList) {
+      const { table } = splitQualifiedTable(t)
+      allTables.add(table)
+    }
+  }
+
+  try {
+    const live = await introspectPostgresTables({
+      connectionString: opts.connectionString,
+      schemaList: [...allSchemas],
+      tableList: [...allTables],
+    })
+
+    // For each CDC source, replace/augment its IntrospectedSchema columns.
+    return schemas.map((s) => {
+      const src = cdcSources.find((n) => n.id === s.nodeId)
+      if (!src) return s
+      const tableList = (src.props.tableList as readonly string[]) ?? []
+      if (tableList.length === 0) return s
+      // Use the first table as the canonical schema (CDC sources fan out,
+      // but the DSL displays the union; for v1 we show columns of the first
+      // table — richer mapping can follow in a later change).
+      const first = tableList[0]
+      const cols = live.get(first)
+      if (!cols || cols.length === 0) return s
+      return { ...s, columns: cols }
+    })
+  } catch (err) {
+    console.error(
+      pc.red(`Live Postgres introspection failed: ${(err as Error).message}`),
+    )
+    process.exitCode = 1
+    return schemas
+  }
+}
+
+function walkTree(
+  root: ConstructNode,
+  visit: (n: ConstructNode) => void,
+): void {
+  visit(root)
+  for (const c of root.children) walkTree(c, visit)
 }
 
 // ── Path resolution ─────────────────────────────────────────────────

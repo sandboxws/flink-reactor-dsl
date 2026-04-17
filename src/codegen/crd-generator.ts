@@ -2,7 +2,10 @@ import { Either } from "effect"
 import type { PipelineProps } from "@/components/pipeline.js"
 import { CrdGenerationError } from "@/core/errors.js"
 import { FlinkVersionCompat } from "@/core/flink-compat.js"
+import { isSecretRef, type SecretRef } from "@/core/secret-ref.js"
 import type { ConstructNode, FlinkMajorVersion } from "@/core/types.js"
+import { pipelineYamlConfigMapName } from "./secondary-resources.js"
+import { hasPipelineConnectorSource } from "./sql-generator.js"
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -325,6 +328,91 @@ function buildInnerSpec(
   }
 }
 
+// ── Pipeline Connector podTemplate builders ─────────────────────────
+
+const PIPELINE_YAML_MOUNT_PATH = "/etc/flink-cdc"
+const PIPELINE_YAML_VOLUME_NAME = "pipeline-yaml"
+const FLINK_CDC_CLI_JAR = "local:///opt/flink-cdc/lib/flink-cdc-cli.jar"
+const FLINK_MAIN_CONTAINER = "flink-main-container"
+
+/** Recursively collect unique SecretRefs, de-duplicated by envName. */
+export function collectSecretRefs(node: ConstructNode): readonly SecretRef[] {
+  const seen = new Map<string, SecretRef>()
+
+  function walk(n: ConstructNode): void {
+    for (const value of Object.values(n.props)) {
+      if (isSecretRef(value) && !seen.has(value.envName)) {
+        seen.set(value.envName, value)
+      }
+    }
+    for (const c of n.children) walk(c)
+  }
+
+  walk(node)
+  return [...seen.values()]
+}
+
+interface PodTemplateContainer {
+  readonly name: string
+  readonly env?: ReadonlyArray<{
+    readonly name: string
+    readonly valueFrom: {
+      readonly secretKeyRef: { readonly name: string; readonly key: string }
+    }
+  }>
+  readonly volumeMounts?: ReadonlyArray<{
+    readonly name: string
+    readonly mountPath: string
+    readonly readOnly?: boolean
+  }>
+}
+
+interface PodTemplate {
+  readonly spec: {
+    readonly containers: readonly PodTemplateContainer[]
+    readonly volumes?: ReadonlyArray<{
+      readonly name: string
+      readonly configMap: { readonly name: string }
+    }>
+  }
+}
+
+function buildPipelineConnectorPodTemplate(
+  pipelineName: string,
+  secretRefs: readonly SecretRef[],
+): PodTemplate {
+  const env = secretRefs.map((ref) => ({
+    name: ref.envName,
+    valueFrom: {
+      secretKeyRef: { name: ref.name, key: ref.key },
+    },
+  }))
+
+  const container: PodTemplateContainer = {
+    name: FLINK_MAIN_CONTAINER,
+    ...(env.length > 0 ? { env } : {}),
+    volumeMounts: [
+      {
+        name: PIPELINE_YAML_VOLUME_NAME,
+        mountPath: PIPELINE_YAML_MOUNT_PATH,
+        readOnly: true,
+      },
+    ],
+  }
+
+  return {
+    spec: {
+      containers: [container],
+      volumes: [
+        {
+          name: PIPELINE_YAML_VOLUME_NAME,
+          configMap: { name: pipelineYamlConfigMapName(pipelineName) },
+        },
+      ],
+    },
+  }
+}
+
 // ── CRD generation ──────────────────────────────────────────────────
 
 /**
@@ -338,11 +426,68 @@ export function generateCrd(
 ): AnyFlinkCrd {
   const props = pipelineNode.props as unknown as PipelineProps
 
+  // Pipeline Connector pipelines need a different jarURI, job args, and
+  // a podTemplate that mounts the pipeline.yaml ConfigMap + wires SecretRefs
+  // as env vars. Blue-green is incompatible with pipeline connectors today.
+  const isPipelineConnector = hasPipelineConnectorSource(pipelineNode)
+
   if (props.upgradeStrategy?.mode === "blue-green") {
+    if (isPipelineConnector) {
+      throw new Error(
+        "Blue-green upgrade strategy is not supported for Flink CDC Pipeline Connector pipelines",
+      )
+    }
     return generateBlueGreenCrd(props, options)
   }
 
+  if (isPipelineConnector) {
+    return generatePipelineConnectorCrd(pipelineNode, props, options)
+  }
+
   return generateFlinkDeploymentCrd(props, options)
+}
+
+function generatePipelineConnectorCrd(
+  pipelineNode: ConstructNode,
+  props: PipelineProps,
+  options: CrdGeneratorOptions,
+): FlinkDeploymentCrd {
+  const cdcOptions: CrdGeneratorOptions = {
+    ...options,
+    jarUri: options.jarUri ?? FLINK_CDC_CLI_JAR,
+    jarArgs: options.jarArgs ?? [
+      "--pipeline",
+      `${PIPELINE_YAML_MOUNT_PATH}/pipeline.yaml`,
+    ],
+  }
+  const innerSpec = buildInnerSpec(props, cdcOptions)
+  const secretRefs = collectSecretRefs(pipelineNode)
+  const podTemplate = buildPipelineConnectorPodTemplate(props.name, secretRefs)
+
+  const metadata: FlinkDeploymentCrd["metadata"] = {
+    name: props.name,
+    ...(options.labels ? { labels: options.labels } : {}),
+    ...(options.annotations ? { annotations: options.annotations } : {}),
+  }
+
+  return {
+    apiVersion: "flink.apache.org/v1beta1",
+    kind: "FlinkDeployment",
+    metadata,
+    spec: {
+      image: innerSpec.image,
+      flinkVersion: innerSpec.flinkVersion,
+      flinkConfiguration: innerSpec.flinkConfiguration,
+      jobManager: innerSpec.jobManager,
+      taskManager: innerSpec.taskManager,
+      podTemplate,
+      job: {
+        jarURI: innerSpec.job.jarURI,
+        parallelism: innerSpec.job.parallelism,
+        ...(innerSpec.job.args ? { args: innerSpec.job.args } : {}),
+      },
+    },
+  }
 }
 
 function generateFlinkDeploymentCrd(

@@ -1,0 +1,34 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`generatePipelineYaml > emits source/sink/pipeline stanzas for Postgres → Iceberg 1`] = `
+"source:
+  type: postgres
+  hostname: pg-primary
+  port: 5432
+  username: postgres
+  password: '\${env:PG_PRIMARY_PASSWORD}'
+  database-name: shop
+  schema-name: public
+  table-name: public.orders
+  decoding.plugin.name: pgoutput
+  slot.name: fr_shop_orders_cdc_slot
+  publication.name: fr_shop_orders_cdc_pub
+  scan.startup.mode: initial
+  scan.snapshot.enabled: true
+  scan.incremental.snapshot.chunk.size: 100000
+sink:
+  type: iceberg
+  catalog.name: lake
+  database: shop
+  table: orders
+  catalog.properties.type: rest
+  catalog.properties.uri: 'http://iceberg-rest:8181'
+  table.properties.format-version: '2'
+  table.properties.upsert.enabled: 'true'
+  table.properties.primary-key: order_id
+pipeline:
+  name: shop-orders-cdc
+  parallelism: 4
+  schema.change.behavior: evolve
+"
+`;

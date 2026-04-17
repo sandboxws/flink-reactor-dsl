@@ -1,6 +1,17 @@
 // ── FlinkReactor public API ──────────────────────────────────────────
 // This is the library entry point for `import { ... } from '@flink-reactor/dsl'`.
 
+export type { GeneratePipelineYamlOptions } from "./codegen/pipeline-yaml-generator.js"
+export { generatePipelineYaml } from "./codegen/pipeline-yaml-generator.js"
+export type {
+  ConfigMapResource,
+  SecondaryResource,
+} from "./codegen/secondary-resources.js"
+export {
+  buildPipelineYamlConfigMap,
+  pipelineYamlConfigMapName,
+  secondaryResourceToYaml,
+} from "./codegen/secondary-resources.js"
 export type { CatalogSourceProps } from "./components/catalog-source.js"
 // Components: catalog source
 export { CatalogSource } from "./components/catalog-source.js"
@@ -133,6 +144,9 @@ export type {
   KafkaFormat,
   KafkaSourceProps,
   KafkaStartupMode,
+  PostgresCdcPipelineSourceProps,
+  PostgresCdcSnapshotMode,
+  PostgresCdcStartupMode,
 } from "./components/sources.js"
 // Components: sources
 export {
@@ -140,6 +154,7 @@ export {
   GenericSource,
   JdbcSource,
   KafkaSource,
+  PostgresCdcPipelineSource,
 } from "./components/sources.js"
 export type { StatementSetProps } from "./components/statement-set.js"
 // Components: statement set
@@ -178,7 +193,6 @@ export type {
   SlideWindowProps,
   TumbleWindowProps,
 } from "./components/windows.js"
-
 // Components: windows
 export {
   SessionWindow,
@@ -293,6 +307,13 @@ export type {
 } from "./core/schema.js"
 // Core: schema
 export { Field, isValidFlinkType, Schema } from "./core/schema.js"
+export type { SecretRef } from "./core/secret-ref.js"
+export {
+  deriveEnvName,
+  isSecretRef,
+  renderSecretPlaceholder,
+  secretRef,
+} from "./core/secret-ref.js"
 export type {
   CliOutputService,
   ConfigProviderService,

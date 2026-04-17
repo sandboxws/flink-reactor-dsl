@@ -1,5 +1,51 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`CRD generation: Flink CDC Pipeline Connector variant > produces a stable CRD YAML snapshot 1`] = `
+"apiVersion: flink.apache.org/v1beta1
+kind: FlinkDeployment
+metadata:
+  name: shop-orders-cdc
+spec:
+  image: 'flink:2.0'
+  flinkVersion: v2_0
+  flinkConfiguration:
+    execution.runtime-mode: STREAMING
+  jobManager:
+    resource:
+      cpu: '1'
+      memory: 1024m
+    replicas: 1
+  taskManager:
+    resource:
+      cpu: '1'
+      memory: 1024m
+  podTemplate:
+    spec:
+      containers:
+        - name: flink-main-container
+          env: 
+            - name: PG_PRIMARY_PASSWORD
+              valueFrom: 
+                secretKeyRef:
+                  name: pg-primary-password
+                  key: password
+          volumeMounts: 
+            - name: pipeline-yaml
+              mountPath: /etc/flink-cdc
+              readOnly: true
+      volumes:
+        - name: pipeline-yaml
+          configMap: 
+            name: shop-orders-cdc-pipeline
+  job:
+    jarURI: 'local:///opt/flink-cdc/lib/flink-cdc-cli.jar'
+    parallelism: 4
+    args:
+      - --pipeline
+      - /etc/flink-cdc/pipeline.yaml
+"
+`;
+
 exports[`CRD generation: batch mode pipeline > produces snapshot-stable YAML for batch 1`] = `
 "apiVersion: flink.apache.org/v1beta1
 kind: FlinkDeployment

@@ -46,6 +46,7 @@ const COMPONENT_CONNECTOR_MAP: ReadonlyMap<string, string> = new Map([
   ["FileSystemSink", "filesystem"],
   ["GenericSource", "__generic"],
   ["GenericSink", "__generic"],
+  ["PostgresCdcPipelineSource", "postgres-cdc-pipeline"],
 ])
 
 // ── Tree walking ────────────────────────────────────────────────────

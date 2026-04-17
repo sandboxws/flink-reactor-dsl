@@ -104,6 +104,7 @@ const BUILTIN_KINDS: ReadonlyMap<string, NodeKind> = new Map([
   ["GenericSource", "Source"],
   ["DataGenSource", "Source"],
   ["CatalogSource", "Source"],
+  ["PostgresCdcPipelineSource", "Source"],
   ["KafkaSink", "Sink"],
   ["JdbcSink", "Sink"],
   ["FileSystemSink", "Sink"],

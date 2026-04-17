@@ -1,14 +1,17 @@
 import { beforeEach, describe, expect, it } from "vitest"
 import {
+  collectSecretRefs,
   generateCrd,
   generateCrdYaml,
   toMilliseconds,
 } from "@/codegen/crd-generator.js"
+import { IcebergCatalog } from "@/components/catalogs.js"
 import { Pipeline } from "@/components/pipeline.js"
-import { KafkaSink } from "@/components/sinks.js"
-import { KafkaSource } from "@/components/sources.js"
+import { IcebergSink, KafkaSink } from "@/components/sinks.js"
+import { KafkaSource, PostgresCdcPipelineSource } from "@/components/sources.js"
 import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
 import { Field, Schema } from "@/core/schema.js"
+import { secretRef } from "@/core/secret-ref.js"
 
 beforeEach(() => {
   resetNodeIdCounter()
@@ -336,5 +339,162 @@ describe("CRD generation: Flink 1.20 config normalization", () => {
     const crd = generateCrd(pipeline, { flinkVersion: "1.20" })
     // state.backend.type is normalized to state.backend for 1.20
     expect(crd.spec.flinkConfiguration["state.backend"]).toBe("rocksdb")
+  })
+})
+
+// ── Pipeline Connector CRD variant ──────────────────────────────────
+
+describe("CRD generation: Flink CDC Pipeline Connector variant", () => {
+  function buildCdcPipeline() {
+    const catalog = IcebergCatalog({
+      name: "lake",
+      catalogType: "rest",
+      uri: "http://iceberg-rest:8181",
+    })
+    const source = PostgresCdcPipelineSource({
+      hostname: "pg-primary",
+      database: "shop",
+      username: "postgres",
+      password: secretRef("pg-primary-password"),
+      schemaList: ["public"],
+      tableList: ["public.orders"],
+    })
+    const sink = IcebergSink({
+      catalog: catalog.handle,
+      database: "shop",
+      table: "orders",
+      formatVersion: 2,
+      upsertEnabled: true,
+      children: [source],
+    })
+    return Pipeline({
+      name: "shop-orders-cdc",
+      parallelism: 4,
+      children: [catalog.node, sink],
+    })
+  }
+
+  it("uses flink-cdc-cli.jar as the default jarURI", () => {
+    const crd = generateCrd(buildCdcPipeline(), { flinkVersion: "2.0" })
+    expect(crd.kind).toBe("FlinkDeployment")
+    // biome-ignore lint/suspicious/noExplicitAny: test introspection
+    expect((crd as any).spec.job.jarURI).toBe(
+      "local:///opt/flink-cdc/lib/flink-cdc-cli.jar",
+    )
+  })
+
+  it("passes --pipeline /etc/flink-cdc/pipeline.yaml as job args", () => {
+    const crd = generateCrd(buildCdcPipeline(), { flinkVersion: "2.0" })
+    // biome-ignore lint/suspicious/noExplicitAny: test introspection
+    expect((crd as any).spec.job.args).toEqual([
+      "--pipeline",
+      "/etc/flink-cdc/pipeline.yaml",
+    ])
+  })
+
+  it("mounts the pipeline ConfigMap via a podTemplate volume", () => {
+    const crd = generateCrd(buildCdcPipeline(), { flinkVersion: "2.0" })
+    // biome-ignore lint/suspicious/noExplicitAny: test introspection
+    const pod = (crd as any).spec.podTemplate
+    expect(pod).toBeDefined()
+    expect(pod.spec.volumes).toEqual([
+      {
+        name: "pipeline-yaml",
+        configMap: { name: "shop-orders-cdc-pipeline" },
+      },
+    ])
+    expect(pod.spec.containers[0].volumeMounts).toEqual([
+      { name: "pipeline-yaml", mountPath: "/etc/flink-cdc", readOnly: true },
+    ])
+  })
+
+  it("wires SecretRefs as individual env entries with secretKeyRef", () => {
+    const crd = generateCrd(buildCdcPipeline(), { flinkVersion: "2.0" })
+    // biome-ignore lint/suspicious/noExplicitAny: test introspection
+    const env = (crd as any).spec.podTemplate.spec.containers[0].env
+    expect(env).toEqual([
+      {
+        name: "PG_PRIMARY_PASSWORD",
+        valueFrom: {
+          secretKeyRef: { name: "pg-primary-password", key: "password" },
+        },
+      },
+    ])
+  })
+
+  it("never leaks the cleartext password into the CRD YAML", () => {
+    const yaml = generateCrdYaml(buildCdcPipeline(), { flinkVersion: "2.0" })
+    expect(yaml).not.toContain("hunter2")
+    expect(yaml).toContain("PG_PRIMARY_PASSWORD")
+  })
+
+  it("collectSecretRefs de-duplicates by envName", () => {
+    const catalog = IcebergCatalog({
+      name: "lake",
+      catalogType: "rest",
+      uri: "http://iceberg-rest:8181",
+    })
+    // Same secret referenced from two places
+    const source1 = PostgresCdcPipelineSource({
+      hostname: "pg-primary",
+      database: "shop",
+      username: "postgres",
+      password: secretRef("pg-primary-password"),
+      schemaList: ["public"],
+      tableList: ["public.orders"],
+    })
+    const sink = IcebergSink({
+      catalog: catalog.handle,
+      database: "shop",
+      table: "orders",
+      formatVersion: 2,
+      upsertEnabled: true,
+      children: [source1],
+    })
+    const pipeline = Pipeline({
+      name: "shop",
+      children: [catalog.node, sink],
+    })
+
+    expect(collectSecretRefs(pipeline)).toHaveLength(1)
+  })
+
+  it("produces a stable CRD YAML snapshot", () => {
+    const yaml = generateCrdYaml(buildCdcPipeline(), { flinkVersion: "2.0" })
+    expect(yaml).toMatchSnapshot()
+  })
+
+  it("rejects blue-green upgrade strategy for pipeline connector pipelines", () => {
+    const catalog = IcebergCatalog({
+      name: "lake",
+      catalogType: "rest",
+      uri: "http://iceberg-rest:8181",
+    })
+    const source = PostgresCdcPipelineSource({
+      hostname: "pg-primary",
+      database: "shop",
+      username: "postgres",
+      password: secretRef("pg-primary-password"),
+      schemaList: ["public"],
+      tableList: ["public.orders"],
+    })
+    const sink = IcebergSink({
+      catalog: catalog.handle,
+      database: "shop",
+      table: "orders",
+      formatVersion: 2,
+      upsertEnabled: true,
+      children: [source],
+    })
+    const pipeline = Pipeline({
+      name: "shop",
+      checkpoint: { interval: "60s" },
+      upgradeStrategy: { mode: "blue-green" },
+      children: [catalog.node, sink],
+    })
+
+    expect(() => generateCrd(pipeline, { flinkVersion: "2.0" })).toThrow(
+      /Blue-green upgrade strategy is not supported for Flink CDC Pipeline Connector/,
+    )
   })
 })

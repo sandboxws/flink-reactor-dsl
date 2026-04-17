@@ -80,7 +80,76 @@ const CONNECTOR_REGISTRY: ReadonlyMap<string, readonly PropertyRule[]> =
       ],
     ],
     ["FileSystemSink", [{ kind: "required", prop: "path" }]],
+    [
+      "PostgresCdcPipelineSource",
+      [
+        { kind: "required", prop: "hostname" },
+        { kind: "required", prop: "database" },
+        { kind: "required", prop: "username" },
+        { kind: "required", prop: "password" },
+        { kind: "required", prop: "schemaList" },
+        { kind: "required", prop: "tableList" },
+      ],
+    ],
   ])
+
+// ── Pipeline Connector sink compatibility ───────────────────────────
+
+const FLINK_CDC_DOCS_URL =
+  "https://nightlies.apache.org/flink/flink-cdc-docs-release-3.6/"
+
+/**
+ * Flink CDC 3.6 Pipeline Connector sink compatibility. Any sink named here
+ * accepts a retract stream from a Pipeline-Connector source; anything else
+ * is rejected at synth time.
+ *
+ * Today this is a simple component-name allowlist. As sinks grow (or if
+ * upsert-kafka lands in sinks.ts), extend with per-sink predicates.
+ */
+function isPipelineConnectorCompatibleSink(sink: ConstructNode): {
+  readonly ok: boolean
+  readonly reason?: string
+} {
+  switch (sink.component) {
+    case "IcebergSink": {
+      // MoR requires formatVersion 2 + upsertEnabled (or the MoR props from change 41).
+      const formatVersion = sink.props.formatVersion as number | undefined
+      const upsertEnabled = sink.props.upsertEnabled === true
+      if (formatVersion !== 2 || !upsertEnabled) {
+        return {
+          ok: false,
+          reason:
+            "IcebergSink requires `formatVersion: 2` and `upsertEnabled: true` (or the MoR props from change 41) to accept a CDC retract stream",
+        }
+      }
+      return { ok: true }
+    }
+    case "PaimonSink": {
+      const pk = sink.props.primaryKey as readonly string[] | undefined
+      if (!Array.isArray(pk) || pk.length === 0) {
+        return {
+          ok: false,
+          reason:
+            "PaimonSink requires a non-empty `primaryKey` to accept a CDC retract stream",
+        }
+      }
+      return { ok: true }
+    }
+    default:
+      return {
+        ok: false,
+        reason: `${sink.component} is not a Flink CDC 3.6 Pipeline Connector sink. Supported sinks: IcebergSink (formatVersion 2 + upsertEnabled), PaimonSink (primaryKey). See ${FLINK_CDC_DOCS_URL}`,
+      }
+  }
+}
+
+function walkNodes(
+  root: ConstructNode,
+  visit: (n: ConstructNode) => void,
+): void {
+  visit(root)
+  for (const c of root.children) walkNodes(c, visit)
+}
 
 // ── Validation options ───────────────────────────────────────────────
 
@@ -165,5 +234,50 @@ export function validateConnectorProperties(
   }
 
   walk(root)
+
+  // Cross-node: Pipeline Connector source → compatible sink validation.
+  const cdcSources: ConstructNode[] = []
+  const sinks: ConstructNode[] = []
+  const tappedCdc: ConstructNode[] = []
+  walkNodes(root, (n) => {
+    if (n.component === "PostgresCdcPipelineSource") {
+      cdcSources.push(n)
+      if (n.props.tap !== undefined && n.props.tap !== false) {
+        tappedCdc.push(n)
+      }
+    }
+    if (n.kind === "Sink") sinks.push(n)
+  })
+
+  if (cdcSources.length > 0) {
+    // Tap on a Pipeline Connector source is not supported yet — reject
+    // explicitly so the user sees why it's ignored.
+    for (const src of tappedCdc) {
+      diagnostics.push({
+        severity: "error",
+        message: `${src.component} '${src.id}' has \`tap\` set, but operator tapping is not supported for Flink CDC Pipeline Connector sources yet. Remove the tap prop or switch to a Kafka-hop topology.`,
+        nodeId: src.id,
+        component: src.component,
+        category: "connector",
+      })
+    }
+
+    for (const src of cdcSources) {
+      for (const sink of sinks) {
+        const compat = isPipelineConnectorCompatibleSink(sink)
+        if (!compat.ok) {
+          diagnostics.push({
+            severity: "error",
+            message: `${src.component} '${src.id}' → ${sink.component} '${sink.id}': ${compat.reason}`,
+            nodeId: sink.id,
+            component: sink.component,
+            category: "connector",
+            details: { sourceNodeId: src.id, sinkNodeId: sink.id },
+          })
+        }
+      }
+    }
+  }
+
   return diagnostics
 }

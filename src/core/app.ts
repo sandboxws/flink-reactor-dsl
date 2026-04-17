@@ -5,6 +5,11 @@ import {
   generateCrd,
   generateCrdEither,
 } from "@/codegen/crd-generator.js"
+import { generatePipelineYaml } from "@/codegen/pipeline-yaml-generator.js"
+import {
+  buildPipelineYamlConfigMap,
+  type SecondaryResource,
+} from "@/codegen/secondary-resources.js"
 import {
   type GenerateSqlResult,
   generateSql,
@@ -53,6 +58,17 @@ export interface PipelineArtifact {
   readonly crd: AnyFlinkCrd
   readonly tapManifest: TapManifest | null
   readonly pipelineManifest: PipelineManifest
+  /**
+   * Flink CDC 3.6 pipeline.yaml document. Present only when the pipeline is
+   * driven by a Pipeline Connector source (e.g. PostgresCdcPipelineSource).
+   * `null` for regular Flink SQL pipelines.
+   */
+  readonly pipelineYaml: string | null
+  /**
+   * Kubernetes secondary resources (e.g. ConfigMap holding pipeline.yaml)
+   * the CLI should emit alongside the FlinkDeployment CRD.
+   */
+  readonly secondaryResources: readonly SecondaryResource[]
 }
 
 export interface AppSynthResult {
@@ -285,7 +301,24 @@ export function synthesizeApp(
       // Generate pipeline manifest (sources, sinks, catalogs)
       const pipelineManifest = generatePipelineManifest(node)
 
-      return { name, sql, crd, tapManifest, pipelineManifest }
+      // Flink CDC Pipeline Connector support:
+      // emit pipeline.yaml + a ConfigMap that holds it. Both are null/empty
+      // for regular Flink SQL pipelines.
+      const pipelineYaml = generatePipelineYaml(node)
+      const secondaryResources: SecondaryResource[] =
+        pipelineYaml != null
+          ? [buildPipelineYamlConfigMap(name, pipelineYaml)]
+          : []
+
+      return {
+        name,
+        sql,
+        crd,
+        tapManifest,
+        pipelineManifest,
+        pipelineYaml,
+        secondaryResources,
+      }
     })
 
     // ── afterSynth hooks ───────────────────────────────────────────────
@@ -460,7 +493,21 @@ export function synthesizeAppEffect(
           // Generate pipeline manifest (sources, sinks, catalogs)
           const pipelineManifest = generatePipelineManifest(node)
 
-          pipelines.push({ name, sql, crd, tapManifest, pipelineManifest })
+          const pipelineYaml = generatePipelineYaml(node)
+          const secondaryResources: SecondaryResource[] =
+            pipelineYaml != null
+              ? [buildPipelineYamlConfigMap(name, pipelineYaml)]
+              : []
+
+          pipelines.push({
+            name,
+            sql,
+            crd,
+            tapManifest,
+            pipelineManifest,
+            pipelineYaml,
+            secondaryResources,
+          })
         }
 
         // afterSynth hooks (with typed error capture)

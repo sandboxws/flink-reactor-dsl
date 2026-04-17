@@ -23,6 +23,27 @@ import {
 } from "./schema-introspect.js"
 import { verifySql } from "./sql-verifier.js"
 
+// ── Pipeline Connector detection ────────────────────────────────────
+
+/**
+ * Components that represent a Flink CDC Pipeline Connector source. These
+ * drive a fundamentally different runtime (flink-cdc-cli + pipeline.yaml)
+ * than the SQL pipelines this file generates, so the SQL generator
+ * short-circuits when one is present.
+ */
+const PIPELINE_CONNECTOR_SOURCES: ReadonlySet<string> = new Set([
+  "PostgresCdcPipelineSource",
+])
+
+/** True iff the tree contains at least one Flink CDC Pipeline Connector source. */
+export function hasPipelineConnectorSource(node: ConstructNode): boolean {
+  if (PIPELINE_CONNECTOR_SOURCES.has(node.component)) return true
+  for (const c of node.children) {
+    if (hasPipelineConnectorSource(c)) return true
+  }
+  return false
+}
+
 // ── Module-scoped version ───────────────────────────────────────────
 // Set at the start of generateSql() and read by builders that need
 // version-aware SQL generation (e.g. QUALIFY). Since codegen is
@@ -206,6 +227,42 @@ export function generateSql(
     commentIndices.add(idx)
     if (meta) statementMeta.set(idx, meta)
     statements.push(comment)
+  }
+
+  // Pipeline Connector short-circuit:
+  // When the pipeline is driven by a Flink CDC Pipeline Connector source
+  // (e.g. PostgresCdcPipelineSource), the runtime is flink-cdc-cli.jar
+  // reading `pipeline.yaml` — there is no Flink SQL to execute. Emit only
+  // a banner explaining where the runtime definition lives so existing
+  // tooling that reads the SQL output doesn't crash on an empty file.
+  if (hasPipelineConnectorSource(currentTree)) {
+    const pipelineName =
+      (currentTree.props.name as string | undefined) ?? "(unnamed)"
+    const details: Array<{ key: string; value: string }> = [
+      { key: "name", value: pipelineName },
+      { key: "runtime", value: "flink-cdc-cli" },
+      { key: "artifact", value: "pipeline.yaml" },
+    ]
+    emitComment(buildCommentBlock("PIPELINE CONNECTOR", details), {
+      label: "Pipeline Connector",
+      section: "configuration",
+      details,
+    })
+    emitComment(
+      "-- This pipeline is a Flink CDC Pipeline Connector job.\n" +
+        "-- The runtime definition lives in pipeline.yaml (ConfigMap-mounted),\n" +
+        "-- not in Flink SQL. Inspect pipeline.yaml and deployment.yaml for the\n" +
+        "-- full topology.",
+    )
+    return {
+      statements,
+      sql: `${statements.join("\n\n")}\n`,
+      diagnostics: [],
+      statementOrigins,
+      statementContributors,
+      commentIndices,
+      statementMeta,
+    }
   }
 
   // 1. SET statements from pipeline props

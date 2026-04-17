@@ -110,12 +110,26 @@ export async function runSynth(opts: {
 
       const pipelineManifest = generatePipelineManifest(pipelineNode)
 
+      const { generatePipelineYaml } = await import(
+        "@/codegen/pipeline-yaml-generator.js"
+      )
+      const { buildPipelineYamlConfigMap } = await import(
+        "@/codegen/secondary-resources.js"
+      )
+      const pipelineYaml = generatePipelineYaml(pipelineNode)
+      const secondaryResources =
+        pipelineYaml != null
+          ? [buildPipelineYamlConfigMap(discovered.name, pipelineYaml)]
+          : []
+
       const artifact: PipelineArtifact = {
         name: discovered.name,
         sql,
         crd,
         tapManifest,
         pipelineManifest,
+        pipelineYaml,
+        secondaryResources,
       }
 
       allArtifacts.push(artifact)
@@ -169,8 +183,26 @@ function writePipelineOutput(
   const crdYaml = toYaml(artifact.crd)
   writeFileSync(join(pipelineDir, "deployment.yaml"), crdYaml, "utf-8")
 
-  const configMap = buildConfigMapYaml(artifact)
-  writeFileSync(join(pipelineDir, "configmap.yaml"), configMap, "utf-8")
+  // Flink CDC Pipeline Connector pipelines have a pipeline.yaml artifact
+  // and their ConfigMap wraps that YAML, not the SQL. Regular Flink SQL
+  // pipelines keep the historical SQL ConfigMap shape.
+  if (artifact.pipelineYaml != null) {
+    writeFileSync(
+      join(pipelineDir, "pipeline.yaml"),
+      artifact.pipelineYaml,
+      "utf-8",
+    )
+    for (const res of artifact.secondaryResources) {
+      writeFileSync(
+        join(pipelineDir, `${res.kind.toLowerCase()}.yaml`),
+        toYaml(res),
+        "utf-8",
+      )
+    }
+  } else {
+    const configMap = buildConfigMapYaml(artifact)
+    writeFileSync(join(pipelineDir, "configmap.yaml"), configMap, "utf-8")
+  }
 
   if (artifact.tapManifest) {
     const outdirPath = join(projectDir, outdir)
@@ -291,6 +323,17 @@ export function runSynthEffect(opts: {
         })
 
         const pipelineManifest = generatePipelineManifest(pipelineNode)
+        const { generatePipelineYaml } = yield* Effect.promise(
+          () => import("@/codegen/pipeline-yaml-generator.js"),
+        )
+        const { buildPipelineYamlConfigMap } = yield* Effect.promise(
+          () => import("@/codegen/secondary-resources.js"),
+        )
+        const pipelineYaml = generatePipelineYaml(pipelineNode)
+        const secondaryResources =
+          pipelineYaml != null
+            ? [buildPipelineYamlConfigMap(discovered.name, pipelineYaml)]
+            : []
 
         const artifact: PipelineArtifact = {
           name: discovered.name,
@@ -298,6 +341,8 @@ export function runSynthEffect(opts: {
           crd,
           tapManifest,
           pipelineManifest,
+          pipelineYaml,
+          secondaryResources,
         }
 
         allArtifacts.push(artifact)
@@ -357,8 +402,21 @@ function writePipelineOutputEffect(
     const crdYaml = toYaml(artifact.crd)
     yield* fs.writeFile(join(pipelineDir, "deployment.yaml"), crdYaml)
 
-    const configMap = buildConfigMapYaml(artifact)
-    yield* fs.writeFile(join(pipelineDir, "configmap.yaml"), configMap)
+    if (artifact.pipelineYaml != null) {
+      yield* fs.writeFile(
+        join(pipelineDir, "pipeline.yaml"),
+        artifact.pipelineYaml,
+      )
+      for (const res of artifact.secondaryResources) {
+        yield* fs.writeFile(
+          join(pipelineDir, `${res.kind.toLowerCase()}.yaml`),
+          toYaml(res),
+        )
+      }
+    } else {
+      const configMap = buildConfigMapYaml(artifact)
+      yield* fs.writeFile(join(pipelineDir, "configmap.yaml"), configMap)
+    }
 
     if (artifact.tapManifest) {
       const outdirPath = join(projectDir, outdir)

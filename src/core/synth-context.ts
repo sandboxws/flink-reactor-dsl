@@ -29,6 +29,10 @@ export interface ValidationDiagnosticDetails {
   readonly referencedColumn?: string
   readonly expressionErrors?: readonly string[]
   readonly missingProps?: readonly string[]
+  /** Cross-node diagnostics: identifies the source endpoint of the violation. */
+  readonly sourceNodeId?: string
+  /** Cross-node diagnostics: identifies the sink endpoint of the violation. */
+  readonly sinkNodeId?: string
 }
 
 export interface ValidationDiagnostic {
