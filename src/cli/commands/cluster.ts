@@ -258,6 +258,8 @@ export async function runClusterUp(opts: {
       sqlGatewayPort: 8083,
       kafkaPort: 9094,
       postgresPort: 5433,
+      seaweedfsPort: 8333,
+      icebergRestPort: 8181,
     })
   } catch {
     console.error(pc.red("Services did not become ready in time."))
@@ -736,7 +738,18 @@ async function initFlinkCatalogs(_flinkPort: number): Promise<void> {
       includeBuiltinJdbc: true,
     })
 
-    if (result.ddl.length === 0 && result.seeding.length === 0) {
+    const { icebergInitStatements } = await import(
+      "@/cli/cluster/iceberg-init.js"
+    )
+    const icebergDdl = icebergInitStatements(
+      initConfig?.iceberg?.databases ?? [],
+    )
+
+    if (
+      result.ddl.length === 0 &&
+      result.seeding.length === 0 &&
+      icebergDdl.length === 0
+    ) {
       spinner.stop(pc.dim("No catalogs to register."))
       return
     }
@@ -755,11 +768,10 @@ async function initFlinkCatalogs(_flinkPort: number): Promise<void> {
 
     let catalogCount = 0
     let tableCount = 0
+    let icebergDbCount = 0
 
-    // Submit DDL statements (CREATE CATALOG, CREATE TABLE)
-    for (const stmt of result.ddl) {
+    const runDdl = async (stmt: string): Promise<void> => {
       const opHandle = await client.submitStatement(sessionHandle, stmt)
-      // Wait for DDL to complete
       for (let i = 0; i < 30; i++) {
         const status = await client.getOperationStatus(sessionHandle, opHandle)
         if (
@@ -770,7 +782,19 @@ async function initFlinkCatalogs(_flinkPort: number): Promise<void> {
           break
         await new Promise((r) => setTimeout(r, 500))
       }
+    }
 
+    // Iceberg catalog + databases first — Kafka/JDBC table DDL below may
+    // reference them, and the catalog must exist before `USE CATALOG`.
+    for (const stmt of icebergDdl) {
+      await runDdl(stmt)
+      if (stmt.includes("CREATE CATALOG")) catalogCount++
+      if (stmt.includes("CREATE DATABASE")) icebergDbCount++
+    }
+
+    // Submit DDL statements (CREATE CATALOG, CREATE TABLE)
+    for (const stmt of result.ddl) {
+      await runDdl(stmt)
       if (stmt.includes("CREATE CATALOG")) catalogCount++
       if (stmt.includes("CREATE TABLE")) tableCount++
     }
@@ -790,6 +814,7 @@ async function initFlinkCatalogs(_flinkPort: number): Promise<void> {
     const parts = []
     if (catalogCount > 0) parts.push(`${catalogCount} catalogs`)
     if (tableCount > 0) parts.push(`${tableCount} tables`)
+    if (icebergDbCount > 0) parts.push(`${icebergDbCount} Iceberg databases`)
     if (seedingCount > 0) parts.push(`${seedingCount} DataGen jobs`)
 
     spinner.stop(pc.green(`Registered ${parts.join(", ")}.`))

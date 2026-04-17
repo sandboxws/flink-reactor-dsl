@@ -43,7 +43,7 @@ export default defineConfig({
             catalogs: [
               {
                 name: 'flink_sink',
-                baseUrl: 'jdbc:postgresql://localhost:5432/',
+                baseUrl: 'jdbc:postgresql://postgres:5432/',
                 defaultDatabase: 'analytics',
               },
             ],
@@ -109,7 +109,7 @@ export default (
     />
     <JdbcSink
       table="page_view_stats"
-      url="jdbc:postgresql://localhost:5432/analytics"
+      url="jdbc:postgresql://postgres:5432/analytics"
     />
   </Pipeline>
 );

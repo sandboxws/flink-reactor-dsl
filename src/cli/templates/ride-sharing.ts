@@ -61,7 +61,7 @@ export default defineConfig({
                       baseMultiplier: 'DOUBLE',
                       updateTime: 'TIMESTAMP(3)',
                     },
-                    format: 'json',
+                    format: 'debezium-json',
                     primaryKey: ['zoneId'],
                   },
                 ],

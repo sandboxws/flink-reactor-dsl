@@ -6,6 +6,8 @@ export async function waitForServices(opts: {
   sqlGatewayPort: number
   kafkaPort: number
   postgresPort?: number
+  seaweedfsPort?: number
+  icebergRestPort?: number
   timeoutMs?: number
   intervalMs?: number
 }): Promise<void> {
@@ -24,6 +26,14 @@ export async function waitForServices(opts: {
     {
       name: "PostgreSQL",
       check: () => checkTcp(opts.postgresPort ?? 5432),
+    },
+    {
+      name: "SeaweedFS (S3)",
+      check: () => checkTcp(opts.seaweedfsPort ?? 8333),
+    },
+    {
+      name: "Iceberg REST",
+      check: () => checkIcebergRest(opts.icebergRestPort ?? 8181),
     },
   ]
 
@@ -76,6 +86,15 @@ async function checkFlink(port: number): Promise<boolean> {
 async function checkSqlGateway(port: number): Promise<boolean> {
   try {
     const res = await fetch(`http://localhost:${port}/info`)
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+async function checkIcebergRest(port: number): Promise<boolean> {
+  try {
+    const res = await fetch(`http://localhost:${port}/v1/config`)
     return res.ok
   } catch {
     return false

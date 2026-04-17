@@ -17,3 +17,9 @@ RUN wget -q -P /opt/flink/lib/ \
   https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-flink-runtime-1.20/1.8.1/iceberg-flink-runtime-1.20-1.8.1.jar \
   && wget -q -P /opt/flink/lib/ \
   https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-aws-bundle/1.8.1/iceberg-aws-bundle-1.8.1.jar
+
+# Flink S3 filesystem plugin (Hadoop flavor) — required for s3:// checkpoint/savepoint dirs.
+# Mounted as a Flink plugin so it doesn't leak into user classpath.
+RUN mkdir -p /opt/flink/plugins/s3-fs-hadoop \
+  && wget -q -O /opt/flink/plugins/s3-fs-hadoop/flink-s3-fs-hadoop-2.0.1.jar \
+  https://repo1.maven.org/maven2/org/apache/flink/flink-s3-fs-hadoop/2.0.1/flink-s3-fs-hadoop-2.0.1.jar

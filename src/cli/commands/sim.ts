@@ -667,28 +667,20 @@ async function runInit(init: SimInitConfig, namespace: string): Promise<void> {
 
   // ── Create Iceberg databases ─────────────────────────────────────
   if (databases.length > 0) {
+    const { icebergInitStatements } = await import(
+      "@/cli/cluster/iceberg-init.js"
+    )
+    const stmts = icebergInitStatements(databases)
+
     const spinner = clack.spinner()
     spinner.start(`Creating ${databases.length} Iceberg database(s)...`)
 
-    let created = 0
-    let skipped = 0
-
-    for (const db of databases) {
-      try {
-        // Use kubectl exec to curl the SQL Gateway REST API from within the cluster
-        const sql = `CREATE CATALOG IF NOT EXISTS lakehouse WITH ('type' = 'iceberg', 'catalog-type' = 'rest', 'uri' = 'http://iceberg-rest:8181', 'warehouse' = 's3://flink-state/warehouse', 's3.endpoint' = 'http://seaweedfs.flink-demo.svc:8333', 's3.path-style-access' = 'true', 's3.access-key' = 'admin', 's3.secret-key' = 'admin'); USE CATALOG lakehouse; CREATE DATABASE IF NOT EXISTS ${db};`
-        execSqlViaGateway(sql, namespace)
-        created++
-      } catch {
-        skipped++
-      }
+    try {
+      execSqlViaGateway(stmts.join("; "), namespace)
+      spinner.stop(pc.green(`Iceberg databases: ${databases.length} created`))
+    } catch {
+      spinner.stop(pc.yellow("Iceberg database creation failed."))
     }
-
-    spinner.stop(
-      pc.green(
-        `Iceberg databases: ${created} created${skipped > 0 ? `, ${skipped} skipped` : ""}`,
-      ),
-    )
   }
 
   // ── Register Flink SQL catalogs and tables ────────────────────────

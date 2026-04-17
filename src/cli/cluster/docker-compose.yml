@@ -13,6 +13,10 @@ services:
         execution.checkpointing.mode: EXACTLY_ONCE
         state.backend.type: hashmap
         state.checkpoints.dir: file:///opt/flink/checkpoints
+        s3.endpoint: http://seaweedfs:8333
+        s3.path.style.access: true
+        s3.access-key: admin
+        s3.secret-key: admin
     volumes:
       - flink-checkpoints:/opt/flink/checkpoints
       - flink-data:/opt/flink/data
@@ -38,6 +42,10 @@ services:
         execution.checkpointing.mode: EXACTLY_ONCE
         state.backend.type: hashmap
         state.checkpoints.dir: file:///opt/flink/checkpoints
+        s3.endpoint: http://seaweedfs:8333
+        s3.path.style.access: true
+        s3.access-key: admin
+        s3.secret-key: admin
     volumes:
       - flink-checkpoints:/opt/flink/checkpoints
       - flink-data:/opt/flink/data
@@ -58,6 +66,10 @@ services:
         execution.checkpointing.mode: EXACTLY_ONCE
         state.backend.type: hashmap
         state.checkpoints.dir: file:///opt/flink/checkpoints
+        s3.endpoint: http://seaweedfs:8333
+        s3.path.style.access: true
+        s3.access-key: admin
+        s3.secret-key: admin
     volumes:
       - flink-checkpoints:/opt/flink/checkpoints
       - flink-data:/opt/flink/data
@@ -148,7 +160,62 @@ services:
       timeout: 3s
       retries: 10
 
+  seaweedfs:
+    image: chrislusf/seaweedfs:latest
+    command: server -s3 -s3.config=/etc/seaweedfs/s3.json -dir=/data
+    ports:
+      - "${SEAWEEDFS_S3_PORT:-8333}:8333"
+    volumes:
+      - seaweedfs-data:/data
+      - ./seaweedfs-s3-config.json:/etc/seaweedfs/s3.json:ro
+    networks:
+      default:
+        aliases:
+          - seaweedfs.flink-demo.svc
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:8333/ | head -c 1 || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  seaweedfs-init:
+    image: amazon/aws-cli:2.22.0
+    depends_on:
+      seaweedfs:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: admin
+      AWS_SECRET_ACCESS_KEY: admin
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint:
+      - sh
+      - -c
+      - "aws --endpoint-url http://seaweedfs:8333 s3 mb s3://flink-state 2>/dev/null || true"
+    restart: "no"
+
+  iceberg-rest:
+    image: tabulario/iceberg-rest:latest
+    depends_on:
+      seaweedfs:
+        condition: service_healthy
+    ports:
+      - "${ICEBERG_REST_PORT:-8181}:8181"
+    environment:
+      CATALOG_WAREHOUSE: s3://flink-state/warehouse
+      CATALOG_IO__IMPL: org.apache.iceberg.aws.s3.S3FileIO
+      CATALOG_S3_ENDPOINT: http://seaweedfs:8333
+      CATALOG_S3_PATH__STYLE__ACCESS: "true"
+      AWS_ACCESS_KEY_ID: admin
+      AWS_SECRET_ACCESS_KEY: admin
+      AWS_REGION: us-east-1
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:8181/v1/config >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
 volumes:
   flink-checkpoints:
   flink-data:
   postgres-data:
+  seaweedfs-data:
