@@ -150,17 +150,56 @@ function buildIcebergSinkStanza(
     if (cp.uri) stanza["catalog.properties.uri"] = cp.uri
     if (cp.warehouse) stanza["catalog.properties.warehouse"] = cp.warehouse
   }
-  if (p.formatVersion !== undefined) {
-    stanza["table.properties.format-version"] = String(p.formatVersion)
+
+  // upsertEnabled implies format-version 2 — render it explicitly even when
+  // the user omitted formatVersion, so the emitted options form a complete,
+  // self-consistent MoR configuration.
+  const upsertEnabled = p.upsertEnabled === true
+  const effectiveFormatVersion =
+    p.formatVersion ?? (upsertEnabled ? 2 : undefined)
+  if (effectiveFormatVersion !== undefined) {
+    stanza["table.properties.format-version"] = String(effectiveFormatVersion)
   }
-  if (p.upsertEnabled === true) {
-    stanza["table.properties.upsert.enabled"] = "true"
+  if (upsertEnabled) {
+    stanza["table.properties.write.upsert.enabled"] = "true"
   }
+
+  // Equality-delete columns: explicit equalityFieldColumns wins over primaryKey.
+  const equalityFields =
+    Array.isArray(p.equalityFieldColumns) && p.equalityFieldColumns.length > 0
+      ? (p.equalityFieldColumns as readonly string[])
+      : Array.isArray(p.primaryKey) && p.primaryKey.length > 0 && upsertEnabled
+        ? (p.primaryKey as readonly string[])
+        : undefined
+  if (equalityFields) {
+    stanza["table.properties.equality-field-columns"] = equalityFields.join(",")
+  }
+
   if (Array.isArray(p.primaryKey) && p.primaryKey.length > 0) {
     stanza["table.properties.primary-key"] = (
       p.primaryKey as readonly string[]
     ).join(",")
   }
+
+  if (p.commitIntervalSeconds !== undefined) {
+    stanza["table.properties.commit-interval-ms"] = String(
+      (p.commitIntervalSeconds as number) * 1000,
+    )
+  }
+  if (p.writeDistributionMode !== undefined) {
+    stanza["table.properties.write.distribution-mode"] =
+      p.writeDistributionMode as string
+  }
+  if (p.targetFileSizeMB !== undefined) {
+    stanza["table.properties.write.target-file-size-bytes"] = String(
+      (p.targetFileSizeMB as number) * 1024 * 1024,
+    )
+  }
+  if (p.writeParquetCompression !== undefined) {
+    stanza["table.properties.write.parquet.compression-codec"] =
+      p.writeParquetCompression as string
+  }
+
   return stanza
 }
 

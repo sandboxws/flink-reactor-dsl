@@ -182,6 +182,38 @@ const CONNECTOR_REGISTRY: readonly ConnectorRegistryEntry[] = [
       },
     ],
   },
+
+  // Apache Iceberg Flink runtime. The iceberg-flink-runtime artifact is
+  // versioned against the Flink minor (1.20 → iceberg-flink-runtime-1.20;
+  // 2.x → iceberg-flink-runtime-2.0). Pinned to Iceberg 1.6.0 — the first
+  // release that ships the Flink 2.0 runtime alongside 1.20.
+  {
+    connectorId: "iceberg",
+    builtIn: false,
+    versions: [
+      {
+        minVersion: "1.20",
+        maxVersion: "1.20",
+        artifacts: [
+          {
+            groupId: "org.apache.iceberg",
+            artifactId: "iceberg-flink-runtime-1.20",
+            version: "1.6.0",
+          },
+        ],
+      },
+      {
+        minVersion: "2.0",
+        artifacts: [
+          {
+            groupId: "org.apache.iceberg",
+            artifactId: "iceberg-flink-runtime-2.0",
+            version: "1.6.0",
+          },
+        ],
+      },
+    ],
+  },
 ]
 
 // ── JDBC Dialect Sub-Registry ───────────────────────────────────────

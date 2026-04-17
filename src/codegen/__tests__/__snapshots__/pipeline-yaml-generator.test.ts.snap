@@ -24,11 +24,48 @@ sink:
   catalog.properties.type: rest
   catalog.properties.uri: 'http://iceberg-rest:8181'
   table.properties.format-version: '2'
-  table.properties.upsert.enabled: 'true'
+  table.properties.write.upsert.enabled: 'true'
+  table.properties.equality-field-columns: order_id
   table.properties.primary-key: order_id
 pipeline:
   name: shop-orders-cdc
   parallelism: 4
+  schema.change.behavior: evolve
+"
+`;
+
+exports[`generatePipelineYaml > emits the full MoR configuration snapshot 1`] = `
+"source:
+  type: postgres
+  hostname: pg-primary
+  port: 5432
+  username: postgres
+  password: '\${env:PG_PRIMARY_PASSWORD}'
+  database-name: shop
+  schema-name: public
+  table-name: public.orders
+  decoding.plugin.name: pgoutput
+  slot.name: fr_shop_orders_cdc_slot
+  publication.name: fr_shop_orders_cdc_pub
+  scan.startup.mode: initial
+  scan.snapshot.enabled: true
+sink:
+  type: iceberg
+  catalog.name: lake
+  database: shop
+  table: orders
+  catalog.properties.type: rest
+  catalog.properties.uri: 'http://iceberg-rest:8181'
+  table.properties.format-version: '2'
+  table.properties.write.upsert.enabled: 'true'
+  table.properties.equality-field-columns: order_id
+  table.properties.primary-key: order_id
+  table.properties.commit-interval-ms: '10000'
+  table.properties.write.distribution-mode: hash
+  table.properties.write.target-file-size-bytes: '268435456'
+  table.properties.write.parquet.compression-codec: zstd
+pipeline:
+  name: shop-orders-cdc
   schema.change.behavior: evolve
 "
 `;

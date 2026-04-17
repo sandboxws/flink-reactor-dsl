@@ -202,6 +202,128 @@ describe("generatePipelineYaml", () => {
     expect(yaml1).toBe(yaml2)
   })
 
+  // ── IcebergSink MoR prop threading ───────────────────────────────
+
+  function buildMorPipeline(
+    extraSinkProps: Record<string, unknown>,
+  ): ReturnType<typeof Pipeline> {
+    const catalog = IcebergCatalog({
+      name: "lake",
+      catalogType: "rest",
+      uri: "http://iceberg-rest:8181",
+    })
+    const source = PostgresCdcPipelineSource({
+      hostname: "pg-primary",
+      database: "shop",
+      username: "postgres",
+      password: secretRef("pg-primary-password"),
+      schemaList: ["public"],
+      tableList: ["public.orders"],
+    })
+    const sink = IcebergSink({
+      catalog: catalog.handle,
+      database: "shop",
+      table: "orders",
+      formatVersion: 2,
+      upsertEnabled: true,
+      primaryKey: ["order_id"],
+      ...extraSinkProps,
+      children: [source],
+    })
+    return Pipeline({
+      name: "shop-orders-cdc",
+      children: [catalog.node, sink],
+    })
+  }
+
+  it("threads equalityFieldColumns into the sink stanza", () => {
+    const yaml = generatePipelineYaml(
+      buildMorPipeline({ equalityFieldColumns: ["order_id", "region"] }),
+    ) as string
+    // toYaml quotes values containing ','; single-quoted literal is the
+    // form Flink CDC reads.
+    expect(yaml).toContain(
+      "table.properties.equality-field-columns: 'order_id,region'",
+    )
+  })
+
+  it("threads commitIntervalSeconds as commit-interval-ms (×1000)", () => {
+    const yaml = generatePipelineYaml(
+      buildMorPipeline({ commitIntervalSeconds: 2 }),
+    ) as string
+    expect(yaml).toContain("table.properties.commit-interval-ms: '2000'")
+  })
+
+  it("threads writeDistributionMode as write.distribution-mode", () => {
+    const yaml = generatePipelineYaml(
+      buildMorPipeline({ writeDistributionMode: "hash" }),
+    ) as string
+    expect(yaml).toContain("table.properties.write.distribution-mode: hash")
+  })
+
+  it("threads targetFileSizeMB as write.target-file-size-bytes (×1MiB)", () => {
+    const yaml = generatePipelineYaml(
+      buildMorPipeline({ targetFileSizeMB: 256 }),
+    ) as string
+    expect(yaml).toContain(
+      "table.properties.write.target-file-size-bytes: '268435456'",
+    )
+  })
+
+  it("threads writeParquetCompression as write.parquet.compression-codec", () => {
+    const yaml = generatePipelineYaml(
+      buildMorPipeline({ writeParquetCompression: "zstd" }),
+    ) as string
+    expect(yaml).toContain(
+      "table.properties.write.parquet.compression-codec: zstd",
+    )
+  })
+
+  it("emits no MoR keys when no MoR props are set", () => {
+    const catalog = IcebergCatalog({
+      name: "lake",
+      catalogType: "rest",
+      uri: "http://iceberg-rest:8181",
+    })
+    const source = PostgresCdcPipelineSource({
+      hostname: "pg-primary",
+      database: "shop",
+      username: "postgres",
+      password: secretRef("pg-primary-password"),
+      schemaList: ["public"],
+      tableList: ["public.orders"],
+    })
+    const sink = IcebergSink({
+      catalog: catalog.handle,
+      database: "shop",
+      table: "orders",
+      formatVersion: 2,
+      upsertEnabled: true,
+      primaryKey: ["order_id"],
+      children: [source],
+    })
+    const pipeline = Pipeline({
+      name: "shop",
+      children: [catalog.node, sink],
+    })
+    const yaml = generatePipelineYaml(pipeline) as string
+    expect(yaml).not.toContain("commit-interval-ms")
+    expect(yaml).not.toContain("write.distribution-mode")
+    expect(yaml).not.toContain("write.target-file-size-bytes")
+    expect(yaml).not.toContain("write.parquet.compression-codec")
+  })
+
+  it("emits the full MoR configuration snapshot", () => {
+    const pipeline = buildMorPipeline({
+      equalityFieldColumns: ["order_id"],
+      commitIntervalSeconds: 10,
+      writeDistributionMode: "hash",
+      targetFileSizeMB: 256,
+      writeParquetCompression: "zstd",
+    })
+    expect(generatePipelineYaml(pipeline)).toMatchSnapshot()
+  })
+
   it("emits a paimon sink stanza for PaimonSink", () => {
     const catalog = PaimonCatalog({
       name: "lake",

@@ -235,6 +235,58 @@ export function validateConnectorProperties(
 
   walk(root)
 
+  // IcebergSink MoR-config validation.
+  //
+  // `upsertEnabled: true` without either `equalityFieldColumns` or
+  // `primaryKey` is a misconfiguration: Iceberg cannot do upserts without a
+  // key, and silently falling back to position-only deletes destroys MoR
+  // read performance.
+  //
+  // `writeDistributionMode: 'none'` combined with pipeline parallelism > 1
+  // is the classic small-file-explosion footgun — emit a warning that names
+  // the sink, but do not fail synthesis (users sometimes want this on
+  // purpose for single-writer sinks).
+  const pipelineParallelism =
+    typeof root.props.parallelism === "number"
+      ? (root.props.parallelism as number)
+      : undefined
+  walkNodes(root, (n) => {
+    if (n.component !== "IcebergSink") return
+    const upsertEnabled = n.props.upsertEnabled === true
+    const equalityFields = n.props.equalityFieldColumns as
+      | readonly string[]
+      | undefined
+    const primaryKey = n.props.primaryKey as readonly string[] | undefined
+    const hasEqualityFields =
+      Array.isArray(equalityFields) && equalityFields.length > 0
+    const hasPrimaryKey = Array.isArray(primaryKey) && primaryKey.length > 0
+
+    if (upsertEnabled && !hasEqualityFields && !hasPrimaryKey) {
+      diagnostics.push({
+        severity: "error",
+        message: `IcebergSink '${n.id}': Iceberg MoR requires either \`equalityFieldColumns\` or \`primaryKey\` when \`upsertEnabled\` is true. See https://iceberg.apache.org/docs/latest/flink-writes/#writing-with-sql for details.`,
+        nodeId: n.id,
+        component: n.component,
+        category: "connector",
+      })
+    }
+
+    const writeDist = n.props.writeDistributionMode as string | undefined
+    if (
+      writeDist === "none" &&
+      pipelineParallelism !== undefined &&
+      pipelineParallelism > 1
+    ) {
+      diagnostics.push({
+        severity: "warning",
+        message: `IcebergSink '${n.id}': \`writeDistributionMode: 'none'\` with pipeline \`parallelism: ${pipelineParallelism}\` will produce one small file per (writer × partition) and starve compaction. Consider \`writeDistributionMode: 'hash'\`.`,
+        nodeId: n.id,
+        component: n.component,
+        category: "connector",
+      })
+    }
+  })
+
   // Cross-node: Pipeline Connector source → compatible sink validation.
   const cdcSources: ConstructNode[] = []
   const sinks: ConstructNode[] = []

@@ -130,6 +130,34 @@ describe("IcebergSink", () => {
     expect(node.props.primaryKey).toEqual(["order_id"])
   })
 
+  it("stores MoR configuration props", () => {
+    const { handle } = IcebergCatalog({
+      name: "iceberg_cat",
+      catalogType: "rest",
+      uri: "http://iceberg-rest:8181",
+    })
+
+    const node = IcebergSink({
+      catalog: handle,
+      database: "lakehouse",
+      table: "orders",
+      primaryKey: ["order_id"],
+      formatVersion: 2,
+      upsertEnabled: true,
+      equalityFieldColumns: ["order_id"],
+      commitIntervalSeconds: 5,
+      writeDistributionMode: "hash",
+      targetFileSizeMB: 128,
+      writeParquetCompression: "zstd",
+    })
+
+    expect(node.props.equalityFieldColumns).toEqual(["order_id"])
+    expect(node.props.commitIntervalSeconds).toBe(5)
+    expect(node.props.writeDistributionMode).toBe("hash")
+    expect(node.props.targetFileSizeMB).toBe(128)
+    expect(node.props.writeParquetCompression).toBe("zstd")
+  })
+
   it("defaults formatVersion and upsertEnabled to undefined", () => {
     const { handle } = IcebergCatalog({
       name: "iceberg_cat",

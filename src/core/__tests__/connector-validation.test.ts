@@ -382,6 +382,112 @@ describe("validateConnectorProperties", () => {
     expect(diags.some((d) => d.message.includes("primaryKey"))).toBe(true)
   })
 
+  // ── IcebergSink MoR misconfiguration ─────────────────────────────
+
+  it("errors when IcebergSink has upsertEnabled but neither equalityFieldColumns nor primaryKey", () => {
+    const sink = makeNode("IcebergSink", "Sink", {
+      upsertEnabled: true,
+      formatVersion: 2,
+    })
+    const tree = makePipeline(sink)
+    const diags = validateConnectorProperties(tree)
+    const err = diags.find(
+      (d) =>
+        d.severity === "error" &&
+        d.component === "IcebergSink" &&
+        d.nodeId === sink.id &&
+        /equalityFieldColumns.*primaryKey/i.test(d.message) &&
+        /upsertEnabled/.test(d.message),
+    )
+    expect(err).toBeDefined()
+    expect(err?.message).toContain(sink.id)
+  })
+
+  it("accepts IcebergSink upsertEnabled + primaryKey without equalityFieldColumns", () => {
+    const sink = makeNode("IcebergSink", "Sink", {
+      upsertEnabled: true,
+      formatVersion: 2,
+      primaryKey: ["order_id"],
+    })
+    const tree = makePipeline(sink)
+    const diags = validateConnectorProperties(tree)
+    const morErrors = diags.filter(
+      (d) =>
+        d.severity === "error" &&
+        d.component === "IcebergSink" &&
+        /equalityFieldColumns.*primaryKey/i.test(d.message),
+    )
+    expect(morErrors).toHaveLength(0)
+  })
+
+  it("accepts IcebergSink upsertEnabled + equalityFieldColumns without primaryKey", () => {
+    const sink = makeNode("IcebergSink", "Sink", {
+      upsertEnabled: true,
+      formatVersion: 2,
+      equalityFieldColumns: ["order_id"],
+    })
+    const tree = makePipeline(sink)
+    const diags = validateConnectorProperties(tree)
+    const morErrors = diags.filter(
+      (d) =>
+        d.severity === "error" &&
+        d.component === "IcebergSink" &&
+        /equalityFieldColumns.*primaryKey/i.test(d.message),
+    )
+    expect(morErrors).toHaveLength(0)
+  })
+
+  it("warns (non-fatal) when writeDistributionMode='none' and parallelism > 1", () => {
+    const sink = makeNode("IcebergSink", "Sink", {
+      upsertEnabled: true,
+      primaryKey: ["order_id"],
+      writeDistributionMode: "none",
+    })
+    const tree = makeNode(
+      "Pipeline",
+      "Pipeline",
+      {
+        name: "test",
+        parallelism: 4,
+      },
+      [sink],
+    )
+    const diags = validateConnectorProperties(tree)
+    const warn = diags.find(
+      (d) =>
+        d.severity === "warning" &&
+        d.component === "IcebergSink" &&
+        /small file/i.test(d.message) &&
+        /parallelism/.test(d.message),
+    )
+    expect(warn).toBeDefined()
+
+    const morFatal = diags.find(
+      (d) =>
+        d.severity === "error" &&
+        d.component === "IcebergSink" &&
+        /distribution/i.test(d.message),
+    )
+    expect(morFatal).toBeUndefined()
+  })
+
+  it("does not warn about distribution=none when parallelism is 1 or unset", () => {
+    const sink = makeNode("IcebergSink", "Sink", {
+      upsertEnabled: true,
+      primaryKey: ["order_id"],
+      writeDistributionMode: "none",
+    })
+    const tree = makePipeline(sink)
+    const diags = validateConnectorProperties(tree)
+    const warn = diags.find(
+      (d) =>
+        d.severity === "warning" &&
+        d.component === "IcebergSink" &&
+        /small file/i.test(d.message),
+    )
+    expect(warn).toBeUndefined()
+  })
+
   it("errors when tap is set on a PostgresCdcPipelineSource", () => {
     const src = makeCdcSource({ tap: true })
     const sink = makeNode(

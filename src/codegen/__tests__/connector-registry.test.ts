@@ -131,6 +131,36 @@ describe("resolveConnectorArtifacts: postgres-cdc-pipeline", () => {
   })
 })
 
+// ── Iceberg Connector Resolution ────────────────────────────────────
+
+describe("resolveConnectorArtifacts: iceberg", () => {
+  it("resolves the Flink 1.20 runtime coordinate", () => {
+    const artifacts = resolveConnectorArtifacts("iceberg", "1.20")
+    expect(artifacts).toHaveLength(1)
+    expect(artifacts[0]).toEqual({
+      groupId: "org.apache.iceberg",
+      artifactId: "iceberg-flink-runtime-1.20",
+      version: "1.6.0",
+    })
+  })
+
+  it("resolves the Flink 2.0 runtime coordinate", () => {
+    const artifacts = resolveConnectorArtifacts("iceberg", "2.0")
+    expect(artifacts).toHaveLength(1)
+    expect(artifacts[0]).toEqual({
+      groupId: "org.apache.iceberg",
+      artifactId: "iceberg-flink-runtime-2.0",
+      version: "1.6.0",
+    })
+  })
+
+  it("resolves the 2.0 runtime coordinate at Flink 2.2", () => {
+    const artifacts = resolveConnectorArtifacts("iceberg", "2.2")
+    expect(artifacts).toHaveLength(1)
+    expect(artifacts[0].artifactId).toBe("iceberg-flink-runtime-2.0")
+  })
+})
+
 // ── JDBC Dialect Sub-Registry ───────────────────────────────────────
 
 describe("detectJdbcDialect", () => {

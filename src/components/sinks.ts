@@ -202,6 +202,9 @@ export function PaimonSink(props: PaimonSinkProps): ConstructNode {
 
 // ── IcebergSink ────────────────────────────────────────────────────
 
+export type IcebergWriteDistributionMode = "none" | "hash" | "range"
+export type IcebergParquetCompression = "zstd" | "snappy" | "gzip" | "none"
+
 export interface IcebergSinkProps extends BaseComponentProps {
   readonly catalog: CatalogHandle
   readonly database: string
@@ -209,6 +212,44 @@ export interface IcebergSinkProps extends BaseComponentProps {
   readonly primaryKey?: readonly string[]
   readonly formatVersion?: 1 | 2
   readonly upsertEnabled?: boolean
+  /**
+   * Columns that drive Iceberg equality-delete writes for MoR.
+   * Declared independently from `primaryKey`: in practice they are usually
+   * the same set, but Iceberg treats them as two distinct concepts and
+   * without at least one of them set, `upsertEnabled: true` cannot produce
+   * real row-level deletes (falls back to position-only deletes).
+   *
+   * When omitted but `primaryKey` is set, synthesis derives the Iceberg
+   * `equality-field-columns` entry from `primaryKey`.
+   */
+  readonly equalityFieldColumns?: readonly string[]
+  /**
+   * Iceberg writer flush cadence. Maps to `commit-interval-ms` (×1000).
+   *
+   * Recommended defaults for CDC workloads:
+   *   • 10s — throughput-oriented runs
+   *   • 2–5s — latency-oriented runs
+   */
+  readonly commitIntervalSeconds?: number
+  /**
+   * Partition-aware write routing. Maps to `write.distribution-mode`.
+   *
+   * Use `'hash'` under any non-trivial parallelism to avoid small-file
+   * explosion; `'none'` + `parallelism > 1` emits a synthesis warning.
+   */
+  readonly writeDistributionMode?: IcebergWriteDistributionMode
+  /**
+   * Target size per data file in MB. Maps to `write.target-file-size-bytes`
+   * (×1048576). Pair with `writeDistributionMode` to bound write-amplification.
+   *
+   * Recommended defaults: 256 for snapshot backfills, 64 for steady-state live.
+   */
+  readonly targetFileSizeMB?: number
+  /**
+   * Parquet codec. Maps to `write.parquet.compression-codec`.
+   * `'zstd'` is the defensible default for CDC workloads.
+   */
+  readonly writeParquetCompression?: IcebergParquetCompression
   /** Enable operator tailing for this sink */
   readonly tap?: boolean | TapConfig
   readonly children?: ConstructNode | ConstructNode[]
@@ -219,7 +260,15 @@ export interface IcebergSinkProps extends BaseComponentProps {
  *
  * References an IcebergCatalog handle to form catalog-qualified table names.
  * `formatVersion` 2 is required for row-level deletes (upsert support).
- * When `upsertEnabled` is true, the sink accepts retract/upsert streams.
+ * When `upsertEnabled` is true, the sink accepts retract/upsert streams and
+ * SHALL be configured with either `equalityFieldColumns` or `primaryKey`
+ * (synthesis fails otherwise).
+ *
+ * The Merge-on-Read knobs (`equalityFieldColumns`, `commitIntervalSeconds`,
+ * `writeDistributionMode`, `targetFileSizeMB`, `writeParquetCompression`)
+ * are optional; omitting them falls back to Iceberg's own defaults. See the
+ * worked Postgres → Iceberg MoR example in the benchmark-pipelines package
+ * for a production-shaped configuration.
  */
 export function IcebergSink(props: IcebergSinkProps): ConstructNode {
   const { children, catalog, ...rest } = props
