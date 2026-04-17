@@ -1,0 +1,1451 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`pg-cdc-iceberg-f1 (Kafka-hop) > synthesizes a stable artifact bundle for avro + latency 1`] = `
+{
+  "crd": {
+    "apiVersion": "flink.apache.org/v1beta1",
+    "kind": "FlinkDeployment",
+    "metadata": {
+      "name": "pg-cdc-iceberg-f1",
+    },
+    "spec": {
+      "flinkConfiguration": {
+        "execution.checkpointing.interval": "60000",
+        "execution.checkpointing.mode": "EXACTLY_ONCE",
+        "execution.runtime-mode": "STREAMING",
+      },
+      "flinkVersion": "v2_0",
+      "image": "flink:2.0",
+      "job": {
+        "jarURI": "local:///opt/flink/usrlib/sql-runner.jar",
+        "parallelism": 4,
+      },
+      "jobManager": {
+        "replicas": 1,
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+      "taskManager": {
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+    },
+  },
+  "jars": [
+    "org.apache.flink:flink-sql-avro-confluent-registry:2.0.0",
+    "org.apache.flink:flink-sql-connector-kafka:4.0.1-2.0",
+    "org.apache.iceberg:iceberg-flink-runtime-2.0:1.6.0",
+  ],
+  "sql": "-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : pg-cdc-iceberg-f1
+-- parallelism : 4
+-- checkpoint  : 60s
+-- cp-mode     : exactly-once
+-- ====================================================================
+
+SET 'pipeline.name' = 'pg-cdc-iceberg-f1';
+
+SET 'parallelism.default' = '4';
+
+SET 'execution.checkpointing.interval' = '60000';
+
+SET 'execution.checkpointing.mode' = 'exactly-once';
+
+-- ====================================================================
+-- CATALOG
+-- --------------------------------------------------------------------
+-- id          : IcebergCatalog_0
+-- type        : iceberg
+-- uri         : http://lakekeeper:8181/catalog
+-- ====================================================================
+
+CREATE CATALOG \`lakekeeper\` WITH (
+  'type' = 'iceberg',
+  'catalog-type' = 'rest',
+  'uri' = 'http://lakekeeper:8181/catalog'
+);
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : tpch_public_orders
+-- type        : kafka
+-- topic       : tpch.public.orders
+-- format      : debezium-avro
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`tpch_public_orders\` (
+  \`o_orderkey\` BIGINT,
+  \`o_custkey\` BIGINT,
+  \`o_orderstatus\` STRING,
+  \`o_totalprice\` DECIMAL(15, 2),
+  \`o_orderdate\` DATE,
+  \`o_orderpriority\` STRING,
+  \`o_clerk\` STRING,
+  \`o_shippriority\` INT,
+  \`o_comment\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS event_time - INTERVAL '5' SECOND,
+  PRIMARY KEY (\`o_orderkey\`) NOT ENFORCED
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'tpch.public.orders',
+  'format' = 'debezium-avro',
+  'debezium-avro.schema-registry.url' = 'http://schema-registry:8081',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : IcebergSink_2
+-- type        : iceberg
+-- ====================================================================
+
+-- IcebergSink \`lakekeeper\`.\`tpch\`.\`orders\` (catalog-managed)
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : tpch_public_orders
+-- output      : lakekeeper
+-- ====================================================================
+
+INSERT INTO \`lakekeeper\`.\`tpch\`.\`orders\`
+SELECT * FROM \`tpch_public_orders\`;
+",
+}
+`;
+
+exports[`pg-cdc-iceberg-f1 (Kafka-hop) > synthesizes a stable artifact bundle for avro + throughput 1`] = `
+{
+  "crd": {
+    "apiVersion": "flink.apache.org/v1beta1",
+    "kind": "FlinkDeployment",
+    "metadata": {
+      "name": "pg-cdc-iceberg-f1",
+    },
+    "spec": {
+      "flinkConfiguration": {
+        "execution.checkpointing.interval": "60000",
+        "execution.checkpointing.mode": "EXACTLY_ONCE",
+        "execution.runtime-mode": "STREAMING",
+      },
+      "flinkVersion": "v2_0",
+      "image": "flink:2.0",
+      "job": {
+        "jarURI": "local:///opt/flink/usrlib/sql-runner.jar",
+        "parallelism": 4,
+      },
+      "jobManager": {
+        "replicas": 1,
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+      "taskManager": {
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+    },
+  },
+  "jars": [
+    "org.apache.flink:flink-sql-avro-confluent-registry:2.0.0",
+    "org.apache.flink:flink-sql-connector-kafka:4.0.1-2.0",
+    "org.apache.iceberg:iceberg-flink-runtime-2.0:1.6.0",
+  ],
+  "sql": "-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : pg-cdc-iceberg-f1
+-- parallelism : 4
+-- checkpoint  : 60s
+-- cp-mode     : exactly-once
+-- ====================================================================
+
+SET 'pipeline.name' = 'pg-cdc-iceberg-f1';
+
+SET 'parallelism.default' = '4';
+
+SET 'execution.checkpointing.interval' = '60000';
+
+SET 'execution.checkpointing.mode' = 'exactly-once';
+
+-- ====================================================================
+-- CATALOG
+-- --------------------------------------------------------------------
+-- id          : IcebergCatalog_0
+-- type        : iceberg
+-- uri         : http://lakekeeper:8181/catalog
+-- ====================================================================
+
+CREATE CATALOG \`lakekeeper\` WITH (
+  'type' = 'iceberg',
+  'catalog-type' = 'rest',
+  'uri' = 'http://lakekeeper:8181/catalog'
+);
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : tpch_public_orders
+-- type        : kafka
+-- topic       : tpch.public.orders
+-- format      : debezium-avro
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`tpch_public_orders\` (
+  \`o_orderkey\` BIGINT,
+  \`o_custkey\` BIGINT,
+  \`o_orderstatus\` STRING,
+  \`o_totalprice\` DECIMAL(15, 2),
+  \`o_orderdate\` DATE,
+  \`o_orderpriority\` STRING,
+  \`o_clerk\` STRING,
+  \`o_shippriority\` INT,
+  \`o_comment\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS event_time - INTERVAL '5' SECOND,
+  PRIMARY KEY (\`o_orderkey\`) NOT ENFORCED
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'tpch.public.orders',
+  'format' = 'debezium-avro',
+  'debezium-avro.schema-registry.url' = 'http://schema-registry:8081',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : IcebergSink_2
+-- type        : iceberg
+-- ====================================================================
+
+-- IcebergSink \`lakekeeper\`.\`tpch\`.\`orders\` (catalog-managed)
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : tpch_public_orders
+-- output      : lakekeeper
+-- ====================================================================
+
+INSERT INTO \`lakekeeper\`.\`tpch\`.\`orders\`
+SELECT * FROM \`tpch_public_orders\`;
+",
+}
+`;
+
+exports[`pg-cdc-iceberg-f1 (Kafka-hop) > synthesizes a stable artifact bundle for json + latency 1`] = `
+{
+  "crd": {
+    "apiVersion": "flink.apache.org/v1beta1",
+    "kind": "FlinkDeployment",
+    "metadata": {
+      "name": "pg-cdc-iceberg-f1",
+    },
+    "spec": {
+      "flinkConfiguration": {
+        "execution.checkpointing.interval": "60000",
+        "execution.checkpointing.mode": "EXACTLY_ONCE",
+        "execution.runtime-mode": "STREAMING",
+      },
+      "flinkVersion": "v2_0",
+      "image": "flink:2.0",
+      "job": {
+        "jarURI": "local:///opt/flink/usrlib/sql-runner.jar",
+        "parallelism": 4,
+      },
+      "jobManager": {
+        "replicas": 1,
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+      "taskManager": {
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+    },
+  },
+  "jars": [
+    "org.apache.flink:flink-sql-connector-kafka:4.0.1-2.0",
+    "org.apache.iceberg:iceberg-flink-runtime-2.0:1.6.0",
+  ],
+  "sql": "-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : pg-cdc-iceberg-f1
+-- parallelism : 4
+-- checkpoint  : 60s
+-- cp-mode     : exactly-once
+-- ====================================================================
+
+SET 'pipeline.name' = 'pg-cdc-iceberg-f1';
+
+SET 'parallelism.default' = '4';
+
+SET 'execution.checkpointing.interval' = '60000';
+
+SET 'execution.checkpointing.mode' = 'exactly-once';
+
+-- ====================================================================
+-- CATALOG
+-- --------------------------------------------------------------------
+-- id          : IcebergCatalog_0
+-- type        : iceberg
+-- uri         : http://lakekeeper:8181/catalog
+-- ====================================================================
+
+CREATE CATALOG \`lakekeeper\` WITH (
+  'type' = 'iceberg',
+  'catalog-type' = 'rest',
+  'uri' = 'http://lakekeeper:8181/catalog'
+);
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : tpch_public_orders
+-- type        : kafka
+-- topic       : tpch.public.orders
+-- format      : debezium-json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`tpch_public_orders\` (
+  \`o_orderkey\` BIGINT,
+  \`o_custkey\` BIGINT,
+  \`o_orderstatus\` STRING,
+  \`o_totalprice\` DECIMAL(15, 2),
+  \`o_orderdate\` DATE,
+  \`o_orderpriority\` STRING,
+  \`o_clerk\` STRING,
+  \`o_shippriority\` INT,
+  \`o_comment\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS event_time - INTERVAL '5' SECOND,
+  PRIMARY KEY (\`o_orderkey\`) NOT ENFORCED
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'tpch.public.orders',
+  'format' = 'debezium-json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : IcebergSink_2
+-- type        : iceberg
+-- ====================================================================
+
+-- IcebergSink \`lakekeeper\`.\`tpch\`.\`orders\` (catalog-managed)
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : tpch_public_orders
+-- output      : lakekeeper
+-- ====================================================================
+
+INSERT INTO \`lakekeeper\`.\`tpch\`.\`orders\`
+SELECT * FROM \`tpch_public_orders\`;
+",
+}
+`;
+
+exports[`pg-cdc-iceberg-f1 (Kafka-hop) > synthesizes a stable artifact bundle for json + throughput 1`] = `
+{
+  "crd": {
+    "apiVersion": "flink.apache.org/v1beta1",
+    "kind": "FlinkDeployment",
+    "metadata": {
+      "name": "pg-cdc-iceberg-f1",
+    },
+    "spec": {
+      "flinkConfiguration": {
+        "execution.checkpointing.interval": "60000",
+        "execution.checkpointing.mode": "EXACTLY_ONCE",
+        "execution.runtime-mode": "STREAMING",
+      },
+      "flinkVersion": "v2_0",
+      "image": "flink:2.0",
+      "job": {
+        "jarURI": "local:///opt/flink/usrlib/sql-runner.jar",
+        "parallelism": 4,
+      },
+      "jobManager": {
+        "replicas": 1,
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+      "taskManager": {
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+    },
+  },
+  "jars": [
+    "org.apache.flink:flink-sql-connector-kafka:4.0.1-2.0",
+    "org.apache.iceberg:iceberg-flink-runtime-2.0:1.6.0",
+  ],
+  "sql": "-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : pg-cdc-iceberg-f1
+-- parallelism : 4
+-- checkpoint  : 60s
+-- cp-mode     : exactly-once
+-- ====================================================================
+
+SET 'pipeline.name' = 'pg-cdc-iceberg-f1';
+
+SET 'parallelism.default' = '4';
+
+SET 'execution.checkpointing.interval' = '60000';
+
+SET 'execution.checkpointing.mode' = 'exactly-once';
+
+-- ====================================================================
+-- CATALOG
+-- --------------------------------------------------------------------
+-- id          : IcebergCatalog_0
+-- type        : iceberg
+-- uri         : http://lakekeeper:8181/catalog
+-- ====================================================================
+
+CREATE CATALOG \`lakekeeper\` WITH (
+  'type' = 'iceberg',
+  'catalog-type' = 'rest',
+  'uri' = 'http://lakekeeper:8181/catalog'
+);
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : tpch_public_orders
+-- type        : kafka
+-- topic       : tpch.public.orders
+-- format      : debezium-json
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`tpch_public_orders\` (
+  \`o_orderkey\` BIGINT,
+  \`o_custkey\` BIGINT,
+  \`o_orderstatus\` STRING,
+  \`o_totalprice\` DECIMAL(15, 2),
+  \`o_orderdate\` DATE,
+  \`o_orderpriority\` STRING,
+  \`o_clerk\` STRING,
+  \`o_shippriority\` INT,
+  \`o_comment\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS event_time - INTERVAL '5' SECOND,
+  PRIMARY KEY (\`o_orderkey\`) NOT ENFORCED
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'tpch.public.orders',
+  'format' = 'debezium-json',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : IcebergSink_2
+-- type        : iceberg
+-- ====================================================================
+
+-- IcebergSink \`lakekeeper\`.\`tpch\`.\`orders\` (catalog-managed)
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : tpch_public_orders
+-- output      : lakekeeper
+-- ====================================================================
+
+INSERT INTO \`lakekeeper\`.\`tpch\`.\`orders\`
+SELECT * FROM \`tpch_public_orders\`;
+",
+}
+`;
+
+exports[`pg-cdc-iceberg-f1 (Kafka-hop) > synthesizes a stable artifact bundle for protobuf + latency 1`] = `
+{
+  "crd": {
+    "apiVersion": "flink.apache.org/v1beta1",
+    "kind": "FlinkDeployment",
+    "metadata": {
+      "name": "pg-cdc-iceberg-f1",
+    },
+    "spec": {
+      "flinkConfiguration": {
+        "execution.checkpointing.interval": "60000",
+        "execution.checkpointing.mode": "EXACTLY_ONCE",
+        "execution.runtime-mode": "STREAMING",
+      },
+      "flinkVersion": "v2_0",
+      "image": "flink:2.0",
+      "job": {
+        "jarURI": "local:///opt/flink/usrlib/sql-runner.jar",
+        "parallelism": 4,
+      },
+      "jobManager": {
+        "replicas": 1,
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+      "taskManager": {
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+    },
+  },
+  "jars": [
+    "org.apache.flink:flink-sql-connector-kafka:4.0.1-2.0",
+    "org.apache.flink:flink-sql-protobuf-confluent-registry:2.0.0",
+    "org.apache.iceberg:iceberg-flink-runtime-2.0:1.6.0",
+  ],
+  "sql": "-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : pg-cdc-iceberg-f1
+-- parallelism : 4
+-- checkpoint  : 60s
+-- cp-mode     : exactly-once
+-- ====================================================================
+
+SET 'pipeline.name' = 'pg-cdc-iceberg-f1';
+
+SET 'parallelism.default' = '4';
+
+SET 'execution.checkpointing.interval' = '60000';
+
+SET 'execution.checkpointing.mode' = 'exactly-once';
+
+-- ====================================================================
+-- CATALOG
+-- --------------------------------------------------------------------
+-- id          : IcebergCatalog_0
+-- type        : iceberg
+-- uri         : http://lakekeeper:8181/catalog
+-- ====================================================================
+
+CREATE CATALOG \`lakekeeper\` WITH (
+  'type' = 'iceberg',
+  'catalog-type' = 'rest',
+  'uri' = 'http://lakekeeper:8181/catalog'
+);
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : tpch_public_orders
+-- type        : kafka
+-- topic       : tpch.public.orders
+-- format      : debezium-protobuf
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`tpch_public_orders\` (
+  \`o_orderkey\` BIGINT,
+  \`o_custkey\` BIGINT,
+  \`o_orderstatus\` STRING,
+  \`o_totalprice\` DECIMAL(15, 2),
+  \`o_orderdate\` DATE,
+  \`o_orderpriority\` STRING,
+  \`o_clerk\` STRING,
+  \`o_shippriority\` INT,
+  \`o_comment\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS event_time - INTERVAL '5' SECOND,
+  PRIMARY KEY (\`o_orderkey\`) NOT ENFORCED
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'tpch.public.orders',
+  'format' = 'debezium-protobuf',
+  'debezium-protobuf.schema-registry.url' = 'http://schema-registry:8081',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : IcebergSink_2
+-- type        : iceberg
+-- ====================================================================
+
+-- IcebergSink \`lakekeeper\`.\`tpch\`.\`orders\` (catalog-managed)
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : tpch_public_orders
+-- output      : lakekeeper
+-- ====================================================================
+
+INSERT INTO \`lakekeeper\`.\`tpch\`.\`orders\`
+SELECT * FROM \`tpch_public_orders\`;
+",
+}
+`;
+
+exports[`pg-cdc-iceberg-f1 (Kafka-hop) > synthesizes a stable artifact bundle for protobuf + throughput 1`] = `
+{
+  "crd": {
+    "apiVersion": "flink.apache.org/v1beta1",
+    "kind": "FlinkDeployment",
+    "metadata": {
+      "name": "pg-cdc-iceberg-f1",
+    },
+    "spec": {
+      "flinkConfiguration": {
+        "execution.checkpointing.interval": "60000",
+        "execution.checkpointing.mode": "EXACTLY_ONCE",
+        "execution.runtime-mode": "STREAMING",
+      },
+      "flinkVersion": "v2_0",
+      "image": "flink:2.0",
+      "job": {
+        "jarURI": "local:///opt/flink/usrlib/sql-runner.jar",
+        "parallelism": 4,
+      },
+      "jobManager": {
+        "replicas": 1,
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+      "taskManager": {
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+    },
+  },
+  "jars": [
+    "org.apache.flink:flink-sql-connector-kafka:4.0.1-2.0",
+    "org.apache.flink:flink-sql-protobuf-confluent-registry:2.0.0",
+    "org.apache.iceberg:iceberg-flink-runtime-2.0:1.6.0",
+  ],
+  "sql": "-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : pg-cdc-iceberg-f1
+-- parallelism : 4
+-- checkpoint  : 60s
+-- cp-mode     : exactly-once
+-- ====================================================================
+
+SET 'pipeline.name' = 'pg-cdc-iceberg-f1';
+
+SET 'parallelism.default' = '4';
+
+SET 'execution.checkpointing.interval' = '60000';
+
+SET 'execution.checkpointing.mode' = 'exactly-once';
+
+-- ====================================================================
+-- CATALOG
+-- --------------------------------------------------------------------
+-- id          : IcebergCatalog_0
+-- type        : iceberg
+-- uri         : http://lakekeeper:8181/catalog
+-- ====================================================================
+
+CREATE CATALOG \`lakekeeper\` WITH (
+  'type' = 'iceberg',
+  'catalog-type' = 'rest',
+  'uri' = 'http://lakekeeper:8181/catalog'
+);
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : tpch_public_orders
+-- type        : kafka
+-- topic       : tpch.public.orders
+-- format      : debezium-protobuf
+-- bootstrap   : kafka:9092
+-- startup     : earliest-offset
+-- ====================================================================
+
+CREATE TABLE \`tpch_public_orders\` (
+  \`o_orderkey\` BIGINT,
+  \`o_custkey\` BIGINT,
+  \`o_orderstatus\` STRING,
+  \`o_totalprice\` DECIMAL(15, 2),
+  \`o_orderdate\` DATE,
+  \`o_orderpriority\` STRING,
+  \`o_clerk\` STRING,
+  \`o_shippriority\` INT,
+  \`o_comment\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS event_time - INTERVAL '5' SECOND,
+  PRIMARY KEY (\`o_orderkey\`) NOT ENFORCED
+) WITH (
+  'connector' = 'kafka',
+  'topic' = 'tpch.public.orders',
+  'format' = 'debezium-protobuf',
+  'debezium-protobuf.schema-registry.url' = 'http://schema-registry:8081',
+  'properties.bootstrap.servers' = 'kafka:9092',
+  'scan.startup.mode' = 'earliest-offset'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : IcebergSink_2
+-- type        : iceberg
+-- ====================================================================
+
+-- IcebergSink \`lakekeeper\`.\`tpch\`.\`orders\` (catalog-managed)
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : tpch_public_orders
+-- output      : lakekeeper
+-- ====================================================================
+
+INSERT INTO \`lakekeeper\`.\`tpch\`.\`orders\`
+SELECT * FROM \`tpch_public_orders\`;
+",
+}
+`;
+
+exports[`pg-cdc-iceberg-f2 (Pipeline Connector) > synthesizes a stable artifact bundle for initial + latency 1`] = `
+{
+  "crd": {
+    "apiVersion": "flink.apache.org/v1beta1",
+    "kind": "FlinkDeployment",
+    "metadata": {
+      "name": "pg-cdc-iceberg-f2",
+    },
+    "spec": {
+      "flinkConfiguration": {
+        "execution.checkpointing.interval": "60000",
+        "execution.checkpointing.mode": "EXACTLY_ONCE",
+        "execution.runtime-mode": "STREAMING",
+      },
+      "flinkVersion": "v2_0",
+      "image": "flink:2.0",
+      "job": {
+        "args": [
+          "--pipeline",
+          "/etc/flink-cdc/pipeline.yaml",
+        ],
+        "jarURI": "local:///opt/flink-cdc/lib/flink-cdc-cli.jar",
+        "parallelism": 4,
+      },
+      "jobManager": {
+        "replicas": 1,
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+      "podTemplate": {
+        "spec": {
+          "containers": [
+            {
+              "env": [
+                {
+                  "name": "PG_PRIMARY_PASSWORD",
+                  "valueFrom": {
+                    "secretKeyRef": {
+                      "key": "password",
+                      "name": "pg-primary-password",
+                    },
+                  },
+                },
+              ],
+              "name": "flink-main-container",
+              "volumeMounts": [
+                {
+                  "mountPath": "/etc/flink-cdc",
+                  "name": "pipeline-yaml",
+                  "readOnly": true,
+                },
+              ],
+            },
+          ],
+          "volumes": [
+            {
+              "configMap": {
+                "name": "pg-cdc-iceberg-f2-pipeline",
+              },
+              "name": "pipeline-yaml",
+            },
+          ],
+        },
+      },
+      "taskManager": {
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+    },
+  },
+  "jars": [
+    "org.apache.flink:flink-cdc-pipeline-connector-postgres:3.6.0",
+    "org.apache.iceberg:iceberg-flink-runtime-2.0:1.6.0",
+  ],
+  "pipelineYaml": "source:
+  type: postgres
+  hostname: pg-primary
+  port: 5432
+  username: flink_cdc
+  password: '\${env:PG_PRIMARY_PASSWORD}'
+  database-name: tpch
+  schema-name: public
+  table-name: 'public.orders,public.lineitem,public.customer'
+  decoding.plugin.name: pgoutput
+  slot.name: fr_pg_cdc_iceberg_f2_slot
+  publication.name: fr_pg_cdc_iceberg_f2_pub
+  scan.startup.mode: initial
+  scan.snapshot.enabled: true
+  scan.incremental.snapshot.chunk.size: 100000
+sink:
+  type: iceberg
+  catalog.name: lakekeeper
+  database: tpch
+  table: orders
+  catalog.properties.type: rest
+  catalog.properties.uri: 'http://lakekeeper:8181/catalog'
+  table.properties.format-version: '2'
+  table.properties.write.upsert.enabled: 'true'
+  table.properties.equality-field-columns: o_orderkey
+  table.properties.primary-key: o_orderkey
+  table.properties.commit-interval-ms: '2000'
+  table.properties.write.distribution-mode: hash
+  table.properties.write.target-file-size-bytes: '268435456'
+  table.properties.write.parquet.compression-codec: zstd
+pipeline:
+  name: pg-cdc-iceberg-f2
+  parallelism: 4
+  schema.change.behavior: evolve
+",
+}
+`;
+
+exports[`pg-cdc-iceberg-f2 (Pipeline Connector) > synthesizes a stable artifact bundle for initial + throughput 1`] = `
+{
+  "crd": {
+    "apiVersion": "flink.apache.org/v1beta1",
+    "kind": "FlinkDeployment",
+    "metadata": {
+      "name": "pg-cdc-iceberg-f2",
+    },
+    "spec": {
+      "flinkConfiguration": {
+        "execution.checkpointing.interval": "60000",
+        "execution.checkpointing.mode": "EXACTLY_ONCE",
+        "execution.runtime-mode": "STREAMING",
+      },
+      "flinkVersion": "v2_0",
+      "image": "flink:2.0",
+      "job": {
+        "args": [
+          "--pipeline",
+          "/etc/flink-cdc/pipeline.yaml",
+        ],
+        "jarURI": "local:///opt/flink-cdc/lib/flink-cdc-cli.jar",
+        "parallelism": 4,
+      },
+      "jobManager": {
+        "replicas": 1,
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+      "podTemplate": {
+        "spec": {
+          "containers": [
+            {
+              "env": [
+                {
+                  "name": "PG_PRIMARY_PASSWORD",
+                  "valueFrom": {
+                    "secretKeyRef": {
+                      "key": "password",
+                      "name": "pg-primary-password",
+                    },
+                  },
+                },
+              ],
+              "name": "flink-main-container",
+              "volumeMounts": [
+                {
+                  "mountPath": "/etc/flink-cdc",
+                  "name": "pipeline-yaml",
+                  "readOnly": true,
+                },
+              ],
+            },
+          ],
+          "volumes": [
+            {
+              "configMap": {
+                "name": "pg-cdc-iceberg-f2-pipeline",
+              },
+              "name": "pipeline-yaml",
+            },
+          ],
+        },
+      },
+      "taskManager": {
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+    },
+  },
+  "jars": [
+    "org.apache.flink:flink-cdc-pipeline-connector-postgres:3.6.0",
+    "org.apache.iceberg:iceberg-flink-runtime-2.0:1.6.0",
+  ],
+  "pipelineYaml": "source:
+  type: postgres
+  hostname: pg-primary
+  port: 5432
+  username: flink_cdc
+  password: '\${env:PG_PRIMARY_PASSWORD}'
+  database-name: tpch
+  schema-name: public
+  table-name: 'public.orders,public.lineitem,public.customer'
+  decoding.plugin.name: pgoutput
+  slot.name: fr_pg_cdc_iceberg_f2_slot
+  publication.name: fr_pg_cdc_iceberg_f2_pub
+  scan.startup.mode: initial
+  scan.snapshot.enabled: true
+  scan.incremental.snapshot.chunk.size: 100000
+sink:
+  type: iceberg
+  catalog.name: lakekeeper
+  database: tpch
+  table: orders
+  catalog.properties.type: rest
+  catalog.properties.uri: 'http://lakekeeper:8181/catalog'
+  table.properties.format-version: '2'
+  table.properties.write.upsert.enabled: 'true'
+  table.properties.equality-field-columns: o_orderkey
+  table.properties.primary-key: o_orderkey
+  table.properties.commit-interval-ms: '10000'
+  table.properties.write.distribution-mode: hash
+  table.properties.write.target-file-size-bytes: '268435456'
+  table.properties.write.parquet.compression-codec: zstd
+pipeline:
+  name: pg-cdc-iceberg-f2
+  parallelism: 4
+  schema.change.behavior: evolve
+",
+}
+`;
+
+exports[`pg-cdc-iceberg-f2 (Pipeline Connector) > synthesizes a stable artifact bundle for initial_only + latency 1`] = `
+{
+  "crd": {
+    "apiVersion": "flink.apache.org/v1beta1",
+    "kind": "FlinkDeployment",
+    "metadata": {
+      "name": "pg-cdc-iceberg-f2",
+    },
+    "spec": {
+      "flinkConfiguration": {
+        "execution.checkpointing.interval": "60000",
+        "execution.checkpointing.mode": "EXACTLY_ONCE",
+        "execution.runtime-mode": "BATCH",
+      },
+      "flinkVersion": "v2_0",
+      "image": "flink:2.0",
+      "job": {
+        "args": [
+          "--pipeline",
+          "/etc/flink-cdc/pipeline.yaml",
+        ],
+        "jarURI": "local:///opt/flink-cdc/lib/flink-cdc-cli.jar",
+        "parallelism": 4,
+      },
+      "jobManager": {
+        "replicas": 1,
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+      "podTemplate": {
+        "spec": {
+          "containers": [
+            {
+              "env": [
+                {
+                  "name": "PG_PRIMARY_PASSWORD",
+                  "valueFrom": {
+                    "secretKeyRef": {
+                      "key": "password",
+                      "name": "pg-primary-password",
+                    },
+                  },
+                },
+              ],
+              "name": "flink-main-container",
+              "volumeMounts": [
+                {
+                  "mountPath": "/etc/flink-cdc",
+                  "name": "pipeline-yaml",
+                  "readOnly": true,
+                },
+              ],
+            },
+          ],
+          "volumes": [
+            {
+              "configMap": {
+                "name": "pg-cdc-iceberg-f2-pipeline",
+              },
+              "name": "pipeline-yaml",
+            },
+          ],
+        },
+      },
+      "taskManager": {
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+    },
+  },
+  "jars": [
+    "org.apache.flink:flink-cdc-pipeline-connector-postgres:3.6.0",
+    "org.apache.iceberg:iceberg-flink-runtime-2.0:1.6.0",
+  ],
+  "pipelineYaml": "source:
+  type: postgres
+  hostname: pg-primary
+  port: 5432
+  username: flink_cdc
+  password: '\${env:PG_PRIMARY_PASSWORD}'
+  database-name: tpch
+  schema-name: public
+  table-name: 'public.orders,public.lineitem,public.customer'
+  decoding.plugin.name: pgoutput
+  slot.name: fr_pg_cdc_iceberg_f2_slot
+  publication.name: fr_pg_cdc_iceberg_f2_pub
+  scan.startup.mode: snapshot
+  scan.snapshot.enabled: true
+  scan.incremental.snapshot.chunk.size: 100000
+  slot.drop.on.stop: true
+sink:
+  type: iceberg
+  catalog.name: lakekeeper
+  database: tpch
+  table: orders
+  catalog.properties.type: rest
+  catalog.properties.uri: 'http://lakekeeper:8181/catalog'
+  table.properties.format-version: '2'
+  table.properties.write.upsert.enabled: 'true'
+  table.properties.equality-field-columns: o_orderkey
+  table.properties.primary-key: o_orderkey
+  table.properties.commit-interval-ms: '2000'
+  table.properties.write.distribution-mode: hash
+  table.properties.write.target-file-size-bytes: '268435456'
+  table.properties.write.parquet.compression-codec: zstd
+pipeline:
+  name: pg-cdc-iceberg-f2
+  parallelism: 4
+  schema.change.behavior: evolve
+",
+}
+`;
+
+exports[`pg-cdc-iceberg-f2 (Pipeline Connector) > synthesizes a stable artifact bundle for initial_only + throughput 1`] = `
+{
+  "crd": {
+    "apiVersion": "flink.apache.org/v1beta1",
+    "kind": "FlinkDeployment",
+    "metadata": {
+      "name": "pg-cdc-iceberg-f2",
+    },
+    "spec": {
+      "flinkConfiguration": {
+        "execution.checkpointing.interval": "60000",
+        "execution.checkpointing.mode": "EXACTLY_ONCE",
+        "execution.runtime-mode": "BATCH",
+      },
+      "flinkVersion": "v2_0",
+      "image": "flink:2.0",
+      "job": {
+        "args": [
+          "--pipeline",
+          "/etc/flink-cdc/pipeline.yaml",
+        ],
+        "jarURI": "local:///opt/flink-cdc/lib/flink-cdc-cli.jar",
+        "parallelism": 4,
+      },
+      "jobManager": {
+        "replicas": 1,
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+      "podTemplate": {
+        "spec": {
+          "containers": [
+            {
+              "env": [
+                {
+                  "name": "PG_PRIMARY_PASSWORD",
+                  "valueFrom": {
+                    "secretKeyRef": {
+                      "key": "password",
+                      "name": "pg-primary-password",
+                    },
+                  },
+                },
+              ],
+              "name": "flink-main-container",
+              "volumeMounts": [
+                {
+                  "mountPath": "/etc/flink-cdc",
+                  "name": "pipeline-yaml",
+                  "readOnly": true,
+                },
+              ],
+            },
+          ],
+          "volumes": [
+            {
+              "configMap": {
+                "name": "pg-cdc-iceberg-f2-pipeline",
+              },
+              "name": "pipeline-yaml",
+            },
+          ],
+        },
+      },
+      "taskManager": {
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+    },
+  },
+  "jars": [
+    "org.apache.flink:flink-cdc-pipeline-connector-postgres:3.6.0",
+    "org.apache.iceberg:iceberg-flink-runtime-2.0:1.6.0",
+  ],
+  "pipelineYaml": "source:
+  type: postgres
+  hostname: pg-primary
+  port: 5432
+  username: flink_cdc
+  password: '\${env:PG_PRIMARY_PASSWORD}'
+  database-name: tpch
+  schema-name: public
+  table-name: 'public.orders,public.lineitem,public.customer'
+  decoding.plugin.name: pgoutput
+  slot.name: fr_pg_cdc_iceberg_f2_slot
+  publication.name: fr_pg_cdc_iceberg_f2_pub
+  scan.startup.mode: snapshot
+  scan.snapshot.enabled: true
+  scan.incremental.snapshot.chunk.size: 100000
+  slot.drop.on.stop: true
+sink:
+  type: iceberg
+  catalog.name: lakekeeper
+  database: tpch
+  table: orders
+  catalog.properties.type: rest
+  catalog.properties.uri: 'http://lakekeeper:8181/catalog'
+  table.properties.format-version: '2'
+  table.properties.write.upsert.enabled: 'true'
+  table.properties.equality-field-columns: o_orderkey
+  table.properties.primary-key: o_orderkey
+  table.properties.commit-interval-ms: '10000'
+  table.properties.write.distribution-mode: hash
+  table.properties.write.target-file-size-bytes: '268435456'
+  table.properties.write.parquet.compression-codec: zstd
+pipeline:
+  name: pg-cdc-iceberg-f2
+  parallelism: 4
+  schema.change.behavior: evolve
+",
+}
+`;
+
+exports[`pg-cdc-iceberg-f2 (Pipeline Connector) > synthesizes a stable artifact bundle for never + latency 1`] = `
+{
+  "crd": {
+    "apiVersion": "flink.apache.org/v1beta1",
+    "kind": "FlinkDeployment",
+    "metadata": {
+      "name": "pg-cdc-iceberg-f2",
+    },
+    "spec": {
+      "flinkConfiguration": {
+        "execution.checkpointing.interval": "60000",
+        "execution.checkpointing.mode": "EXACTLY_ONCE",
+        "execution.runtime-mode": "STREAMING",
+      },
+      "flinkVersion": "v2_0",
+      "image": "flink:2.0",
+      "job": {
+        "args": [
+          "--pipeline",
+          "/etc/flink-cdc/pipeline.yaml",
+        ],
+        "jarURI": "local:///opt/flink-cdc/lib/flink-cdc-cli.jar",
+        "parallelism": 4,
+      },
+      "jobManager": {
+        "replicas": 1,
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+      "podTemplate": {
+        "spec": {
+          "containers": [
+            {
+              "env": [
+                {
+                  "name": "PG_PRIMARY_PASSWORD",
+                  "valueFrom": {
+                    "secretKeyRef": {
+                      "key": "password",
+                      "name": "pg-primary-password",
+                    },
+                  },
+                },
+              ],
+              "name": "flink-main-container",
+              "volumeMounts": [
+                {
+                  "mountPath": "/etc/flink-cdc",
+                  "name": "pipeline-yaml",
+                  "readOnly": true,
+                },
+              ],
+            },
+          ],
+          "volumes": [
+            {
+              "configMap": {
+                "name": "pg-cdc-iceberg-f2-pipeline",
+              },
+              "name": "pipeline-yaml",
+            },
+          ],
+        },
+      },
+      "taskManager": {
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+    },
+  },
+  "jars": [
+    "org.apache.flink:flink-cdc-pipeline-connector-postgres:3.6.0",
+    "org.apache.iceberg:iceberg-flink-runtime-2.0:1.6.0",
+  ],
+  "pipelineYaml": "source:
+  type: postgres
+  hostname: pg-primary
+  port: 5432
+  username: flink_cdc
+  password: '\${env:PG_PRIMARY_PASSWORD}'
+  database-name: tpch
+  schema-name: public
+  table-name: 'public.orders,public.lineitem,public.customer'
+  decoding.plugin.name: pgoutput
+  slot.name: fr_pg_cdc_iceberg_f2_slot
+  publication.name: fr_pg_cdc_iceberg_f2_pub
+  scan.startup.mode: initial
+  scan.snapshot.enabled: false
+  scan.incremental.snapshot.chunk.size: 100000
+sink:
+  type: iceberg
+  catalog.name: lakekeeper
+  database: tpch
+  table: orders
+  catalog.properties.type: rest
+  catalog.properties.uri: 'http://lakekeeper:8181/catalog'
+  table.properties.format-version: '2'
+  table.properties.write.upsert.enabled: 'true'
+  table.properties.equality-field-columns: o_orderkey
+  table.properties.primary-key: o_orderkey
+  table.properties.commit-interval-ms: '2000'
+  table.properties.write.distribution-mode: hash
+  table.properties.write.target-file-size-bytes: '268435456'
+  table.properties.write.parquet.compression-codec: zstd
+pipeline:
+  name: pg-cdc-iceberg-f2
+  parallelism: 4
+  schema.change.behavior: evolve
+",
+}
+`;
+
+exports[`pg-cdc-iceberg-f2 (Pipeline Connector) > synthesizes a stable artifact bundle for never + throughput 1`] = `
+{
+  "crd": {
+    "apiVersion": "flink.apache.org/v1beta1",
+    "kind": "FlinkDeployment",
+    "metadata": {
+      "name": "pg-cdc-iceberg-f2",
+    },
+    "spec": {
+      "flinkConfiguration": {
+        "execution.checkpointing.interval": "60000",
+        "execution.checkpointing.mode": "EXACTLY_ONCE",
+        "execution.runtime-mode": "STREAMING",
+      },
+      "flinkVersion": "v2_0",
+      "image": "flink:2.0",
+      "job": {
+        "args": [
+          "--pipeline",
+          "/etc/flink-cdc/pipeline.yaml",
+        ],
+        "jarURI": "local:///opt/flink-cdc/lib/flink-cdc-cli.jar",
+        "parallelism": 4,
+      },
+      "jobManager": {
+        "replicas": 1,
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+      "podTemplate": {
+        "spec": {
+          "containers": [
+            {
+              "env": [
+                {
+                  "name": "PG_PRIMARY_PASSWORD",
+                  "valueFrom": {
+                    "secretKeyRef": {
+                      "key": "password",
+                      "name": "pg-primary-password",
+                    },
+                  },
+                },
+              ],
+              "name": "flink-main-container",
+              "volumeMounts": [
+                {
+                  "mountPath": "/etc/flink-cdc",
+                  "name": "pipeline-yaml",
+                  "readOnly": true,
+                },
+              ],
+            },
+          ],
+          "volumes": [
+            {
+              "configMap": {
+                "name": "pg-cdc-iceberg-f2-pipeline",
+              },
+              "name": "pipeline-yaml",
+            },
+          ],
+        },
+      },
+      "taskManager": {
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+    },
+  },
+  "jars": [
+    "org.apache.flink:flink-cdc-pipeline-connector-postgres:3.6.0",
+    "org.apache.iceberg:iceberg-flink-runtime-2.0:1.6.0",
+  ],
+  "pipelineYaml": "source:
+  type: postgres
+  hostname: pg-primary
+  port: 5432
+  username: flink_cdc
+  password: '\${env:PG_PRIMARY_PASSWORD}'
+  database-name: tpch
+  schema-name: public
+  table-name: 'public.orders,public.lineitem,public.customer'
+  decoding.plugin.name: pgoutput
+  slot.name: fr_pg_cdc_iceberg_f2_slot
+  publication.name: fr_pg_cdc_iceberg_f2_pub
+  scan.startup.mode: initial
+  scan.snapshot.enabled: false
+  scan.incremental.snapshot.chunk.size: 100000
+sink:
+  type: iceberg
+  catalog.name: lakekeeper
+  database: tpch
+  table: orders
+  catalog.properties.type: rest
+  catalog.properties.uri: 'http://lakekeeper:8181/catalog'
+  table.properties.format-version: '2'
+  table.properties.write.upsert.enabled: 'true'
+  table.properties.equality-field-columns: o_orderkey
+  table.properties.primary-key: o_orderkey
+  table.properties.commit-interval-ms: '10000'
+  table.properties.write.distribution-mode: hash
+  table.properties.write.target-file-size-bytes: '268435456'
+  table.properties.write.parquet.compression-codec: zstd
+pipeline:
+  name: pg-cdc-iceberg-f2
+  parallelism: 4
+  schema.change.behavior: evolve
+",
+}
+`;

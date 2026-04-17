@@ -421,6 +421,29 @@ export default (
 
 <br />
 
+## <img src="assets/icons/code-xml.svg" width="24" height="24" style="vertical-align: middle; margin-bottom: 2px;"> Reference Pipelines
+
+First-class, production-shaped pipeline templates that ship in-tree. Copy the
+directory into your own project as a starting point — they are also the tracks
+used by the Postgres → Iceberg CDC benchmark, so any number the benchmark
+publishes is reproducible from the same source.
+
+- [`pipelines/pg-cdc-iceberg-f1/`](pipelines/pg-cdc-iceberg-f1/) — **F1 (Kafka-hop):**
+  Postgres → Debezium → Kafka → Flink SQL → Iceberg. Parameterised on
+  `wireFormat` (`json` / `avro` / `protobuf`) and `commitMode`
+  (`throughput` / `latency`).
+- [`pipelines/pg-cdc-iceberg-f2/`](pipelines/pg-cdc-iceberg-f2/) — **F2 (Pipeline
+  Connector):** Postgres → Flink CDC 3.6 Pipeline Connector → Iceberg. No
+  Kafka hop. Parameterised on `snapshotMode`
+  (`initial` / `never` / `initial_only`) and `commitMode`.
+
+Both write to a Lakekeeper REST Iceberg catalog with Merge-on-Read
+(`upsertEnabled`, equality-field columns, `zstd` Parquet, hash distribution)
+so downstream Iceberg queries see equivalent tables regardless of which
+pipeline is running.
+
+<br />
+
 ## <img src="assets/icons/layers.svg" width="24" height="24" style="vertical-align: middle; margin-bottom: 2px;"> Architecture
 
 ```
