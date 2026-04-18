@@ -347,6 +347,8 @@ _flink_reactor_cluster_submit() {
 _flink_reactor_schema() {
   _arguments \\
     '--json[Output as JSON]' \\
+    '--live[For Pipeline Connector sources (e.g. PostgresCdcPipelineSource), connect to the live database and introspect column metadata]' \\
+    '--pg-connection-string[Postgres connection string (overrides FR_PG_CONNECTION_STRING)]: : ' \\
     '1:Path to a .tsx pipeline file, or a pipeline name:_files -g "*.tsx"'
 }
 

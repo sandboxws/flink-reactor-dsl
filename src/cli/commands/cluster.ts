@@ -1,5 +1,11 @@
 import { execSync, fork } from "node:child_process"
-import { existsSync, readdirSync } from "node:fs"
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"

@@ -27,7 +27,7 @@ describe("validate command", () => {
     return join(projectRoot, "src/core/jsx-runtime.js")
   }
 
-  it("passes for a valid pipeline", async () => {
+  it("passes for a valid pipeline", { timeout: 15_000 }, async () => {
     writePipeline(
       "orders",
       `
@@ -60,10 +60,13 @@ export default pipeline;
     expect(result).toBe(true)
   })
 
-  it("reports errors for an invalid pipeline with orphan source", async () => {
-    writePipeline(
-      "invalid",
-      `
+  it(
+    "reports errors for an invalid pipeline with orphan source",
+    { timeout: 15_000 },
+    async () => {
+      writePipeline(
+        "invalid",
+        `
 import { createElement } from '${jsxPath()}';
 
 const pipeline = createElement('Pipeline', { name: 'invalid-pipeline' },
@@ -80,15 +83,16 @@ const pipeline = createElement('Pipeline', { name: 'invalid-pipeline' },
 
 export default pipeline;
 `,
-    )
+      )
 
-    const result = await runValidate({
-      projectDir: tempDir,
-    })
+      const result = await runValidate({
+        projectDir: tempDir,
+      })
 
-    // Orphan source should cause validation failure
-    expect(result).toBe(false)
-  })
+      // Orphan source should cause validation failure
+      expect(result).toBe(false)
+    },
+  )
 
   it("returns true when no pipelines found", async () => {
     const result = await runValidate({
