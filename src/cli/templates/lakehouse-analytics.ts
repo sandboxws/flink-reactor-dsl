@@ -262,8 +262,8 @@ export default (
         product: 'product',
         totalRevenue: 'SUM(amount)',
         orderCount: 'COUNT(*)',
-        windowStart: 'WINDOW_START',
-        windowEnd: 'WINDOW_END',
+        windowStart: 'window_start',
+        windowEnd: 'window_end',
       }}
     />
     {/* Gold: append-only summary tables */}

@@ -218,7 +218,7 @@ export default (
         storeId: 'storeId',
         avgRating: 'AVG(storeRating)',
         ratingCount: 'COUNT(*)',
-        windowEnd: 'WINDOW_END',
+        windowEnd: 'window_end',
       }}
     />
     <JdbcSink table="store_rankings" url="jdbc:postgresql://postgres:5432/flink_sink" upsertMode keyFields={['storeId']} />

@@ -227,7 +227,7 @@ const windowed = TumbleWindow({ size: "1 MINUTE", on: "requestTime", children: r
 
 const demand = Aggregate({
   groupBy: ['zoneId'],
-  select: { zoneId: 'zoneId', demandCount: 'COUNT(*)', windowEnd: 'WINDOW_END' },
+  select: { zoneId: 'zoneId', demandCount: 'COUNT(*)', windowEnd: 'window_end' },
   children: windowed,
 });
 

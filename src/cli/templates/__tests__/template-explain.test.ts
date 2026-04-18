@@ -45,11 +45,8 @@ const SKIP = new Set<string>([
   "pump-iot", // StatementSet: later source/sink pairs have column type mismatches
   "pump-lakehouse", // StatementSet: later source/sink pairs have column type mismatches
 
-  // ── Window column case mismatch (bugs/015) ──────────────────────
-  // WINDOW_START/WINDOW_END emitted uppercase; Flink TVFs produce lowercase.
-  "page-view-analytics", // bugs/015
-  "grocery-store-rankings", // bugs/015
-  "ecom-revenue-analytics", // bugs/015
+  // ── Template authoring bug: schema missing required column ──────
+  "ecom-revenue-analytics", // bugs/025 — aggregates by `category` but OrderSchema lacks that field
 ])
 
 // ── Helpers ──────────────────────────────────────────────────────────

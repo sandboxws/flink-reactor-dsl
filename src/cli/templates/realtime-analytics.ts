@@ -103,8 +103,8 @@ export default (
       select={{
         pageUrl: 'pageUrl',
         viewCount: 'COUNT(*)',
-        windowStart: 'WINDOW_START',
-        windowEnd: 'WINDOW_END',
+        windowStart: 'window_start',
+        windowEnd: 'window_end',
       }}
     />
     <JdbcSink

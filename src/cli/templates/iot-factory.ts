@@ -136,7 +136,7 @@ const stats = Aggregate({
     stddevValue: 'STDDEV_POP(value)',
     maxValue: 'MAX(value)',
     readingCount: 'COUNT(*)',
-    windowEnd: 'WINDOW_END',
+    windowEnd: 'window_end',
   },
   children: windowed,
 });

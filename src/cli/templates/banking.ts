@@ -195,11 +195,11 @@ export default (
     <TumbleWindow size="1 HOUR" on="txnTime" />
     <Route>
       <Route.Branch condition="1 = 1">
-        <Aggregate groupBy={['accountId']} select={{ accountId: 'accountId', totalAmount: 'SUM(amount)', txnCount: 'COUNT(*)', windowEnd: 'WINDOW_END' }} />
+        <Aggregate groupBy={['accountId']} select={{ accountId: 'accountId', totalAmount: 'SUM(amount)', txnCount: 'COUNT(*)', windowEnd: 'window_end' }} />
         <JdbcSink table="large_txn_report" url="jdbc:postgresql://postgres:5432/flink_sink" />
       </Route.Branch>
       <Route.Branch condition="1 = 1">
-        <Aggregate groupBy={['country']} select={{ country: 'country', crossBorderCount: 'COUNT(*)', totalVolume: 'SUM(amount)', windowEnd: 'WINDOW_END' }} />
+        <Aggregate groupBy={['country']} select={{ country: 'country', crossBorderCount: 'COUNT(*)', totalVolume: 'SUM(amount)', windowEnd: 'window_end' }} />
         <JdbcSink table="cross_border_report" url="jdbc:postgresql://postgres:5432/flink_sink" />
       </Route.Branch>
       <Route.Branch condition="amount > 10000">
