@@ -26,7 +26,6 @@ const SKIP = new Set<string>([
   // ── Codegen issues needing deeper fixes ───────────────────────────
   "ecom-order-enrichment", // bugs/029 — multiple rowtime cols in Kafka sink after interval join
   "rides-trip-tracking", // MatchRecognize SQL parsing not yet supported by EXPLAIN
-  "rides-surge-pricing", // BroadcastJoin references intermediate 'demand' table not registered
   "bank-fraud-detection", // bugs/027 — MatchRecognize MEASURES type inference returns STRING for FIRST/LAST(timestamp_col)
   "bank-compliance-agg", // Route branch column type mismatch after windowed aggregation
   "grocery-order-fulfillment", // bugs/028 — temporal join needs full composite PK; template joins on partial key

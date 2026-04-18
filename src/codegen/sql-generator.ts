@@ -1491,7 +1491,17 @@ function resolveSinkMetadata(
 
   function resolveSourceChangelogMode(source: ConstructNode): ChangelogMode {
     const mode = source.props.changelogMode as string | undefined
-    return mode === "retract" ? "retract" : "append-only"
+    if (mode === "retract") return "retract"
+    // A KafkaSource with a schema primary key is emitted as upsert-kafka,
+    // which carries upsert (retract-equivalent) changelog semantics even
+    // though its format (json/avro) isn't listed as CDC by inferChangelogMode.
+    if (source.component === "KafkaSource") {
+      const schema = source.props.schema as
+        | { primaryKey?: { columns?: readonly string[] } }
+        | undefined
+      if ((schema?.primaryKey?.columns?.length ?? 0) > 0) return "retract"
+    }
+    return "append-only"
   }
 
   function resolveSourcePrimaryKey(
@@ -1624,10 +1634,28 @@ function resolveSinkMetadata(
             if (joinType === "anti" || joinType === "semi") {
               changelogMode = "retract"
             }
-            // Propagate PK from the left (primary) source
-            const leftSource = findDeepestSource(sibling)
-            if (leftSource) {
-              primaryKey = resolveSourcePrimaryKey(leftSource)
+            // Inner/left/right/full joins are retract when either input is retract
+            // (e.g. CDC / upsert-kafka source on the broadcast side of a join).
+            const left = sibling.children[0]
+            const right = sibling.children[1]
+            const leftDeepest = left ? findDeepestSource(left) : null
+            const rightDeepest = right ? findDeepestSource(right) : null
+            if (
+              (leftDeepest &&
+                resolveSourceChangelogMode(leftDeepest) === "retract") ||
+              (rightDeepest &&
+                resolveSourceChangelogMode(rightDeepest) === "retract")
+            ) {
+              changelogMode = "retract"
+            }
+            // Prefer a same-name join key as the sink's PK (natural key of
+            // the joined result). Fall back to the left source's PK.
+            const onClause = sibling.props.on as string | undefined
+            const sharedKey = onClause ? sameNameJoinKey(onClause) : null
+            if (sharedKey) {
+              primaryKey = [sharedKey]
+            } else if (leftDeepest) {
+              primaryKey = resolveSourcePrimaryKey(leftDeepest)
             }
           }
           // Propagate through intermediate transforms
@@ -3061,7 +3089,24 @@ function buildJoinQuery(
     ? `/*+ BROADCAST(${resolveRef(hints.broadcast === "left" ? leftId : rightId, nodeIndex)}) */ `
     : ""
 
-  return `${ctePrefix}SELECT ${hintClause}* FROM ${left.ref} ${sqlJoinType} JOIN ${right.ref} ON ${onCondition}`
+  // Same shared-key disambiguation as temporal / interval / lookup joins:
+  // if both sides reference the same column in the ON clause, qualify
+  // with side refs and drop the duplicate right-side column from SELECT *.
+  const sharedKey = sameNameJoinKey(onCondition)
+  const qualifiedOn = sharedKey
+    ? `${left.ref}.${q(sharedKey)} = ${right.ref}.${q(sharedKey)}`
+    : onCondition
+  const projection = sharedKey
+    ? buildJoinProjectionSkippingRightCol(
+        left.ref,
+        right.ref,
+        rightId,
+        sharedKey,
+        nodeIndex,
+      )
+    : "*"
+
+  return `${ctePrefix}SELECT ${hintClause}${projection} FROM ${left.ref} ${sqlJoinType} JOIN ${right.ref} ON ${qualifiedOn}`
 }
 
 // ── Temporal Join ───────────────────────────────────────────────────

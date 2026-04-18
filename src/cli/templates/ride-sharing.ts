@@ -98,6 +98,7 @@ export const RideRequestSchema = Schema({
   fields: {
     rideId: Field.STRING(),
     riderId: Field.STRING(),
+    zoneId: Field.STRING(),
     pickupLat: Field.DOUBLE(),
     pickupLng: Field.DOUBLE(),
     dropoffLat: Field.DOUBLE(),

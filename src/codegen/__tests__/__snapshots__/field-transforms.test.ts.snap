@@ -51,11 +51,13 @@ CREATE TABLE \`output\` (
   \`internal_id\` STRING,
   \`debug_flag\` BOOLEAN,
   \`total\` DOUBLE,
-  \`processed_at\` STRING
+  \`processed_at\` STRING,
+  PRIMARY KEY (\`id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'output',
-  'format' = 'json',
+  'key.format' = 'json',
+  'value.format' = 'json',
   'properties.bootstrap.servers' = 'kafka:9092'
 );
 
@@ -122,11 +124,13 @@ CREATE TABLE \`output\` (
   \`name\` STRING,
   \`price\` DECIMAL(10, 2),
   \`internal_id\` STRING,
-  \`debug_flag\` BOOLEAN
+  \`debug_flag\` BOOLEAN,
+  PRIMARY KEY (\`id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'output',
-  'format' = 'json',
+  'key.format' = 'json',
+  'value.format' = 'json',
   'properties.bootstrap.servers' = 'kafka:9092'
 );
 
@@ -193,11 +197,13 @@ CREATE TABLE \`output\` (
   \`name\` STRING,
   \`price\` DOUBLE,
   \`internal_id\` STRING,
-  \`debug_flag\` BOOLEAN
+  \`debug_flag\` BOOLEAN,
+  PRIMARY KEY (\`id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'output',
-  'format' = 'json',
+  'key.format' = 'json',
+  'value.format' = 'json',
   'properties.bootstrap.servers' = 'kafka:9092'
 );
 
@@ -264,11 +270,13 @@ CREATE TABLE \`output\` (
   \`name\` STRING,
   \`price\` DOUBLE,
   \`internal_id\` STRING,
-  \`debug_flag\` BOOLEAN
+  \`debug_flag\` BOOLEAN,
+  PRIMARY KEY (\`id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'output',
-  'format' = 'json',
+  'key.format' = 'json',
+  'value.format' = 'json',
   'properties.bootstrap.servers' = 'kafka:9092'
 );
 
@@ -333,11 +341,13 @@ CREATE TABLE \`products\` (
 CREATE TABLE \`output\` (
   \`id\` INT,
   \`name\` STRING,
-  \`price\` DOUBLE
+  \`price\` DOUBLE,
+  PRIMARY KEY (\`id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'output',
-  'format' = 'json',
+  'key.format' = 'json',
+  'value.format' = 'json',
   'properties.bootstrap.servers' = 'kafka:9092'
 );
 
@@ -404,11 +414,13 @@ CREATE TABLE \`output\` (
   \`name\` STRING,
   \`price\` DOUBLE,
   \`internal_id\` STRING,
-  \`debug_flag\` BOOLEAN
+  \`debug_flag\` BOOLEAN,
+  PRIMARY KEY (\`product_id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'output',
-  'format' = 'json',
+  'key.format' = 'json',
+  'value.format' = 'json',
   'properties.bootstrap.servers' = 'kafka:9092'
 );
 
@@ -475,11 +487,13 @@ CREATE TABLE \`output\` (
   \`product_name\` STRING,
   \`price\` DOUBLE,
   \`internal_id\` STRING,
-  \`discounted\` DOUBLE
+  \`discounted\` DOUBLE,
+  PRIMARY KEY (\`id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'output',
-  'format' = 'json',
+  'key.format' = 'json',
+  'value.format' = 'json',
   'properties.bootstrap.servers' = 'kafka:9092'
 );
 
@@ -551,11 +565,13 @@ CREATE TABLE \`output\` (
   \`product_name\` STRING,
   \`price\` DOUBLE,
   \`internal_id\` STRING,
-  \`discounted\` DOUBLE
+  \`discounted\` DOUBLE,
+  PRIMARY KEY (\`id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'output',
-  'format' = 'json',
+  'key.format' = 'json',
+  'value.format' = 'json',
   'properties.bootstrap.servers' = 'kafka:9092'
 );
 
@@ -625,11 +641,13 @@ CREATE TABLE \`products\` (
 CREATE TABLE \`output\` (
   \`id\` INT,
   \`name\` STRING,
-  \`price\` DOUBLE
+  \`price\` DOUBLE,
+  PRIMARY KEY (\`id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'output',
-  'format' = 'json',
+  'key.format' = 'json',
+  'value.format' = 'json',
   'properties.bootstrap.servers' = 'kafka:9092'
 );
 
@@ -696,11 +714,13 @@ CREATE TABLE \`output\` (
   \`product_name\` STRING,
   \`price\` DOUBLE,
   \`internal_id\` STRING,
-  \`debug_flag\` BOOLEAN
+  \`debug_flag\` BOOLEAN,
+  PRIMARY KEY (\`product_id\`) NOT ENFORCED
 ) WITH (
-  'connector' = 'kafka',
+  'connector' = 'upsert-kafka',
   'topic' = 'output',
-  'format' = 'json',
+  'key.format' = 'json',
+  'value.format' = 'json',
   'properties.bootstrap.servers' = 'kafka:9092'
 );
 
