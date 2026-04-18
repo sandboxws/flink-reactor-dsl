@@ -101,6 +101,7 @@ export const AccountSchema = Schema({
     updateTime: Field.TIMESTAMP(3),
   },
   primaryKey: { columns: ['accountId'] },
+  watermark: { column: 'updateTime', expression: "updateTime - INTERVAL '5' SECOND" },
 });
 `,
     },

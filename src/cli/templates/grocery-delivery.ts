@@ -113,6 +113,7 @@ export const StoreInventorySchema = Schema({
     updateTime: Field.TIMESTAMP(3),
   },
   primaryKey: { columns: ['storeId', 'productId'] },
+  watermark: { column: 'updateTime', expression: "updateTime - INTERVAL '5' SECOND" },
 });
 
 export const RatingSchema = Schema({

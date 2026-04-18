@@ -22,7 +22,7 @@ their target filename.
 |---|---|---|---|---|
 | 1 | BUG-015 window column case | 2 — `page-view-analytics`, `grocery-store-rankings` (also unmasks BUG-025 on `ecom-revenue-analytics`) | [`015-window-column-case-mismatch.md`](./015-window-column-case-mismatch.md) [FIXED] | few hours |
 | 2 | Iceberg REST catalog wiring | 4 — `cdc-to-lakehouse`, `medallion-{bronze,silver,gold}` (also unmasks BUG-018 on `lakehouse-ingest`) | [`016-iceberg-rest-catalog-wiring.md`](./016-iceberg-rest-catalog-wiring.md) [FIXED] | 0.5–1 day |
-| 3 | Temporal-join column ambiguity | 2 — `bank-fraud-detection` (accountId), `grocery-order-fulfillment` (storeId) | create `017-temporal-join-column-ambiguity.md` | 1 day |
+| 3 | Temporal-join column ambiguity | 0 directly — codegen fix shipped, both pipelines blocked on deeper template/codegen issues (BUG-027, BUG-028) | [`017-temporal-join-column-ambiguity.md`](./017-temporal-join-column-ambiguity.md) [FIXED] | 1 day |
 | 4 | Multi-pair StatementSet type mismatch | 4 — `pump-ecom`, `pump-iot`, `pump-lakehouse`, `lakehouse-ingest` (added via A.2) | create `018-statement-set-type-mismatch.md` | 1–2 days |
 | 5 | Interval-join table refs | 1 — `ecom-order-enrichment` | create `019-interval-join-table-refs.md` | 1 day |
 | 6 | LookupJoin external table | 1 — `ecom-customer-360` | create `020-lookupjoin-external-table.md` | 1 day |
@@ -31,6 +31,8 @@ their target filename.
 | 9 | STDDEV_POP in windowed context | 1 — `iot-predictive-maintenance` | create `023-stddev-pop-windowed.md` | 0.5–1 day |
 | 10 | MATCH_RECOGNIZE EXPLAIN | 1 — `rides-trip-tracking` | create `024-match-recognize-explain.md` after investigation | TBD |
 | 11 | Template schema missing `category` field | 1 — `ecom-revenue-analytics` | [`025-ecom-revenue-schema-missing-category.md`](./025-ecom-revenue-schema-missing-category.md) | few hours |
+| 12 | MatchRecognize MEASURES type inference | 1 — `bank-fraud-detection` (uncovered by A.3) | [`027-match-recognize-measures-type-inference.md`](./027-match-recognize-measures-type-inference.md) | 0.5–1 day |
+| 13 | Temporal join partial PK coverage (template) | 1 — `grocery-order-fulfillment` (uncovered by A.3) | [`028-temporal-join-partial-pk-coverage.md`](./028-temporal-join-partial-pk-coverage.md) | few hours (template) |
 
 Note: BUG-001 through BUG-014 are all marked `[FIXED]`. None of the 19
 skipped pipelines correspond to those closed bugs — the remaining issues
@@ -300,7 +302,7 @@ As each PR lands, update this document:
 
 - [x] A.1 — BUG-015 window column case (2 tests; uncovered BUG-025 on `ecom-revenue-analytics`)
 - [x] A.2 — Iceberg REST catalog wiring (4 tests; uncovered BUG-018 affects `lakehouse-ingest`)
-- [ ] A.3 — Temporal-join column ambiguity (2 tests)
+- [x] A.3 — Temporal-join column ambiguity (codegen shipped; uncovered BUG-027 + BUG-028, neither pipeline unblocked yet)
 - [ ] A.4 — Multi-pair StatementSet (4 tests, +1 from A.2 finding: `lakehouse-ingest`)
 - [ ] B.1 — Interval-join table refs (1 test)
 - [ ] B.2 — LookupJoin external table (1 test)
@@ -309,6 +311,8 @@ As each PR lands, update this document:
 - [ ] B.5 — STDDEV_POP windowed (1 test)
 - [ ] C.1 — MATCH_RECOGNIZE EXPLAIN (1 test, may remain skipped)
 - [ ] BUG-025 — `ecom-revenue-analytics` schema missing `category` (1 test; surfaced by A.1)
+- [ ] BUG-027 — MatchRecognize MEASURES type inference (1 test; surfaced by A.3)
+- [ ] BUG-028 — Temporal join partial PK coverage in `grocery-order-fulfillment` template (1 test; surfaced by A.3)
 
 **Done when:** the checkbox list above is complete *and* the `SKIP`
 set in `template-explain.test.ts` contains only items documented as

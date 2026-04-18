@@ -3067,7 +3067,63 @@ function buildTemporalJoinQuery(
   const ctes = [stream.cte, temporal.cte].filter(Boolean)
   const ctePrefix = ctes.length > 0 ? `WITH ${ctes.join(",\n")}\n` : ""
 
-  return `${ctePrefix}SELECT * FROM ${stream.ref} LEFT JOIN ${temporal.ref} FOR SYSTEM_TIME AS OF ${stream.ref}.${q(asOf)} ON ${onCondition}`
+  const sharedKey = sameNameJoinKey(onCondition)
+  const qualifiedOn = sharedKey
+    ? `${stream.ref}.${q(sharedKey)} = ${temporal.ref}.${q(sharedKey)}`
+    : onCondition
+
+  // When the join key has the same name on both sides, `SELECT *` produces
+  // a duplicate column that breaks downstream sinks expecting one. Project
+  // the left side fully and drop the duplicate join key from the right.
+  const projection = sharedKey
+    ? buildJoinProjectionSkippingRightCol(
+        stream.ref,
+        temporal.ref,
+        temporalId,
+        sharedKey,
+        nodeIndex,
+      )
+    : "*"
+
+  return `${ctePrefix}SELECT ${projection} FROM ${stream.ref} LEFT JOIN ${temporal.ref} FOR SYSTEM_TIME AS OF ${stream.ref}.${q(asOf)} ON ${qualifiedOn}`
+}
+
+/**
+ * Returns the shared column name when an ON clause has the form
+ * `col = col` (same identifier both sides). Templates commonly write this
+ * to express "join where both sides share this key"; the codegen
+ * disambiguates by qualifying with side-refs and pruning duplicate
+ * projections. Compound or already-qualified ON clauses return null —
+ * the user is expected to qualify their own then.
+ */
+function sameNameJoinKey(on: string): string | null {
+  const m = on.match(/^\s*([A-Za-z_][\w]*)\s*=\s*([A-Za-z_][\w]*)\s*$/)
+  return m && m[1] === m[2] ? m[1] : null
+}
+
+/**
+ * Project `left.*, right.col1, right.col2, ...` — i.e., the left side fully
+ * plus every right-side column except `skipCol`. Used to suppress the
+ * duplicate join-key column that `SELECT *` would otherwise produce. Falls
+ * back to `*` when the right side's schema isn't directly knowable
+ * (currently: only `Source` nodes with `props.schema` are introspectable).
+ */
+function buildJoinProjectionSkippingRightCol(
+  leftRef: string,
+  rightRef: string,
+  rightNodeId: string,
+  skipCol: string,
+  nodeIndex: Map<string, ConstructNode>,
+): string {
+  const rightNode = nodeIndex.get(rightNodeId)
+  const schema =
+    rightNode?.kind === "Source"
+      ? (rightNode.props.schema as SchemaDefinition | undefined)
+      : undefined
+  if (!schema) return "*"
+  const cols = Object.keys(schema.fields).filter((c) => c !== skipCol)
+  if (cols.length === 0) return `${leftRef}.*`
+  return `${leftRef}.*, ${cols.map((c) => `${rightRef}.${q(c)}`).join(", ")}`
 }
 
 // ── Lookup Join ─────────────────────────────────────────────────────
