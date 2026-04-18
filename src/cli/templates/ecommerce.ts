@@ -293,7 +293,7 @@ export default (
       consumerGroup="ecom-revenue"
     />
     <Route>
-      <Route.Branch condition="1 = 1">
+      <Route.Default>
         <SlideWindow size="5 MINUTE" slide="1 MINUTE" on="orderTime" />
         <Aggregate
           groupBy={['category']}
@@ -309,7 +309,7 @@ export default (
           table="revenue_by_category"
           url="jdbc:postgresql://postgres:5432/flink_sink"
         />
-      </Route.Branch>
+      </Route.Default>
       <Route.Branch condition="amount > 500">
         <KafkaSink
           topic="ecom.revenue-alerts"

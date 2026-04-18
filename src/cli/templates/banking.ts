@@ -196,11 +196,11 @@ export default (
     <KafkaSource topic="bank.transactions" schema={TransactionSchema} bootstrapServers="kafka:9092" consumerGroup="bank-compliance" />
     <TumbleWindow size="1 HOUR" on="txnTime" />
     <Route>
-      <Route.Branch condition="1 = 1">
+      <Route.Branch condition="true">
         <Aggregate groupBy={['accountId']} select={{ accountId: 'accountId', totalAmount: 'SUM(amount)', txnCount: 'COUNT(*)', windowEnd: 'window_end' }} />
         <JdbcSink table="large_txn_report" url="jdbc:postgresql://postgres:5432/flink_sink" />
       </Route.Branch>
-      <Route.Branch condition="1 = 1">
+      <Route.Branch condition="true">
         <Aggregate groupBy={['country']} select={{ country: 'country', crossBorderCount: 'COUNT(*)', totalVolume: 'SUM(amount)', windowEnd: 'window_end' }} />
         <JdbcSink table="cross_border_report" url="jdbc:postgresql://postgres:5432/flink_sink" />
       </Route.Branch>

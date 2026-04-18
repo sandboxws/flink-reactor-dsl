@@ -171,9 +171,9 @@ export default (
       <Route.Branch condition="stddevValue > thresholdTemp">
         <KafkaSink topic="iot.maintenance-alerts" bootstrapServers="kafka:9092" />
       </Route.Branch>
-      <Route.Branch condition="1 = 1">
+      <Route.Default>
         <JdbcSink table="sensor_dashboard" url="jdbc:postgresql://postgres:5432/flink_sink" />
-      </Route.Branch>
+      </Route.Default>
     </Route>
   </Pipeline>
 );
