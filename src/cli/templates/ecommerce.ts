@@ -308,6 +308,7 @@ export default (
       content: `import {
   Pipeline,
   KafkaSource,
+  JdbcSource,
   JdbcSink,
   LookupJoin,
   SessionWindow,
@@ -320,6 +321,13 @@ const orders = KafkaSource({
   schema: OrderSchema,
   bootstrapServers: "kafka:9092",
   consumerGroup: "ecom-customer360",
+});
+
+const customers = JdbcSource({
+  table: "customers",
+  url: "jdbc:postgresql://postgres:5432/flink_sink",
+  schema: CustomerSchema,
+  lookupCache: { type: "lru", maxRows: 10000, ttl: "10min" },
 });
 
 export default (
@@ -338,6 +346,7 @@ export default (
     }}
   >
     {orders}
+    {customers}
     {LookupJoin({
       input: orders,
       table: "customers",
@@ -353,8 +362,8 @@ export default (
         tier: 'tier',
         sessionOrders: 'COUNT(*)',
         sessionRevenue: 'SUM(amount)',
-        windowStart: 'SESSION_START',
-        windowEnd: 'SESSION_END',
+        windowStart: 'window_start',
+        windowEnd: 'window_end',
       }}
     />
     <JdbcSink

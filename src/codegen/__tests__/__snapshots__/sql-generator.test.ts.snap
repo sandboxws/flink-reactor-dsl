@@ -731,7 +731,8 @@ CREATE TABLE \`enriched_orders\` (
 -- ====================================================================
 
 INSERT INTO \`enriched_orders\`
-SELECT * FROM \`orders\` LEFT JOIN \`dim_users\` FOR SYSTEM_TIME AS OF \`orders\`.proc_time ON \`KafkaSource_0\`.\`user_id\` = \`dim_users\`.\`user_id\`;
+WITH \`_lookup_LookupJoin_1\` AS (SELECT *, PROCTIME() AS proc_time FROM \`orders\`)
+SELECT * FROM \`_lookup_LookupJoin_1\` LEFT JOIN \`dim_users\` FOR SYSTEM_TIME AS OF \`_lookup_LookupJoin_1\`.proc_time ON \`KafkaSource_0\`.\`user_id\` = \`dim_users\`.\`user_id\`;
 "
 `;
 

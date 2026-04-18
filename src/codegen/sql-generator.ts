@@ -3158,15 +3158,43 @@ function buildLookupJoinQuery(
   const select = node.props.select as Record<string, string> | undefined
 
   const input = resolveJoinOperand(inputId, nodeIndex)
-  const ctePrefix = input.cte ? `WITH ${input.cte}\n` : ""
 
-  const projections = select
-    ? Object.entries(select)
-        .map(([alias, expr]) => `${expr} AS ${q(alias)}`)
-        .join(", ")
-    : "*"
+  // Wrap the driving input in a CTE that adds PROCTIME() AS proc_time.
+  // Lookup joins require a processing-time attribute on the left side;
+  // keeping it local to this join avoids mutating every source's DDL.
+  const procCteName = `_lookup_${node.id}`
+  const procCte = `${q(procCteName)} AS (SELECT *, PROCTIME() AS proc_time FROM ${input.ref})`
+  const ctes = [input.cte, procCte].filter(Boolean)
+  const ctePrefix = `WITH ${ctes.join(",\n")}\n`
 
-  return `${ctePrefix}SELECT ${projections} FROM ${input.ref} LEFT JOIN ${q(table)} FOR SYSTEM_TIME AS OF ${input.ref}.proc_time ON ${onCondition}`
+  const leftRef = q(procCteName)
+  const rightRef = q(table)
+
+  // Disambiguate same-name join keys (BUG-017 pattern) — qualify with
+  // side refs and prune the duplicate right column from SELECT *.
+  const sharedKey = sameNameJoinKey(onCondition)
+  const qualifiedOn = sharedKey
+    ? `${leftRef}.${q(sharedKey)} = ${rightRef}.${q(sharedKey)}`
+    : onCondition
+
+  let projection: string
+  if (select) {
+    projection = Object.entries(select)
+      .map(([alias, expr]) => `${expr} AS ${q(alias)}`)
+      .join(", ")
+  } else if (sharedKey) {
+    projection = buildJoinProjectionSkippingRightCol(
+      leftRef,
+      rightRef,
+      table,
+      sharedKey,
+      nodeIndex,
+    )
+  } else {
+    projection = "*"
+  }
+
+  return `${ctePrefix}SELECT ${projection} FROM ${leftRef} LEFT JOIN ${rightRef} FOR SYSTEM_TIME AS OF ${leftRef}.proc_time ON ${qualifiedOn}`
 }
 
 // ── Interval Join ───────────────────────────────────────────────────

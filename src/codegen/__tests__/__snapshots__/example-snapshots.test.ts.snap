@@ -541,7 +541,8 @@ CREATE TABLE \`premium_user_actions\` (
 
 INSERT INTO \`premium_user_actions\`
 SELECT * FROM (
-SELECT * FROM \`user_actions\` LEFT JOIN \`user_profiles\` FOR SYSTEM_TIME AS OF \`user_actions\`.proc_time ON user_id
+WITH \`_lookup_LookupJoin_1\` AS (SELECT *, PROCTIME() AS proc_time FROM \`user_actions\`)
+SELECT * FROM \`_lookup_LookupJoin_1\` LEFT JOIN \`user_profiles\` FOR SYSTEM_TIME AS OF \`_lookup_LookupJoin_1\`.proc_time ON user_id
 ) WHERE user_tier IN ('premium', 'enterprise');
 "
 `;
@@ -1480,9 +1481,11 @@ SELECT *, ROW_NUMBER() OVER (PARTITION BY \`window_start\`, \`region\` ORDER BY 
 FROM (
 WITH \`_windowed_input\` AS (
 WITH \`LookupJoin_1\` AS (
-SELECT * FROM \`sales_transactions\` LEFT JOIN \`dim_products\` FOR SYSTEM_TIME AS OF \`sales_transactions\`.proc_time ON product_id
-)
-SELECT * FROM \`LookupJoin_1\` LEFT JOIN \`dim_stores\` FOR SYSTEM_TIME AS OF \`LookupJoin_1\`.proc_time ON store_id
+WITH \`_lookup_LookupJoin_1\` AS (SELECT *, PROCTIME() AS proc_time FROM \`sales_transactions\`)
+SELECT * FROM \`_lookup_LookupJoin_1\` LEFT JOIN \`dim_products\` FOR SYSTEM_TIME AS OF \`_lookup_LookupJoin_1\`.proc_time ON product_id
+),
+\`_lookup_LookupJoin_2\` AS (SELECT *, PROCTIME() AS proc_time FROM \`LookupJoin_1\`)
+SELECT * FROM \`_lookup_LookupJoin_2\` LEFT JOIN \`dim_stores\` FOR SYSTEM_TIME AS OF \`_lookup_LookupJoin_2\`.proc_time ON store_id
 )
 SELECT \`region\`, \`category\`, SUM(quantity * unit_price) AS \`revenue\`, SUM(quantity) AS \`units_sold\`, COUNT(*) AS \`transaction_count\`, window_start, window_end FROM TABLE(
   TUMBLE(TABLE \`_windowed_input\`, DESCRIPTOR(\`transaction_time\`), INTERVAL '1' MINUTE)
@@ -1783,10 +1786,12 @@ SELECT *, CAST(\`event_time\` AS DATE) AS \`dt\` FROM (
 SELECT * FROM \`user_events\`
 );
 INSERT INTO \`enriched_user_events\`
-SELECT * FROM \`user_events\` LEFT JOIN \`user_profiles\` FOR SYSTEM_TIME AS OF \`user_events\`.proc_time ON user_id;
+WITH \`_lookup_LookupJoin_1\` AS (SELECT *, PROCTIME() AS proc_time FROM \`user_events\`)
+SELECT * FROM \`_lookup_LookupJoin_1\` LEFT JOIN \`user_profiles\` FOR SYSTEM_TIME AS OF \`_lookup_LookupJoin_1\`.proc_time ON user_id;
 INSERT INTO \`premium_user_conversions\`
 SELECT * FROM (
-SELECT * FROM \`user_events\` LEFT JOIN \`user_profiles\` FOR SYSTEM_TIME AS OF \`user_events\`.proc_time ON user_id
+WITH \`_lookup_LookupJoin_1\` AS (SELECT *, PROCTIME() AS proc_time FROM \`user_events\`)
+SELECT * FROM \`_lookup_LookupJoin_1\` LEFT JOIN \`user_profiles\` FOR SYSTEM_TIME AS OF \`_lookup_LookupJoin_1\`.proc_time ON user_id
 ) WHERE user_tier = 'premium' AND event_type IN ('purchase', 'subscription');
 END;
 "
