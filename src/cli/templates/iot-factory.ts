@@ -105,8 +105,8 @@ export const DeviceRegistrySchema = Schema({
     {
       path: "pipelines/iot-predictive-maintenance/index.tsx",
       content: `import {
-  Pipeline, KafkaSource, KafkaSink, JdbcSink,
-  SlideWindow, Aggregate, TemporalJoin, Route,
+  Pipeline, KafkaSource, JdbcSource, KafkaSink, JdbcSink,
+  SlideWindow, Aggregate, LookupJoin, Route,
 } from '@flink-reactor/dsl';
 import { SensorReadingSchema, DeviceRegistrySchema } from '@/schemas/iot';
 
@@ -117,12 +117,17 @@ const readings = KafkaSource({
   consumerGroup: "iot-maintenance",
 });
 
-const devices = KafkaSource({
-  topic: "iot.device-registry",
+// Device registry is a slow-changing dimension — enrich via JDBC lookup
+// from the aggregated stats. A Kafka-CDC + event-time TemporalJoin over
+// a windowed aggregate hits a Flink-version quirk where window_end/
+// window_start lose their rowtime-attribute through the subquery
+// boundary (BUG-030); LookupJoin sidesteps it by running on a synthetic
+// proctime, which is the natural pattern for dim-enrichment anyway.
+const devices = JdbcSource({
+  table: "device_registry",
+  url: "jdbc:postgresql://postgres:5432/flink_sink",
   schema: DeviceRegistrySchema,
-  format: "debezium-json",
-  bootstrapServers: "kafka:9092",
-  consumerGroup: "iot-device-dim",
+  lookupCache: { type: "lru", maxRows: 10000, ttl: "10min" },
 });
 
 const windowed = SlideWindow({ size: "5 MINUTE", slide: "30 SECOND", on: "readingTime", children: readings });
@@ -130,22 +135,19 @@ const windowed = SlideWindow({ size: "5 MINUTE", slide: "30 SECOND", on: "readin
 const stats = Aggregate({
   groupBy: ['deviceId', 'sensorType'],
   select: {
-    deviceId: 'deviceId',
-    sensorType: 'sensorType',
     avgValue: 'AVG(\`value\`)',
     stddevValue: 'STDDEV_POP(\`value\`)',
     maxValue: 'MAX(\`value\`)',
     readingCount: 'COUNT(*)',
-    windowEnd: 'window_end',
   },
   children: windowed,
 });
 
-const enriched = TemporalJoin({
-  stream: stats,
-  temporal: devices,
+const enriched = LookupJoin({
+  input: stats,
+  table: "device_registry",
+  url: "jdbc:postgresql://postgres:5432/flink_sink",
   on: "deviceId = deviceId",
-  asOf: "windowEnd",
 });
 
 export default (

@@ -316,6 +316,25 @@ export function resolveNodeSchema(
           })
         }
       }
+      // Forward-nesting (Aggregate { children: Window }): the codegen
+      // emits `SELECT …, window_start, window_end FROM TABLE(TVF(…))`,
+      // so these window metadata columns flow into the output. Reflect
+      // them in the resolved schema so the auto-inferred sink DDL lines
+      // up with the query result (BUG-030).
+      const firstChild = node.children[0]
+      if (
+        firstChild &&
+        (firstChild.component === "TumbleWindow" ||
+          firstChild.component === "SlideWindow" ||
+          firstChild.component === "SessionWindow")
+      ) {
+        const existing = new Set(columns.map((c) => c.name))
+        for (const col of ["window_start", "window_end"]) {
+          if (!existing.has(col)) {
+            columns.push({ name: col, type: "TIMESTAMP(3)" })
+          }
+        }
+      }
       return columns
     }
 

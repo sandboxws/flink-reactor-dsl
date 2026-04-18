@@ -2745,6 +2745,27 @@ function buildAggregateQuery(
   nodeIndex: Map<string, ConstructNode>,
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
 ): string {
+  // Forward-nesting (Aggregate { children: Window }): emit the single
+  // `SELECT … FROM TABLE(TVF(...)) GROUP BY …` pattern by delegating to
+  // buildWindowQuery with a pseudo-Window that carries this Aggregate as
+  // a child. The default path below would wrap the TVF in a
+  // `SELECT * FROM (TABLE(TVF))` subquery, which strips the time-attribute
+  // metadata on window_start/window_end and breaks downstream TemporalJoin
+  // `FOR SYSTEM_TIME AS OF` validation (BUG-030).
+  const firstChild = node.children[0]
+  if (
+    firstChild &&
+    (firstChild.component === "TumbleWindow" ||
+      firstChild.component === "SlideWindow" ||
+      firstChild.component === "SessionWindow")
+  ) {
+    const pseudoWindow: ConstructNode = {
+      ...firstChild,
+      children: [...firstChild.children, node],
+    }
+    return buildWindowQuery(pseudoWindow, nodeIndex, pluginSql)
+  }
+
   const groupBy = node.props.groupBy as readonly string[]
   const select = node.props.select as Record<string, string>
   const groupBySet = new Set(groupBy)

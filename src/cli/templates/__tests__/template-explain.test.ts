@@ -25,7 +25,6 @@ const REQUIRE_SQL_GATEWAY = process.env.REQUIRE_SQL_GATEWAY === "1"
 const SKIP = new Set<string>([
   // ── Codegen issues needing deeper fixes ───────────────────────────
   // "ecom-order-enrichment", // bugs/029 — multiple rowtime cols in Kafka sink after interval join
-  "iot-predictive-maintenance", // bugs/030 — temporal join requires a time-attribute field; windowed-agg output loses the attribute through the CTE alias
 ])
 
 // ── Helpers ──────────────────────────────────────────────────────────

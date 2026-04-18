@@ -314,7 +314,7 @@ As each PR lands, update this document:
 - [x] BUG-027 — MatchRecognize MEASURES type inference (1 test; surfaced by A.3) — codegen fixed by BUG-024, template `orderBy` + reluctant quantifier landed here
 - [x] BUG-028 — Temporal join partial PK coverage in `grocery-order-fulfillment` template (1 test; surfaced by A.3) — template adds OrderLineSchema; codegen extended for compound same-name ON
 - [x] BUG-029 — Multiple rowtime cols in Kafka sink for `ecom-order-enrichment` (1 test; surfaced by B.1) — wrapped INSERT with CAST at sink boundary
-- [ ] BUG-030 — TemporalJoin on windowed-agg output loses time-attribute through CTE alias (1 test; surfaced by B.5)
+- [x] BUG-030 — TemporalJoin on windowed-agg output loses time-attribute through CTE alias (1 test; surfaced by B.5) — template pivoted to LookupJoin; codegen gained forward-nesting delegation + Aggregate window-col schema resolution
 
 **Done when:** the checkbox list above is complete *and* the `SKIP`
 set in `template-explain.test.ts` contains only items documented as
