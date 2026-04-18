@@ -24,7 +24,7 @@ const REQUIRE_SQL_GATEWAY = process.env.REQUIRE_SQL_GATEWAY === "1"
 
 const SKIP = new Set<string>([
   // ── Codegen issues needing deeper fixes ───────────────────────────
-  "ecom-order-enrichment", // interval join table reference issues
+  "ecom-order-enrichment", // bugs/029 — multiple rowtime cols in Kafka sink after interval join
   "ecom-customer-360", // LookupJoin references external table not in session
   "rides-trip-tracking", // MatchRecognize SQL parsing not yet supported by EXPLAIN
   "rides-surge-pricing", // BroadcastJoin references intermediate 'demand' table not registered

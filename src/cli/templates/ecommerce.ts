@@ -138,6 +138,7 @@ export const ProductSchema = Schema({
     stock: Field.INT(),
     updateTime: Field.TIMESTAMP(3),
   },
+  watermark: { column: 'updateTime', expression: "updateTime - INTERVAL '5' SECOND" },
   primaryKey: { columns: ['productId'] },
 });
 
@@ -168,6 +169,7 @@ export const CustomerSchema = Schema({
 import { OrderSchema, OrderItemSchema, ProductSchema } from '@/schemas/ecommerce';
 
 const orders = KafkaSource({
+  name: "orders",
   topic: "ecom.orders",
   schema: OrderSchema,
   bootstrapServers: "kafka:9092",
@@ -175,6 +177,7 @@ const orders = KafkaSource({
 });
 
 const items = KafkaSource({
+  name: "items",
   topic: "ecom.order-items",
   schema: OrderItemSchema,
   bootstrapServers: "kafka:9092",
@@ -182,6 +185,7 @@ const items = KafkaSource({
 });
 
 const products = KafkaSource({
+  name: "products",
   topic: "ecom.products",
   schema: ProductSchema,
   format: "debezium-json",
@@ -193,7 +197,7 @@ const ordersWithItems = IntervalJoin({
   left: orders,
   right: items,
   on: "orders.orderId = items.orderId",
-  interval: { from: "orders.orderTime", to: "orders.orderTime + INTERVAL '30' SECOND" },
+  interval: { from: "orderTime", to: "orderTime + INTERVAL '30' SECOND" },
 });
 
 const enriched = TemporalJoin({

@@ -3102,16 +3102,23 @@ function buildTemporalJoinQuery(
 }
 
 /**
- * Returns the shared column name when an ON clause has the form
- * `col = col` (same identifier both sides). Templates commonly write this
- * to express "join where both sides share this key"; the codegen
+ * Returns the shared column name when an ON clause joins on the same
+ * column on both sides. Accepts two forms:
+ *   `col = col`           — unqualified, common in templates
+ *   `left.col = right.col` — qualified, same column, different qualifiers
+ * Both signal "join where both sides share this key"; the codegen
  * disambiguates by qualifying with side-refs and pruning duplicate
- * projections. Compound or already-qualified ON clauses return null —
- * the user is expected to qualify their own then.
+ * projections. Compound ON clauses return null — the user is expected
+ * to qualify their own then.
  */
 function sameNameJoinKey(on: string): string | null {
-  const m = on.match(/^\s*([A-Za-z_][\w]*)\s*=\s*([A-Za-z_][\w]*)\s*$/)
-  return m && m[1] === m[2] ? m[1] : null
+  const unq = on.match(/^\s*([A-Za-z_][\w]*)\s*=\s*([A-Za-z_][\w]*)\s*$/)
+  if (unq && unq[1] === unq[2]) return unq[1]
+  const qual = on.match(
+    /^\s*[A-Za-z_][\w]*\.([A-Za-z_][\w]*)\s*=\s*[A-Za-z_][\w]*\.([A-Za-z_][\w]*)\s*$/,
+  )
+  if (qual && qual[1] === qual[2]) return qual[1]
+  return null
 }
 
 /**
@@ -3191,7 +3198,22 @@ function buildIntervalJoinQuery(
     ? `${right.ref}.${q(rightTimeCol)}`
     : `${right.ref}.${interval.from}`
 
-  return `${ctePrefix}SELECT * FROM ${left.ref} ${sqlJoinType}JOIN ${right.ref} ON ${onCondition} AND ${betweenCol} BETWEEN ${left.ref}.${interval.from} AND ${left.ref}.${interval.to}`
+  // When the join key has the same column name on both sides, `SELECT *`
+  // produces a duplicate column that breaks downstream sinks. Project left
+  // fully and drop the duplicate join key from the right. Mirrors the fix
+  // in buildTemporalJoinQuery / BUG-017.
+  const sharedKey = sameNameJoinKey(onCondition)
+  const projection = sharedKey
+    ? buildJoinProjectionSkippingRightCol(
+        left.ref,
+        right.ref,
+        rightId,
+        sharedKey,
+        nodeIndex,
+      )
+    : "*"
+
+  return `${ctePrefix}SELECT ${projection} FROM ${left.ref} ${sqlJoinType}JOIN ${right.ref} ON ${onCondition} AND ${betweenCol} BETWEEN ${left.ref}.${interval.from} AND ${left.ref}.${interval.to}`
 }
 
 // ── Window ──────────────────────────────────────────────────────────

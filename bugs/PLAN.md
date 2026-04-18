@@ -24,7 +24,7 @@ their target filename.
 | 2 | Iceberg REST catalog wiring | 4 — `cdc-to-lakehouse`, `medallion-{bronze,silver,gold}` (also unmasks BUG-018 on `lakehouse-ingest`) | [`016-iceberg-rest-catalog-wiring.md`](./016-iceberg-rest-catalog-wiring.md) [FIXED] | 0.5–1 day |
 | 3 | Temporal-join column ambiguity | 0 directly — codegen fix shipped, both pipelines blocked on deeper template/codegen issues (BUG-027, BUG-028) | [`017-temporal-join-column-ambiguity.md`](./017-temporal-join-column-ambiguity.md) [FIXED] | 1 day |
 | 4 | Multi-pair StatementSet type mismatch | 4 — `pump-ecom`, `pump-iot`, `pump-lakehouse`, `lakehouse-ingest` (added via A.2) | [`018-statement-set-type-mismatch.md`](./018-statement-set-type-mismatch.md) [FIXED] | 1–2 days |
-| 5 | Interval-join table refs | 1 — `ecom-order-enrichment` | create `019-interval-join-table-refs.md` | 1 day |
+| 5 | Interval-join table refs | 0 directly — codegen + template fixes shipped, pipeline blocked on BUG-029 (rowtime attrs in sink) | [`019-interval-join-table-refs.md`](./019-interval-join-table-refs.md) [FIXED] | 1 day |
 | 6 | LookupJoin external table | 1 — `ecom-customer-360` | create `020-lookupjoin-external-table.md` | 1 day |
 | 7 | BroadcastJoin intermediate table | 1 — `rides-surge-pricing` (references `demand`) | create `021-broadcastjoin-intermediate.md` | 1–2 days |
 | 8 | Route-after-window type mismatch | 1 — `bank-compliance-agg` | create `022-route-after-window.md` | 1 day |
@@ -304,7 +304,7 @@ As each PR lands, update this document:
 - [x] A.2 — Iceberg REST catalog wiring (4 tests; uncovered BUG-018 affects `lakehouse-ingest`)
 - [x] A.3 — Temporal-join column ambiguity (codegen shipped; uncovered BUG-027 + BUG-028, neither pipeline unblocked yet)
 - [x] A.4 — Multi-pair StatementSet (4 tests: `pump-ecom`, `pump-iot`, `pump-lakehouse`, `lakehouse-ingest`)
-- [ ] B.1 — Interval-join table refs (1 test)
+- [x] B.1 — Interval-join table refs (codegen + template shipped; uncovered BUG-029, pipeline still skipped)
 - [ ] B.2 — LookupJoin external table (1 test)
 - [ ] B.3 — BroadcastJoin intermediate (1 test)
 - [ ] B.4 — Route-after-window (1 test)
@@ -313,6 +313,7 @@ As each PR lands, update this document:
 - [ ] BUG-025 — `ecom-revenue-analytics` schema missing `category` (1 test; surfaced by A.1)
 - [ ] BUG-027 — MatchRecognize MEASURES type inference (1 test; surfaced by A.3)
 - [ ] BUG-028 — Temporal join partial PK coverage in `grocery-order-fulfillment` template (1 test; surfaced by A.3)
+- [ ] BUG-029 — Multiple rowtime cols in Kafka sink for `ecom-order-enrichment` (1 test; surfaced by B.1)
 
 **Done when:** the checkbox list above is complete *and* the `SKIP`
 set in `template-explain.test.ts` contains only items documented as
