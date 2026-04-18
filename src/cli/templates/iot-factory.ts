@@ -132,9 +132,9 @@ const stats = Aggregate({
   select: {
     deviceId: 'deviceId',
     sensorType: 'sensorType',
-    avgValue: 'AVG(value)',
-    stddevValue: 'STDDEV_POP(value)',
-    maxValue: 'MAX(value)',
+    avgValue: 'AVG(\`value\`)',
+    stddevValue: 'STDDEV_POP(\`value\`)',
+    maxValue: 'MAX(\`value\`)',
     readingCount: 'COUNT(*)',
     windowEnd: 'window_end',
   },

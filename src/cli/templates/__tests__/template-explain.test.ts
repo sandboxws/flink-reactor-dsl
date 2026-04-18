@@ -28,8 +28,7 @@ const SKIP = new Set<string>([
   "rides-trip-tracking", // MatchRecognize SQL parsing not yet supported by EXPLAIN
   "bank-fraud-detection", // bugs/027 — MatchRecognize MEASURES type inference returns STRING for FIRST/LAST(timestamp_col)
   "grocery-order-fulfillment", // bugs/028 — temporal join needs full composite PK; template joins on partial key
-  "iot-predictive-maintenance", // STDDEV_POP may need special handling in windowed context
-
+  "iot-predictive-maintenance", // bugs/030 — temporal join requires a time-attribute field; windowed-agg output loses the attribute through the CTE alias
   // ── Template authoring bug: schema missing required column ──────
   "ecom-revenue-analytics", // bugs/025 — aggregates by `category` but OrderSchema lacks that field
 ])

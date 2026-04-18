@@ -28,7 +28,7 @@ their target filename.
 | 6 | LookupJoin external table | 1 — `ecom-customer-360` | [`020-lookupjoin-external-table.md`](./020-lookupjoin-external-table.md) [FIXED] | 1 day |
 | 7 | BroadcastJoin intermediate table | 1 — `rides-surge-pricing` (references `demand`) | [`021-broadcastjoin-intermediate.md`](./021-broadcastjoin-intermediate.md) [FIXED] | 1–2 days |
 | 8 | Route-after-window type mismatch | 1 — `bank-compliance-agg` | [`022-route-after-window.md`](./022-route-after-window.md) [FIXED] | 1 day |
-| 9 | STDDEV_POP in windowed context | 1 — `iot-predictive-maintenance` | create `023-stddev-pop-windowed.md` | 0.5–1 day |
+| 9 | STDDEV_POP in windowed context | 1 — `iot-predictive-maintenance` | [`023-stddev-pop-windowed.md`](./023-stddev-pop-windowed.md) [FIXED] (uncovered BUG-030, pipeline still skipped) | 0.5–1 day |
 | 10 | MATCH_RECOGNIZE EXPLAIN | 1 — `rides-trip-tracking` | create `024-match-recognize-explain.md` after investigation | TBD |
 | 11 | Template schema missing `category` field | 1 — `ecom-revenue-analytics` | [`025-ecom-revenue-schema-missing-category.md`](./025-ecom-revenue-schema-missing-category.md) | few hours |
 | 12 | MatchRecognize MEASURES type inference | 1 — `bank-fraud-detection` (uncovered by A.3) | [`027-match-recognize-measures-type-inference.md`](./027-match-recognize-measures-type-inference.md) | 0.5–1 day |
@@ -308,12 +308,13 @@ As each PR lands, update this document:
 - [x] B.2 — LookupJoin external table (1 test: `ecom-customer-360`)
 - [x] B.3 — BroadcastJoin intermediate (1 test: `rides-surge-pricing`)
 - [x] B.4 — Route-after-window (1 test: `bank-compliance-agg`)
-- [ ] B.5 — STDDEV_POP windowed (1 test)
+- [x] B.5 — STDDEV_POP windowed (codegen + template shipped; uncovered BUG-030, pipeline still skipped)
 - [ ] C.1 — MATCH_RECOGNIZE EXPLAIN (1 test, may remain skipped)
 - [ ] BUG-025 — `ecom-revenue-analytics` schema missing `category` (1 test; surfaced by A.1)
 - [ ] BUG-027 — MatchRecognize MEASURES type inference (1 test; surfaced by A.3)
 - [ ] BUG-028 — Temporal join partial PK coverage in `grocery-order-fulfillment` template (1 test; surfaced by A.3)
 - [ ] BUG-029 — Multiple rowtime cols in Kafka sink for `ecom-order-enrichment` (1 test; surfaced by B.1)
+- [ ] BUG-030 — TemporalJoin on windowed-agg output loses time-attribute through CTE alias (1 test; surfaced by B.5)
 
 **Done when:** the checkbox list above is complete *and* the `SKIP`
 set in `template-explain.test.ts` contains only items documented as

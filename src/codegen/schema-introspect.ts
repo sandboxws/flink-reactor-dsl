@@ -59,6 +59,16 @@ export function inferExpressionType(
     return "DOUBLE"
   }
 
+  // STDDEV_POP/STDDEV_SAMP/VAR_POP/VAR_SAMP(col) — DOUBLE, preserve DECIMAL
+  const varianceMatch = trimmed.match(
+    /^(?:STDDEV_POP|STDDEV_SAMP|VAR_POP|VAR_SAMP)\s*\(\s*`?(\w+)`?\s*\)/i,
+  )
+  if (varianceMatch) {
+    const fieldType = upstreamFields.get(varianceMatch[1]) ?? "DOUBLE"
+    if (fieldType.startsWith("DECIMAL")) return fieldType
+    return "DOUBLE"
+  }
+
   // MIN/MAX/FIRST_VALUE/LAST_VALUE(col) — same type as source
   const preserveTypeMatch = trimmed.match(
     /^(?:MIN|MAX|FIRST_VALUE|LAST_VALUE)\s*\(\s*`?(\w+)`?\s*\)/i,
