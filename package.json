@@ -58,7 +58,11 @@
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "changeset publish && node scripts/publish-root.mjs",
-    "local:publish": "bash scripts/local-publish.sh",
+    "local:publish": "tsx scripts/local-publish.ts",
+    "local:publish:start": "tsx scripts/local-publish.ts verdaccio start",
+    "local:publish:stop": "tsx scripts/local-publish.ts verdaccio stop",
+    "local:publish:status": "tsx scripts/local-publish.ts verdaccio status",
+    "local:publish:logs": "tsx scripts/local-publish.ts verdaccio logs",
     "rewrite-imports": "node scripts/rewrite-imports.mjs",
     "prepublishOnly": "pnpm build"
   },
@@ -95,7 +99,9 @@
     "@types/node": "^22.12.0",
     "@types/pg": "^8.11.0",
     "tsup": "^8.4.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.7.0",
+    "verdaccio": "^6.5.1",
     "vitest": "^3.0.0"
   }
 }
