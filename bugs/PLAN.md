@@ -23,7 +23,7 @@ their target filename.
 | 1 | BUG-015 window column case | 2 — `page-view-analytics`, `grocery-store-rankings` (also unmasks BUG-025 on `ecom-revenue-analytics`) | [`015-window-column-case-mismatch.md`](./015-window-column-case-mismatch.md) [FIXED] | few hours |
 | 2 | Iceberg REST catalog wiring | 4 — `cdc-to-lakehouse`, `medallion-{bronze,silver,gold}` (also unmasks BUG-018 on `lakehouse-ingest`) | [`016-iceberg-rest-catalog-wiring.md`](./016-iceberg-rest-catalog-wiring.md) [FIXED] | 0.5–1 day |
 | 3 | Temporal-join column ambiguity | 0 directly — codegen fix shipped, both pipelines blocked on deeper template/codegen issues (BUG-027, BUG-028) | [`017-temporal-join-column-ambiguity.md`](./017-temporal-join-column-ambiguity.md) [FIXED] | 1 day |
-| 4 | Multi-pair StatementSet type mismatch | 4 — `pump-ecom`, `pump-iot`, `pump-lakehouse`, `lakehouse-ingest` (added via A.2) | create `018-statement-set-type-mismatch.md` | 1–2 days |
+| 4 | Multi-pair StatementSet type mismatch | 4 — `pump-ecom`, `pump-iot`, `pump-lakehouse`, `lakehouse-ingest` (added via A.2) | [`018-statement-set-type-mismatch.md`](./018-statement-set-type-mismatch.md) [FIXED] | 1–2 days |
 | 5 | Interval-join table refs | 1 — `ecom-order-enrichment` | create `019-interval-join-table-refs.md` | 1 day |
 | 6 | LookupJoin external table | 1 — `ecom-customer-360` | create `020-lookupjoin-external-table.md` | 1 day |
 | 7 | BroadcastJoin intermediate table | 1 — `rides-surge-pricing` (references `demand`) | create `021-broadcastjoin-intermediate.md` | 1–2 days |
@@ -303,7 +303,7 @@ As each PR lands, update this document:
 - [x] A.1 — BUG-015 window column case (2 tests; uncovered BUG-025 on `ecom-revenue-analytics`)
 - [x] A.2 — Iceberg REST catalog wiring (4 tests; uncovered BUG-018 affects `lakehouse-ingest`)
 - [x] A.3 — Temporal-join column ambiguity (codegen shipped; uncovered BUG-027 + BUG-028, neither pipeline unblocked yet)
-- [ ] A.4 — Multi-pair StatementSet (4 tests, +1 from A.2 finding: `lakehouse-ingest`)
+- [x] A.4 — Multi-pair StatementSet (4 tests: `pump-ecom`, `pump-iot`, `pump-lakehouse`, `lakehouse-ingest`)
 - [ ] B.1 — Interval-join table refs (1 test)
 - [ ] B.2 — LookupJoin external table (1 test)
 - [ ] B.3 — BroadcastJoin intermediate (1 test)

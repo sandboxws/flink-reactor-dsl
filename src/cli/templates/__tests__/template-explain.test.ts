@@ -33,12 +33,6 @@ const SKIP = new Set<string>([
   "grocery-order-fulfillment", // bugs/028 — temporal join needs full composite PK; template joins on partial key
   "iot-predictive-maintenance", // STDDEV_POP may need special handling in windowed context
 
-  // ── Multi-pair StatementSet type mismatches ─────────────────────
-  "pump-ecom", // StatementSet: later source/sink pairs have column type mismatches
-  "pump-iot", // StatementSet: later source/sink pairs have column type mismatches
-  "pump-lakehouse", // StatementSet: later source/sink pairs have column type mismatches
-  "lakehouse-ingest", // StatementSet: later (source, IcebergSink) pairs read prior pair's source schema
-
   // ── Template authoring bug: schema missing required column ──────
   "ecom-revenue-analytics", // bugs/025 — aggregates by `category` but OrderSchema lacks that field
 ])

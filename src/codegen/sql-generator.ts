@@ -1794,9 +1794,22 @@ function buildSiblingChainQuery(
   nodeIndex: Map<string, ConstructNode>,
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
 ): string {
-  // Collect preceding siblings that form the data chain
+  // Collect preceding siblings that form the data chain.
+  //
+  // Under <StatementSet>, siblings interleave independent (Source, …, Sink)
+  // pairs — each sink must bind to its nearest preceding Source, not the
+  // first one in the parent. Start the chain at the most recent preceding
+  // Source; in the common single-pair case this is idx 0, so behavior is
+  // unchanged.
+  let chainStart = 0
+  for (let i = sinkIndex - 1; i >= 0; i--) {
+    if (parent.children[i].kind === "Source") {
+      chainStart = i
+      break
+    }
+  }
   const chain: ConstructNode[] = []
-  for (let i = 0; i < sinkIndex; i++) {
+  for (let i = chainStart; i < sinkIndex; i++) {
     const sibling = parent.children[i]
     if (
       sibling.kind === "Source" ||
