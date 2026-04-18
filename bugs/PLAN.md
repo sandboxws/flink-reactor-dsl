@@ -21,9 +21,9 @@ their target filename.
 | # | Scope | Pipelines unblocked | Bug record | Est. |
 |---|---|---|---|---|
 | 1 | BUG-015 window column case | 2 — `page-view-analytics`, `grocery-store-rankings` (also unmasks BUG-025 on `ecom-revenue-analytics`) | [`015-window-column-case-mismatch.md`](./015-window-column-case-mismatch.md) [FIXED] | few hours |
-| 2 | Iceberg REST catalog wiring | 5 — `cdc-to-lakehouse`, `lakehouse-ingest`, `medallion-{bronze,silver,gold}` | create `016-iceberg-rest-catalog-wiring.md` | 0.5–1 day |
+| 2 | Iceberg REST catalog wiring | 4 — `cdc-to-lakehouse`, `medallion-{bronze,silver,gold}` (also unmasks BUG-018 on `lakehouse-ingest`) | [`016-iceberg-rest-catalog-wiring.md`](./016-iceberg-rest-catalog-wiring.md) [FIXED] | 0.5–1 day |
 | 3 | Temporal-join column ambiguity | 2 — `bank-fraud-detection` (accountId), `grocery-order-fulfillment` (storeId) | create `017-temporal-join-column-ambiguity.md` | 1 day |
-| 4 | Multi-pair StatementSet type mismatch | 3 — `pump-ecom`, `pump-iot`, `pump-lakehouse` | create `018-statement-set-type-mismatch.md` | 1–2 days |
+| 4 | Multi-pair StatementSet type mismatch | 4 — `pump-ecom`, `pump-iot`, `pump-lakehouse`, `lakehouse-ingest` (added via A.2) | create `018-statement-set-type-mismatch.md` | 1–2 days |
 | 5 | Interval-join table refs | 1 — `ecom-order-enrichment` | create `019-interval-join-table-refs.md` | 1 day |
 | 6 | LookupJoin external table | 1 — `ecom-customer-360` | create `020-lookupjoin-external-table.md` | 1 day |
 | 7 | BroadcastJoin intermediate table | 1 — `rides-surge-pricing` (references `demand`) | create `021-broadcastjoin-intermediate.md` | 1–2 days |
@@ -299,9 +299,9 @@ can go in parallel. Within Sprint B, all five are independent.
 As each PR lands, update this document:
 
 - [x] A.1 — BUG-015 window column case (2 tests; uncovered BUG-025 on `ecom-revenue-analytics`)
-- [ ] A.2 — Iceberg REST catalog wiring (5 tests)
+- [x] A.2 — Iceberg REST catalog wiring (4 tests; uncovered BUG-018 affects `lakehouse-ingest`)
 - [ ] A.3 — Temporal-join column ambiguity (2 tests)
-- [ ] A.4 — Multi-pair StatementSet (3 tests)
+- [ ] A.4 — Multi-pair StatementSet (4 tests, +1 from A.2 finding: `lakehouse-ingest`)
 - [ ] B.1 — Interval-join table refs (1 test)
 - [ ] B.2 — LookupJoin external table (1 test)
 - [ ] B.3 — BroadcastJoin intermediate (1 test)

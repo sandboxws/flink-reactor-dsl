@@ -23,13 +23,6 @@ const REQUIRE_SQL_GATEWAY = process.env.REQUIRE_SQL_GATEWAY === "1"
 // here when its underlying bug is fixed.
 
 const SKIP = new Set<string>([
-  // ── Missing catalog connectors in local cluster ───────────────────
-  "cdc-to-lakehouse", // Iceberg REST catalog connector (Phase 5(i))
-  "lakehouse-ingest", // Iceberg REST catalog connector (Phase 5(i))
-  "medallion-bronze", // Iceberg REST catalog connector (Phase 5(i))
-  "medallion-silver", // Iceberg REST catalog connector (Phase 5(i))
-  "medallion-gold", // Iceberg REST catalog connector (Phase 5(i))
-
   // ── Codegen issues needing deeper fixes ───────────────────────────
   "ecom-order-enrichment", // interval join table reference issues
   "ecom-customer-360", // LookupJoin references external table not in session
@@ -44,6 +37,7 @@ const SKIP = new Set<string>([
   "pump-ecom", // StatementSet: later source/sink pairs have column type mismatches
   "pump-iot", // StatementSet: later source/sink pairs have column type mismatches
   "pump-lakehouse", // StatementSet: later source/sink pairs have column type mismatches
+  "lakehouse-ingest", // StatementSet: later (source, IcebergSink) pairs read prior pair's source schema
 
   // ── Template authoring bug: schema missing required column ──────
   "ecom-revenue-analytics", // bugs/025 — aggregates by `category` but OrderSchema lacks that field

@@ -12,11 +12,21 @@ RUN wget -q -P /opt/flink/lib/ \
   && wget -q -P /opt/flink/lib/ \
   https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.4/postgresql-42.7.4.jar
 
-# Download Iceberg Flink runtime + AWS bundle for S3FileIO
+# Download Iceberg Flink runtime + AWS bundle for S3FileIO.
+# Iceberg 1.10+ ships an iceberg-flink-runtime-2.0 artifact compatible with Flink 2.x;
+# the older iceberg-flink-runtime-1.20 silently fails to register the SPI factory on Flink 2.0.
 RUN wget -q -P /opt/flink/lib/ \
-  https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-flink-runtime-1.20/1.8.1/iceberg-flink-runtime-1.20-1.8.1.jar \
+  https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-flink-runtime-2.0/1.10.1/iceberg-flink-runtime-2.0-1.10.1.jar \
   && wget -q -P /opt/flink/lib/ \
-  https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-aws-bundle/1.8.1/iceberg-aws-bundle-1.8.1.jar
+  https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-aws-bundle/1.10.1/iceberg-aws-bundle-1.10.1.jar
+
+# Hadoop client (api + runtime) — required by Iceberg FlinkCatalogFactory's
+# clusterHadoopConf() even when using a REST catalog with S3FileIO. These two
+# shaded artifacts replace the legacy 1GB Hadoop tarball install.
+RUN wget -q -P /opt/flink/lib/ \
+  https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-client-api/3.3.6/hadoop-client-api-3.3.6.jar \
+  && wget -q -P /opt/flink/lib/ \
+  https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-client-runtime/3.3.6/hadoop-client-runtime-3.3.6.jar
 
 # Flink S3 filesystem plugin (Hadoop flavor) — required for s3:// checkpoint/savepoint dirs.
 # Mounted as a Flink plugin so it doesn't leak into user classpath.

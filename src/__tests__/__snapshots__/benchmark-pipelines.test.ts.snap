@@ -111,7 +111,28 @@ CREATE TABLE \`tpch_public_orders\` (
 -- type        : iceberg
 -- ====================================================================
 
--- IcebergSink \`lakekeeper\`.\`tpch\`.\`orders\` (catalog-managed)
+CREATE DATABASE IF NOT EXISTS \`lakekeeper\`.\`tpch\`;
+CREATE TABLE IF NOT EXISTS \`lakekeeper\`.\`tpch\`.\`orders\` (
+  \`o_orderkey\` BIGINT,
+  \`o_custkey\` BIGINT,
+  \`o_orderstatus\` STRING,
+  \`o_totalprice\` DECIMAL(15, 2),
+  \`o_orderdate\` DATE,
+  \`o_orderpriority\` STRING,
+  \`o_clerk\` STRING,
+  \`o_shippriority\` INT,
+  \`o_comment\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  PRIMARY KEY (\`o_orderkey\`) NOT ENFORCED
+) WITH (
+  'format-version' = '2',
+  'write.upsert.enabled' = 'true',
+  'equality-field-columns' = 'o_orderkey',
+  'commit-interval-ms' = '2000',
+  'write.distribution-mode' = 'hash',
+  'write.target-file-size-bytes' = '268435456',
+  'write.parquet.compression-codec' = 'zstd'
+);
 
 -- ====================================================================
 -- TRANSFORMATION
@@ -237,7 +258,28 @@ CREATE TABLE \`tpch_public_orders\` (
 -- type        : iceberg
 -- ====================================================================
 
--- IcebergSink \`lakekeeper\`.\`tpch\`.\`orders\` (catalog-managed)
+CREATE DATABASE IF NOT EXISTS \`lakekeeper\`.\`tpch\`;
+CREATE TABLE IF NOT EXISTS \`lakekeeper\`.\`tpch\`.\`orders\` (
+  \`o_orderkey\` BIGINT,
+  \`o_custkey\` BIGINT,
+  \`o_orderstatus\` STRING,
+  \`o_totalprice\` DECIMAL(15, 2),
+  \`o_orderdate\` DATE,
+  \`o_orderpriority\` STRING,
+  \`o_clerk\` STRING,
+  \`o_shippriority\` INT,
+  \`o_comment\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  PRIMARY KEY (\`o_orderkey\`) NOT ENFORCED
+) WITH (
+  'format-version' = '2',
+  'write.upsert.enabled' = 'true',
+  'equality-field-columns' = 'o_orderkey',
+  'commit-interval-ms' = '10000',
+  'write.distribution-mode' = 'hash',
+  'write.target-file-size-bytes' = '268435456',
+  'write.parquet.compression-codec' = 'zstd'
+);
 
 -- ====================================================================
 -- TRANSFORMATION
@@ -361,7 +403,28 @@ CREATE TABLE \`tpch_public_orders\` (
 -- type        : iceberg
 -- ====================================================================
 
--- IcebergSink \`lakekeeper\`.\`tpch\`.\`orders\` (catalog-managed)
+CREATE DATABASE IF NOT EXISTS \`lakekeeper\`.\`tpch\`;
+CREATE TABLE IF NOT EXISTS \`lakekeeper\`.\`tpch\`.\`orders\` (
+  \`o_orderkey\` BIGINT,
+  \`o_custkey\` BIGINT,
+  \`o_orderstatus\` STRING,
+  \`o_totalprice\` DECIMAL(15, 2),
+  \`o_orderdate\` DATE,
+  \`o_orderpriority\` STRING,
+  \`o_clerk\` STRING,
+  \`o_shippriority\` INT,
+  \`o_comment\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  PRIMARY KEY (\`o_orderkey\`) NOT ENFORCED
+) WITH (
+  'format-version' = '2',
+  'write.upsert.enabled' = 'true',
+  'equality-field-columns' = 'o_orderkey',
+  'commit-interval-ms' = '2000',
+  'write.distribution-mode' = 'hash',
+  'write.target-file-size-bytes' = '268435456',
+  'write.parquet.compression-codec' = 'zstd'
+);
 
 -- ====================================================================
 -- TRANSFORMATION
@@ -485,7 +548,28 @@ CREATE TABLE \`tpch_public_orders\` (
 -- type        : iceberg
 -- ====================================================================
 
--- IcebergSink \`lakekeeper\`.\`tpch\`.\`orders\` (catalog-managed)
+CREATE DATABASE IF NOT EXISTS \`lakekeeper\`.\`tpch\`;
+CREATE TABLE IF NOT EXISTS \`lakekeeper\`.\`tpch\`.\`orders\` (
+  \`o_orderkey\` BIGINT,
+  \`o_custkey\` BIGINT,
+  \`o_orderstatus\` STRING,
+  \`o_totalprice\` DECIMAL(15, 2),
+  \`o_orderdate\` DATE,
+  \`o_orderpriority\` STRING,
+  \`o_clerk\` STRING,
+  \`o_shippriority\` INT,
+  \`o_comment\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  PRIMARY KEY (\`o_orderkey\`) NOT ENFORCED
+) WITH (
+  'format-version' = '2',
+  'write.upsert.enabled' = 'true',
+  'equality-field-columns' = 'o_orderkey',
+  'commit-interval-ms' = '10000',
+  'write.distribution-mode' = 'hash',
+  'write.target-file-size-bytes' = '268435456',
+  'write.parquet.compression-codec' = 'zstd'
+);
 
 -- ====================================================================
 -- TRANSFORMATION
@@ -611,7 +695,28 @@ CREATE TABLE \`tpch_public_orders\` (
 -- type        : iceberg
 -- ====================================================================
 
--- IcebergSink \`lakekeeper\`.\`tpch\`.\`orders\` (catalog-managed)
+CREATE DATABASE IF NOT EXISTS \`lakekeeper\`.\`tpch\`;
+CREATE TABLE IF NOT EXISTS \`lakekeeper\`.\`tpch\`.\`orders\` (
+  \`o_orderkey\` BIGINT,
+  \`o_custkey\` BIGINT,
+  \`o_orderstatus\` STRING,
+  \`o_totalprice\` DECIMAL(15, 2),
+  \`o_orderdate\` DATE,
+  \`o_orderpriority\` STRING,
+  \`o_clerk\` STRING,
+  \`o_shippriority\` INT,
+  \`o_comment\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  PRIMARY KEY (\`o_orderkey\`) NOT ENFORCED
+) WITH (
+  'format-version' = '2',
+  'write.upsert.enabled' = 'true',
+  'equality-field-columns' = 'o_orderkey',
+  'commit-interval-ms' = '2000',
+  'write.distribution-mode' = 'hash',
+  'write.target-file-size-bytes' = '268435456',
+  'write.parquet.compression-codec' = 'zstd'
+);
 
 -- ====================================================================
 -- TRANSFORMATION
@@ -737,7 +842,28 @@ CREATE TABLE \`tpch_public_orders\` (
 -- type        : iceberg
 -- ====================================================================
 
--- IcebergSink \`lakekeeper\`.\`tpch\`.\`orders\` (catalog-managed)
+CREATE DATABASE IF NOT EXISTS \`lakekeeper\`.\`tpch\`;
+CREATE TABLE IF NOT EXISTS \`lakekeeper\`.\`tpch\`.\`orders\` (
+  \`o_orderkey\` BIGINT,
+  \`o_custkey\` BIGINT,
+  \`o_orderstatus\` STRING,
+  \`o_totalprice\` DECIMAL(15, 2),
+  \`o_orderdate\` DATE,
+  \`o_orderpriority\` STRING,
+  \`o_clerk\` STRING,
+  \`o_shippriority\` INT,
+  \`o_comment\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  PRIMARY KEY (\`o_orderkey\`) NOT ENFORCED
+) WITH (
+  'format-version' = '2',
+  'write.upsert.enabled' = 'true',
+  'equality-field-columns' = 'o_orderkey',
+  'commit-interval-ms' = '10000',
+  'write.distribution-mode' = 'hash',
+  'write.target-file-size-bytes' = '268435456',
+  'write.parquet.compression-codec' = 'zstd'
+);
 
 -- ====================================================================
 -- TRANSFORMATION

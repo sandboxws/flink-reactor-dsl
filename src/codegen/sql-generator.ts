@@ -1154,7 +1154,7 @@ function generateSinkDdl(
   const tableName = node.id
 
   if (props.catalogName) {
-    return `-- ${node.component} ${q(String(props.catalogName))}.${q(String(props.database))}.${q(String(props.table))} (catalog-managed)`
+    return generateCatalogManagedSinkDdl(node, metadata)
   }
 
   const withClause = generateSinkWithClause(node, metadata, pipelineBootstrap)
@@ -1254,6 +1254,98 @@ function generateSinkDdl(
   }
 
   return parts.join("\n")
+}
+
+/**
+ * Emit DDL for a catalog-managed sink (currently IcebergSink).
+ *
+ * Produces idempotent CREATE DATABASE + CREATE TABLE statements scoped to the
+ * sink's catalog. Without these, fresh REST catalogs have no databases/tables
+ * for INSERT to target. IF NOT EXISTS makes the emission safe across
+ * cluster restarts and across pipelines that share a database.
+ */
+function generateCatalogManagedSinkDdl(
+  node: ConstructNode,
+  metadata?: SinkMetadata,
+): string {
+  const props = node.props
+  const catalogName = String(props.catalogName)
+  const database = String(props.database)
+  const table = String(props.table)
+  const fullName = `${q(catalogName)}.${q(database)}.${q(table)}`
+  const dbName = `${q(catalogName)}.${q(database)}`
+
+  const stmts: string[] = [`CREATE DATABASE IF NOT EXISTS ${dbName};`]
+
+  if (!metadata?.schema) {
+    return stmts.join("\n")
+  }
+
+  const colDefs = metadata.schema
+    .map((c) => `  ${q(c.name)} ${c.type}`)
+    .join(",\n")
+
+  const pk = props.primaryKey as readonly string[] | undefined
+  const inner: string[] = [colDefs]
+  if (pk && pk.length > 0) {
+    inner.push(`  PRIMARY KEY (${pk.map(q).join(", ")}) NOT ENFORCED`)
+  }
+
+  const tableProps = collectIcebergTableProps(node)
+  const withClause =
+    tableProps.length > 0
+      ? ` WITH (\n${tableProps.map(([k, v]) => `  '${k}' = '${v}'`).join(",\n")}\n)`
+      : ""
+
+  stmts.push(
+    `CREATE TABLE IF NOT EXISTS ${fullName} (\n${inner.join(",\n")}\n)${withClause};`,
+  )
+
+  return stmts.join("\n")
+}
+
+function collectIcebergTableProps(node: ConstructNode): [string, string][] {
+  if (node.component !== "IcebergSink") return []
+  const props = node.props
+  const out: [string, string][] = []
+
+  if (props.formatVersion) {
+    out.push(["format-version", String(props.formatVersion)])
+  }
+  if (props.upsertEnabled) {
+    out.push(["write.upsert.enabled", "true"])
+  }
+  const equalityCols =
+    (props.equalityFieldColumns as readonly string[] | undefined) ??
+    (props.upsertEnabled
+      ? (props.primaryKey as readonly string[] | undefined)
+      : undefined)
+  if (equalityCols && equalityCols.length > 0) {
+    out.push(["equality-field-columns", equalityCols.join(",")])
+  }
+  if (props.commitIntervalSeconds) {
+    out.push([
+      "commit-interval-ms",
+      String(Number(props.commitIntervalSeconds) * 1000),
+    ])
+  }
+  if (props.writeDistributionMode) {
+    out.push(["write.distribution-mode", String(props.writeDistributionMode)])
+  }
+  if (props.targetFileSizeMB) {
+    out.push([
+      "write.target-file-size-bytes",
+      String(Number(props.targetFileSizeMB) * 1048576),
+    ])
+  }
+  if (props.writeParquetCompression) {
+    out.push([
+      "write.parquet.compression-codec",
+      String(props.writeParquetCompression),
+    ])
+  }
+
+  return out
 }
 
 /**
