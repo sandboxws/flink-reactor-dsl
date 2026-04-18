@@ -63,3 +63,62 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+
+  explain:
+    name: EXPLAIN (Flink SQL Gateway)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Cache Flink Docker image layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: buildx-flink-${{ hashFiles('src/cli/cluster/Dockerfile.flink') }}
+          restore-keys: buildx-flink-
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+      - name: Start Flink SQL Gateway + Kafka
+        working-directory: src/cli/cluster
+        run: |
+          docker compose up -d --wait \
+            jobmanager taskmanager-1 sql-gateway kafka
+
+      - name: Wait for SQL Gateway
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8083/v1/info > /dev/null; then
+              echo "Gateway ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "SQL Gateway never became ready"
+          docker compose -f src/cli/cluster/docker-compose.yml logs sql-gateway
+          exit 1
+
+      - name: Run template EXPLAIN suite
+        env:
+          REQUIRE_SQL_GATEWAY: "1"
+          SQL_GATEWAY_URL: "http://localhost:8083"
+        run: pnpm vitest run src/cli/templates/__tests__/template-explain.test.ts
+
+      - name: Dump container logs on failure
+        if: failure()
+        working-directory: src/cli/cluster
+        run: |
+          docker compose logs --tail=200 jobmanager sql-gateway kafka
+
+      - name: Tear down
+        if: always()
+        working-directory: src/cli/cluster
+        run: docker compose down -v

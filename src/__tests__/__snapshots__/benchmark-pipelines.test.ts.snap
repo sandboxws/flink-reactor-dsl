@@ -55,7 +55,7 @@ SET 'parallelism.default' = '4';
 
 SET 'execution.checkpointing.interval' = '60000';
 
-SET 'execution.checkpointing.mode' = 'exactly-once';
+SET 'execution.checkpointing.mode' = 'EXACTLY_ONCE';
 
 -- ====================================================================
 -- CATALOG
@@ -181,7 +181,7 @@ SET 'parallelism.default' = '4';
 
 SET 'execution.checkpointing.interval' = '60000';
 
-SET 'execution.checkpointing.mode' = 'exactly-once';
+SET 'execution.checkpointing.mode' = 'EXACTLY_ONCE';
 
 -- ====================================================================
 -- CATALOG
@@ -306,7 +306,7 @@ SET 'parallelism.default' = '4';
 
 SET 'execution.checkpointing.interval' = '60000';
 
-SET 'execution.checkpointing.mode' = 'exactly-once';
+SET 'execution.checkpointing.mode' = 'EXACTLY_ONCE';
 
 -- ====================================================================
 -- CATALOG
@@ -430,7 +430,7 @@ SET 'parallelism.default' = '4';
 
 SET 'execution.checkpointing.interval' = '60000';
 
-SET 'execution.checkpointing.mode' = 'exactly-once';
+SET 'execution.checkpointing.mode' = 'EXACTLY_ONCE';
 
 -- ====================================================================
 -- CATALOG
@@ -555,7 +555,7 @@ SET 'parallelism.default' = '4';
 
 SET 'execution.checkpointing.interval' = '60000';
 
-SET 'execution.checkpointing.mode' = 'exactly-once';
+SET 'execution.checkpointing.mode' = 'EXACTLY_ONCE';
 
 -- ====================================================================
 -- CATALOG
@@ -681,7 +681,7 @@ SET 'parallelism.default' = '4';
 
 SET 'execution.checkpointing.interval' = '60000';
 
-SET 'execution.checkpointing.mode' = 'exactly-once';
+SET 'execution.checkpointing.mode' = 'EXACTLY_ONCE';
 
 -- ====================================================================
 -- CATALOG

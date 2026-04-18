@@ -904,7 +904,10 @@ function generateSetStatements(
       toMilliseconds(checkpoint.interval),
     )
     if (checkpoint.mode) {
-      config["execution.checkpointing.mode"] = checkpoint.mode
+      // Flink SQL expects the enum literals EXACTLY_ONCE / AT_LEAST_ONCE,
+      // not the DSL-ergonomic kebab-case values.
+      config["execution.checkpointing.mode"] =
+        checkpoint.mode === "exactly-once" ? "EXACTLY_ONCE" : "AT_LEAST_ONCE"
     }
   }
 

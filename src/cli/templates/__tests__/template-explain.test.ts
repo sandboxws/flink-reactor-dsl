@@ -1,109 +1,34 @@
+import { rmSync } from "node:fs"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
+import type { TemplateName } from "@/cli/commands/new.js"
 import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
 import { SqlGatewayClient } from "@/lib/sql-gateway/client.js"
 import { splitSqlStatements } from "@/lib/sql-gateway/sql-utils.js"
-import { synth } from "@/testing/synth.js"
+import {
+  EXPECTED_PIPELINES,
+  scaffoldAndSynth,
+} from "./helpers/scaffold-and-synth.js"
 
 const SQL_GATEWAY_URL = process.env.SQL_GATEWAY_URL ?? "http://localhost:8083"
 
-// ── Template pipeline fixtures ───────────────────────────────────────
-// Each entry: [fixture-id, template-name, description]
+// When set, a missing gateway causes the suite to FAIL loudly instead of
+// silently skipping. CI should run with this enabled so a broken cluster
+// never masquerades as a green build.
+const REQUIRE_SQL_GATEWAY = process.env.REQUIRE_SQL_GATEWAY === "1"
 
-const FIXTURES: [string, string, string][] = [
-  // Starter
-  ["starter-hello-world", "starter", "KafkaSource → Filter → KafkaSink"],
-  // Realtime Analytics
-  [
-    "analytics-page-views",
-    "realtime-analytics",
-    "Kafka → TumbleWindow → Aggregate → JDBC",
-  ],
-  // CDC Lakehouse
-  [
-    "cdc-to-lakehouse",
-    "cdc-lakehouse",
-    "Debezium CDC → IcebergSink (v2 upsert)",
-  ],
-  // E-Commerce (4 pipelines)
-  ["ecom-order-enrichment", "ecommerce", "3-way join (interval + temporal)"],
-  [
-    "ecom-revenue-analytics",
-    "ecommerce",
-    "Route: windowed agg → JDBC + filter → Kafka",
-  ],
-  [
-    "ecom-customer-360",
-    "ecommerce",
-    "LookupJoin → SessionWindow → JdbcSink upsert",
-  ],
-  ["pump-ecom", "ecommerce", "StatementSet: 4× DataGen → Kafka"],
-  // Ride-Sharing (2 pipelines)
-  [
-    "rides-trip-tracking",
-    "ride-sharing",
-    "IntervalJoin → MatchRecognize → Route",
-  ],
-  [
-    "rides-surge-pricing",
-    "ride-sharing",
-    "TumbleWindow → Aggregate → BroadcastJoin",
-  ],
-  // Grocery Delivery (2 pipelines)
-  [
-    "grocery-order-fulfillment",
-    "grocery-delivery",
-    "TemporalJoin → Route (2 branches)",
-  ],
-  [
-    "grocery-store-rankings",
-    "grocery-delivery",
-    "Deduplicate → TumbleWindow → Aggregate → JDBC upsert",
-  ],
-  // Banking (2 pipelines)
-  ["bank-fraud-detection", "banking", "MatchRecognize → TemporalJoin"],
-  ["bank-compliance-agg", "banking", "TumbleWindow → Route (3 branches)"],
-  // IoT Factory (2 pipelines)
-  [
-    "iot-predictive-maintenance",
-    "iot-factory",
-    "SlideWindow → Aggregate → TemporalJoin → Route",
-  ],
-  ["pump-iot", "iot-factory", "StatementSet: 2× DataGen → Kafka"],
-  // Lakehouse Ingestion (2 pipelines)
-  [
-    "lakehouse-ingest",
-    "lakehouse-ingestion",
-    "StatementSet: 3× Kafka → Iceberg",
-  ],
-  ["pump-lakehouse", "lakehouse-ingestion", "StatementSet: 3× DataGen → Kafka"],
-  // Lakehouse Analytics / Medallion (4 pipelines)
-  [
-    "medallion-bronze",
-    "lakehouse-analytics",
-    "Kafka CDC → Iceberg append (v1)",
-  ],
-  [
-    "medallion-silver",
-    "lakehouse-analytics",
-    "Kafka → Deduplicate → Iceberg upsert (v2)",
-  ],
-  [
-    "medallion-gold",
-    "lakehouse-analytics",
-    "Kafka → TumbleWindow → Aggregate → Iceberg",
-  ],
-  ["pump-medallion", "lakehouse-analytics", "DataGen → Kafka pump"],
-]
+// ── Pipelines skipped from EXPLAIN validation ─────────────────────────
+// The scaffold→synth test (template-scaffold-synth.test.ts) already
+// guarantees these pipelines synthesize. The entries below fail against
+// Flink's EXPLAIN for reasons tracked in `bugs/`; remove an entry from
+// here when its underlying bug is fixed.
 
-// Pipelines requiring connectors not in the local cluster
-// or with pre-existing codegen issues needing deeper fixes
-const SKIP = new Set([
+const SKIP = new Set<string>([
   // ── Missing catalog connectors in local cluster ───────────────────
-  "cdc-to-lakehouse", // Iceberg REST catalog connector
-  "lakehouse-ingest", // Iceberg REST catalog connector
-  "medallion-bronze", // Iceberg REST catalog connector
-  "medallion-silver", // Iceberg REST catalog connector
-  "medallion-gold", // Iceberg REST catalog connector
+  "cdc-to-lakehouse", // Iceberg REST catalog connector (Phase 5(i))
+  "lakehouse-ingest", // Iceberg REST catalog connector (Phase 5(i))
+  "medallion-bronze", // Iceberg REST catalog connector (Phase 5(i))
+  "medallion-silver", // Iceberg REST catalog connector (Phase 5(i))
+  "medallion-gold", // Iceberg REST catalog connector (Phase 5(i))
 
   // ── Codegen issues needing deeper fixes ───────────────────────────
   "ecom-order-enrichment", // interval join table reference issues
@@ -119,6 +44,12 @@ const SKIP = new Set([
   "pump-ecom", // StatementSet: later source/sink pairs have column type mismatches
   "pump-iot", // StatementSet: later source/sink pairs have column type mismatches
   "pump-lakehouse", // StatementSet: later source/sink pairs have column type mismatches
+
+  // ── Window column case mismatch (bugs/015) ──────────────────────
+  // WINDOW_START/WINDOW_END emitted uppercase; Flink TVFs produce lowercase.
+  "page-view-analytics", // bugs/015
+  "grocery-store-rankings", // bugs/015
+  "ecom-revenue-analytics", // bugs/015
 ])
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -163,23 +94,11 @@ const gatewayAvailable = await fetch(`${SQL_GATEWAY_URL}/v1/info`, {
   .then((res) => res.ok)
   .catch(() => false)
 
-// ── Synth-only tests (always run) ────────────────────────────────────
-// Validate that every template pipeline synthesizes without errors.
-
-describe("Template pipeline synthesis", () => {
-  for (const [id, template, desc] of FIXTURES) {
-    it(`${id} (${template}): ${desc}`, async () => {
-      resetNodeIdCounter()
-      const mod = await import(`./fixtures/${id}.tsx`)
-      const { sql } = synth(mod.default)
-      expect(sql).toBeTruthy()
-      expect(sql.length).toBeGreaterThan(0)
-
-      const statements = splitSqlStatements(sql)
-      expect(statements.length).toBeGreaterThan(0)
-    })
-  }
-})
+if (REQUIRE_SQL_GATEWAY && !gatewayAvailable) {
+  throw new Error(
+    `REQUIRE_SQL_GATEWAY=1 but Flink SQL Gateway is not reachable at ${SQL_GATEWAY_URL}. Start the cluster (\`flink-reactor cluster up\`) before running.`,
+  )
+}
 
 // ── EXPLAIN tests (require running SQL Gateway) ──────────────────────
 
@@ -189,9 +108,33 @@ describe.skipIf(!gatewayAvailable)(
     const client = new SqlGatewayClient(SQL_GATEWAY_URL)
     let sessionHandle: string
 
+    // Scaffold each template once up-front; reuse artifacts across its
+    // per-pipeline EXPLAIN tests. Temp dirs are cleaned in afterAll.
+    type ScaffoldedTemplate = {
+      tempRoot: string
+      artifacts: Map<string, string> // pipeline name → sql
+    }
+    const scaffolded = new Map<TemplateName, ScaffoldedTemplate>()
+
     beforeAll(async () => {
       sessionHandle = await client.openSession()
-    })
+
+      for (const [template, pipelines] of Object.entries(
+        EXPECTED_PIPELINES,
+      ) as [TemplateName, readonly string[]][]) {
+        if (pipelines.length === 0) continue
+        resetNodeIdCounter()
+        const result = await scaffoldAndSynth(template)
+        const byName = new Map<string, string>()
+        for (const artifact of result.artifacts) {
+          byName.set(artifact.name, artifact.sql.sql)
+        }
+        scaffolded.set(template, {
+          tempRoot: result.tempRoot,
+          artifacts: byName,
+        })
+      }
+    }, 60_000)
 
     afterAll(async () => {
       if (sessionHandle) {
@@ -201,51 +144,67 @@ describe.skipIf(!gatewayAvailable)(
           // Best-effort cleanup
         }
       }
+      for (const { tempRoot } of scaffolded.values()) {
+        rmSync(tempRoot, { recursive: true, force: true })
+      }
     })
 
-    for (const [id, template, desc] of FIXTURES) {
-      const testFn = SKIP.has(id) ? it.skip : it
+    for (const [template, pipelines] of Object.entries(EXPECTED_PIPELINES) as [
+      TemplateName,
+      readonly string[],
+    ][]) {
+      for (const pipeline of pipelines) {
+        const testFn = SKIP.has(pipeline) ? it.skip : it
 
-      testFn(`${id} (${template}): ${desc}`, { timeout: 60_000 }, async () => {
-        resetNodeIdCounter()
-        const mod = await import(`./fixtures/${id}.tsx`)
-        const { sql } = synth(mod.default)
-        const statements = splitSqlStatements(sql)
+        testFn(`${template}/${pipeline}`, { timeout: 60_000 }, async () => {
+          const entry = scaffolded.get(template)
+          if (!entry) throw new Error(`Template ${template} not scaffolded`)
 
-        // Per-pipeline session to avoid DDL conflicts
-        const pipelineSession = await client.openSession()
+          const sql = entry.artifacts.get(pipeline)
+          if (!sql) {
+            throw new Error(
+              `Pipeline ${pipeline} not found in scaffolded ${template}; got: ${[...entry.artifacts.keys()].join(", ")}`,
+            )
+          }
 
-        try {
-          for (const stmt of statements) {
-            if (isDdl(stmt)) {
-              const status = await client.executeStatement(
-                pipelineSession,
-                stmt,
-                30_000,
-              )
-              expect(status).toBe("FINISHED")
-            } else if (isStatementSet(stmt)) {
-              const inserts = extractInserts(stmt)
-              for (const insert of inserts) {
+          const statements = splitSqlStatements(sql)
+          const pipelineSession = await client.openSession()
+
+          try {
+            for (const stmt of statements) {
+              if (isDdl(stmt)) {
+                const status = await client.executeStatement(
+                  pipelineSession,
+                  stmt,
+                  30_000,
+                )
+                expect(status).toBe("FINISHED")
+              } else if (isStatementSet(stmt)) {
+                const inserts = extractInserts(stmt)
+                for (const insert of inserts) {
+                  const plan = await client.explainInSession(
+                    pipelineSession,
+                    insert,
+                  )
+                  expect(plan).toBeTruthy()
+                }
+              } else {
                 const plan = await client.explainInSession(
                   pipelineSession,
-                  insert,
+                  stmt,
                 )
                 expect(plan).toBeTruthy()
               }
-            } else {
-              const plan = await client.explainInSession(pipelineSession, stmt)
-              expect(plan).toBeTruthy()
+            }
+          } finally {
+            try {
+              await client.closeSession(pipelineSession)
+            } catch {
+              // Best-effort cleanup
             }
           }
-        } finally {
-          try {
-            await client.closeSession(pipelineSession)
-          } catch {
-            // Best-effort cleanup
-          }
-        }
-      })
+        })
+      }
     }
   },
 )
