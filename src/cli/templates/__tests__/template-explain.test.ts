@@ -25,8 +25,7 @@ const REQUIRE_SQL_GATEWAY = process.env.REQUIRE_SQL_GATEWAY === "1"
 const SKIP = new Set<string>([
   // ── Codegen issues needing deeper fixes ───────────────────────────
   "ecom-order-enrichment", // bugs/029 — multiple rowtime cols in Kafka sink after interval join
-  "rides-trip-tracking", // MatchRecognize SQL parsing not yet supported by EXPLAIN
-  "bank-fraud-detection", // bugs/027 — MatchRecognize MEASURES type inference returns STRING for FIRST/LAST(timestamp_col)
+  "bank-fraud-detection", // bugs/027 — type-inference side fixed by BUG-024; template still missing explicit `orderBy` for MATCH_RECOGNIZE over streaming input
   "grocery-order-fulfillment", // bugs/028 — temporal join needs full composite PK; template joins on partial key
   "iot-predictive-maintenance", // bugs/030 — temporal join requires a time-attribute field; windowed-agg output loses the attribute through the CTE alias
   // ── Template authoring bug: schema missing required column ──────

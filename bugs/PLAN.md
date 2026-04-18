@@ -29,7 +29,7 @@ their target filename.
 | 7 | BroadcastJoin intermediate table | 1 — `rides-surge-pricing` (references `demand`) | [`021-broadcastjoin-intermediate.md`](./021-broadcastjoin-intermediate.md) [FIXED] | 1–2 days |
 | 8 | Route-after-window type mismatch | 1 — `bank-compliance-agg` | [`022-route-after-window.md`](./022-route-after-window.md) [FIXED] | 1 day |
 | 9 | STDDEV_POP in windowed context | 1 — `iot-predictive-maintenance` | [`023-stddev-pop-windowed.md`](./023-stddev-pop-windowed.md) [FIXED] (uncovered BUG-030, pipeline still skipped) | 0.5–1 day |
-| 10 | MATCH_RECOGNIZE EXPLAIN | 1 — `rides-trip-tracking` | create `024-match-recognize-explain.md` after investigation | TBD |
+| 10 | MATCH_RECOGNIZE EXPLAIN | 1 — `rides-trip-tracking` (also unmasks type-inference portion of BUG-027 on `bank-fraud-detection`) | [`024-match-recognize-explain.md`](./024-match-recognize-explain.md) [FIXED] | 1 day |
 | 11 | Template schema missing `category` field | 1 — `ecom-revenue-analytics` | [`025-ecom-revenue-schema-missing-category.md`](./025-ecom-revenue-schema-missing-category.md) | few hours |
 | 12 | MatchRecognize MEASURES type inference | 1 — `bank-fraud-detection` (uncovered by A.3) | [`027-match-recognize-measures-type-inference.md`](./027-match-recognize-measures-type-inference.md) | 0.5–1 day |
 | 13 | Temporal join partial PK coverage (template) | 1 — `grocery-order-fulfillment` (uncovered by A.3) | [`028-temporal-join-partial-pk-coverage.md`](./028-temporal-join-partial-pk-coverage.md) | few hours (template) |
@@ -309,7 +309,7 @@ As each PR lands, update this document:
 - [x] B.3 — BroadcastJoin intermediate (1 test: `rides-surge-pricing`)
 - [x] B.4 — Route-after-window (1 test: `bank-compliance-agg`)
 - [x] B.5 — STDDEV_POP windowed (codegen + template shipped; uncovered BUG-030, pipeline still skipped)
-- [ ] C.1 — MATCH_RECOGNIZE EXPLAIN (1 test, may remain skipped)
+- [x] C.1 — MATCH_RECOGNIZE EXPLAIN (1 test: `rides-trip-tracking`; type-inference half also unblocks BUG-027)
 - [ ] BUG-025 — `ecom-revenue-analytics` schema missing `category` (1 test; surfaced by A.1)
 - [ ] BUG-027 — MatchRecognize MEASURES type inference (1 test; surfaced by A.3)
 - [ ] BUG-028 — Temporal join partial PK coverage in `grocery-order-fulfillment` template (1 test; surfaced by A.3)

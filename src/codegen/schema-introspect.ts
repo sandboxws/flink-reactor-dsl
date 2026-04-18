@@ -69,6 +69,16 @@ export function inferExpressionType(
     return "DOUBLE"
   }
 
+  // MATCH_RECOGNIZE FIRST/LAST(col [, N]) — same type as source. The
+  // pattern-variable prefix is already stripped upstream by the
+  // MatchRecognize case of resolveNodeSchema.
+  const matchRecognizeNavMatch = trimmed.match(
+    /^(?:FIRST|LAST)\s*\(\s*`?(\w+)`?\s*(?:,\s*\d+)?\s*\)/i,
+  )
+  if (matchRecognizeNavMatch) {
+    return upstreamFields.get(matchRecognizeNavMatch[1]) ?? "STRING"
+  }
+
   // MIN/MAX/FIRST_VALUE/LAST_VALUE(col) — same type as source
   const preserveTypeMatch = trimmed.match(
     /^(?:MIN|MAX|FIRST_VALUE|LAST_VALUE)\s*\(\s*`?(\w+)`?\s*\)/i,
@@ -374,9 +384,11 @@ export function resolveNodeSchema(
       }
       // MEASURES define the remaining output columns
       for (const [name, expr] of Object.entries(measures)) {
-        // Strip pattern variable prefixes (A., B., C.) so inferExpressionType
-        // can look up base column names in the source schema
-        const stripped = expr.replace(/\b[A-Z]\./g, "")
+        // Strip pattern variable prefixes (e.g. `A.`, `pickup.`) so
+        // inferExpressionType can look up base column names in the source
+        // schema. Safe inside MatchRecognize because it operates on a
+        // single input relation — any dotted prefix is a pattern variable.
+        const stripped = expr.replace(/\b[A-Za-z_]\w*\./g, "")
         columns.push({
           name,
           type: inferExpressionType(stripped, sourceFields),

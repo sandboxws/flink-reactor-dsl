@@ -137,6 +137,7 @@ export const SurgeZoneSchema = Schema({
 import { RideRequestSchema, TripEventSchema } from '@/schemas/rides';
 
 const requests = KafkaSource({
+  name: "requests",
   topic: "rides.requests",
   schema: RideRequestSchema,
   bootstrapServers: "kafka:9092",
@@ -144,6 +145,7 @@ const requests = KafkaSource({
 });
 
 const events = KafkaSource({
+  name: "events",
   topic: "rides.trip-events",
   schema: TripEventSchema,
   bootstrapServers: "kafka:9092",
@@ -154,7 +156,7 @@ const joined = IntervalJoin({
   left: requests,
   right: events,
   on: "requests.rideId = events.rideId",
-  interval: { from: "requests.requestTime", to: "requests.requestTime + INTERVAL '5' MINUTE" },
+  interval: { from: "requestTime", to: "requestTime + INTERVAL '5' MINUTE" },
 });
 
 export default (
@@ -175,6 +177,7 @@ export default (
     {events}
     {MatchRecognize({
       input: joined,
+      orderBy: "eventTime",
       pattern: "request accept? pickup dropoff",
       define: {
         request: "status = 'requested'",
@@ -186,8 +189,8 @@ export default (
         rideId: 'LAST(rideId)',
         driverId: 'LAST(driverId)',
         tripStatus: 'LAST(status)',
-        pickupTime: "FIRST(eventTime, pickup)",
-        dropoffTime: "LAST(eventTime, dropoff)",
+        pickupTime: "FIRST(pickup.eventTime)",
+        dropoffTime: "LAST(dropoff.eventTime)",
       },
     })}
     <Route>
