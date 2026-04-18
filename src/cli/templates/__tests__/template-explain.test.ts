@@ -27,7 +27,6 @@ const SKIP = new Set<string>([
   "ecom-order-enrichment", // bugs/029 — multiple rowtime cols in Kafka sink after interval join
   "rides-trip-tracking", // MatchRecognize SQL parsing not yet supported by EXPLAIN
   "bank-fraud-detection", // bugs/027 — MatchRecognize MEASURES type inference returns STRING for FIRST/LAST(timestamp_col)
-  "bank-compliance-agg", // Route branch column type mismatch after windowed aggregation
   "grocery-order-fulfillment", // bugs/028 — temporal join needs full composite PK; template joins on partial key
   "iot-predictive-maintenance", // STDDEV_POP may need special handling in windowed context
 

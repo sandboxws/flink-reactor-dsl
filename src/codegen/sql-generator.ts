@@ -437,7 +437,7 @@ export function generateSql(
   }
 
   // 5. DML: INSERT INTO / STATEMENT SET
-  const dmlEntries = generateDml(currentTree, nodeIndex, pluginSql)
+  const dmlEntries = generateDml(currentTree, nodeIndex, pluginSql, sinkMeta)
   for (const entry of dmlEntries) {
     const details = buildDmlDetails(entry, nodeIndex)
     emitComment(buildCommentBlock("TRANSFORMATION", details), {
@@ -1799,11 +1799,19 @@ function generateDml(
   pipelineNode: ConstructNode,
   nodeIndex: Map<string, ConstructNode>,
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
+  sinkMeta?: Map<string, SinkMetadata>,
 ): DmlEntry[] {
   const entries: DmlEntry[] = []
 
   // Collect all sinks from the pipeline's direct children
-  collectSinkDml(pipelineNode, nodeIndex, entries, pluginSql)
+  collectSinkDml(
+    pipelineNode,
+    nodeIndex,
+    entries,
+    pluginSql,
+    undefined,
+    sinkMeta,
+  )
 
   return entries
 }
@@ -1967,6 +1975,7 @@ function collectSinkDml(
   entries: DmlEntry[],
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
   parent?: ConstructNode,
+  sinkMeta?: Map<string, SinkMetadata>,
 ): void {
   if (node.kind === "Sink") {
     const sinkRef = resolveSinkRef(node)
@@ -2030,14 +2039,14 @@ function collectSinkDml(
 
   // Route generates multiple INSERT statements (one per branch)
   if (node.component === "Route") {
-    collectRouteDml(node, nodeIndex, entries, pluginSql, parent)
+    collectRouteDml(node, nodeIndex, entries, pluginSql, parent, sinkMeta)
     return
   }
 
   // StatementSet is a transparent passthrough — recurse into children
   if (node.component === "StatementSet") {
     for (const child of node.children) {
-      collectSinkDml(child, nodeIndex, entries, pluginSql, node)
+      collectSinkDml(child, nodeIndex, entries, pluginSql, node, sinkMeta)
     }
     return
   }
@@ -2056,7 +2065,7 @@ function collectSinkDml(
 
   // Recurse into children to find sinks
   for (const child of node.children) {
-    collectSinkDml(child, nodeIndex, entries, pluginSql, node)
+    collectSinkDml(child, nodeIndex, entries, pluginSql, node, sinkMeta)
   }
 }
 
@@ -2259,6 +2268,7 @@ function collectRouteDml(
   entries: DmlEntry[],
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
   parent?: ConstructNode,
+  sinkMeta?: Map<string, SinkMetadata>,
 ): void {
   const branches = routeNode.children.filter(
     (c) => c.component === "Route.Branch" || c.component === "Route.Default",
@@ -2287,9 +2297,39 @@ function collectRouteDml(
     )
     endFragmentCollection()
 
+    // A branch without an `Aggregate` but with a passthrough window
+    // upstream generates `SELECT * FROM TABLE(TUMBLE/HOP/SESSION(...))`,
+    // which materializes a `window_time` ROWTIME column in addition to
+    // `window_start`/`window_end`. Sinks inferred from the chain only
+    // expect the latter two, and Flink additionally rejects INSERTs with
+    // two ROWTIME attributes (source watermark + window_time). Project
+    // the sink's resolved columns explicitly so `window_time` is dropped.
+    // `TumbleWindow → Aggregate` (reverse-nesting) already projects
+    // explicitly via `buildWindowQuery`, so count a Window with an
+    // Aggregate child as a projection too.
+    const branchHasAggregate = transforms.some(
+      (t) =>
+        t.component === "Aggregate" ||
+        (t.kind === "Window" &&
+          t.children.some((c) => c.component === "Aggregate")),
+    )
+
     for (const sink of sinks) {
       const sinkRef = resolveSinkRef(sink)
       let sinkQuery = query
+
+      if (!branchHasAggregate) {
+        const sinkSchema = sinkMeta?.get(sink.id)?.schema
+        if (
+          sinkSchema &&
+          sinkSchema.length > 0 &&
+          sinkSchema.some((c) => c.name === "window_start") &&
+          sinkSchema.every((c) => c.name !== "window_time")
+        ) {
+          const colList = sinkSchema.map((c) => q(c.name)).join(", ")
+          sinkQuery = `SELECT ${colList} FROM (\n${sinkQuery}\n)`
+        }
+      }
 
       // FileSystemSink with function-based partitionBy: wrap the query
       // to add computed partition columns

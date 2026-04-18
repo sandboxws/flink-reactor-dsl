@@ -27,7 +27,7 @@ their target filename.
 | 5 | Interval-join table refs | 0 directly — codegen + template fixes shipped, pipeline blocked on BUG-029 (rowtime attrs in sink) | [`019-interval-join-table-refs.md`](./019-interval-join-table-refs.md) [FIXED] | 1 day |
 | 6 | LookupJoin external table | 1 — `ecom-customer-360` | [`020-lookupjoin-external-table.md`](./020-lookupjoin-external-table.md) [FIXED] | 1 day |
 | 7 | BroadcastJoin intermediate table | 1 — `rides-surge-pricing` (references `demand`) | [`021-broadcastjoin-intermediate.md`](./021-broadcastjoin-intermediate.md) [FIXED] | 1–2 days |
-| 8 | Route-after-window type mismatch | 1 — `bank-compliance-agg` | create `022-route-after-window.md` | 1 day |
+| 8 | Route-after-window type mismatch | 1 — `bank-compliance-agg` | [`022-route-after-window.md`](./022-route-after-window.md) [FIXED] | 1 day |
 | 9 | STDDEV_POP in windowed context | 1 — `iot-predictive-maintenance` | create `023-stddev-pop-windowed.md` | 0.5–1 day |
 | 10 | MATCH_RECOGNIZE EXPLAIN | 1 — `rides-trip-tracking` | create `024-match-recognize-explain.md` after investigation | TBD |
 | 11 | Template schema missing `category` field | 1 — `ecom-revenue-analytics` | [`025-ecom-revenue-schema-missing-category.md`](./025-ecom-revenue-schema-missing-category.md) | few hours |
@@ -307,7 +307,7 @@ As each PR lands, update this document:
 - [x] B.1 — Interval-join table refs (codegen + template shipped; uncovered BUG-029, pipeline still skipped)
 - [x] B.2 — LookupJoin external table (1 test: `ecom-customer-360`)
 - [x] B.3 — BroadcastJoin intermediate (1 test: `rides-surge-pricing`)
-- [ ] B.4 — Route-after-window (1 test)
+- [x] B.4 — Route-after-window (1 test: `bank-compliance-agg`)
 - [ ] B.5 — STDDEV_POP windowed (1 test)
 - [ ] C.1 — MATCH_RECOGNIZE EXPLAIN (1 test, may remain skipped)
 - [ ] BUG-025 — `ecom-revenue-analytics` schema missing `category` (1 test; surfaced by A.1)
