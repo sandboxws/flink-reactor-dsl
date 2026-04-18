@@ -825,7 +825,9 @@ CREATE TABLE \`order_shipments\` (
 -- ====================================================================
 
 INSERT INTO \`order_shipments\`
-SELECT * FROM \`orders\` JOIN \`shipments\` ON \`KafkaSource_0\`.\`order_id\` = \`KafkaSource_1\`.\`order_id\` AND \`shipments\`.\`shipped_time\` BETWEEN \`orders\`.event_time AND \`orders\`.event_time + INTERVAL '7' DAY;
+SELECT \`order_id\`, \`user_id\`, \`amount\`, \`event_time\`, CAST(\`shipped_time\` AS TIMESTAMP(3)) AS \`shipped_time\`, \`carrier\` FROM (
+SELECT * FROM \`orders\` JOIN \`shipments\` ON \`KafkaSource_0\`.\`order_id\` = \`KafkaSource_1\`.\`order_id\` AND \`shipments\`.\`shipped_time\` BETWEEN \`orders\`.event_time AND \`orders\`.event_time + INTERVAL '7' DAY
+);
 "
 `;
 

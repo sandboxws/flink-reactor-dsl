@@ -313,7 +313,7 @@ As each PR lands, update this document:
 - [x] BUG-025 — `ecom-revenue-analytics` schema missing `category` (1 test; surfaced by A.1)
 - [x] BUG-027 — MatchRecognize MEASURES type inference (1 test; surfaced by A.3) — codegen fixed by BUG-024, template `orderBy` + reluctant quantifier landed here
 - [x] BUG-028 — Temporal join partial PK coverage in `grocery-order-fulfillment` template (1 test; surfaced by A.3) — template adds OrderLineSchema; codegen extended for compound same-name ON
-- [ ] BUG-029 — Multiple rowtime cols in Kafka sink for `ecom-order-enrichment` (1 test; surfaced by B.1)
+- [x] BUG-029 — Multiple rowtime cols in Kafka sink for `ecom-order-enrichment` (1 test; surfaced by B.1) — wrapped INSERT with CAST at sink boundary
 - [ ] BUG-030 — TemporalJoin on windowed-agg output loses time-attribute through CTE alias (1 test; surfaced by B.5)
 
 **Done when:** the checkbox list above is complete *and* the `SKIP`

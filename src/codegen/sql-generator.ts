@@ -1803,7 +1803,19 @@ function generateDml(
 ): DmlEntry[] {
   const entries: DmlEntry[] = []
 
-  // Collect all sinks from the pipeline's direct children
+  // Collect every watermark column declared on any Source in this pipeline.
+  // Used at the sink boundary (BUG-029) to detect when the INSERT's query
+  // carries more than one rowtime attribute — Flink rejects that; wrap the
+  // INSERT with CASTs to demote all-but-one.
+  const rowtimeCols = new Set<string>()
+  for (const n of nodeIndex.values()) {
+    if (n.kind !== "Source") continue
+    const wm = (
+      n.props.schema as { watermark?: { column: string } } | undefined
+    )?.watermark?.column
+    if (wm) rowtimeCols.add(wm)
+  }
+
   collectSinkDml(
     pipelineNode,
     nodeIndex,
@@ -1811,9 +1823,40 @@ function generateDml(
     pluginSql,
     undefined,
     sinkMeta,
+    rowtimeCols,
   )
 
   return entries
+}
+
+/**
+ * When the sink's resolved schema contains two or more columns that are
+ * watermarked rowtime attributes on any upstream source, Flink rejects
+ * the INSERT with "more than one rowtime attribute column" (BUG-029).
+ *
+ * Wrap the query so that each rowtime column but the first (in schema
+ * order) is emitted as `CAST(col AS <type>) AS col`, demoting it to plain
+ * TIMESTAMP without rowtime metadata. Returns the original query unchanged
+ * when fewer than two rowtime columns reach the sink.
+ */
+function wrapSinkQueryForMultiRowtime(
+  sinkQuery: string,
+  sinkSchema: readonly { name: string; type: string }[] | undefined,
+  rowtimeCols: ReadonlySet<string>,
+): string {
+  if (!sinkSchema || sinkSchema.length === 0) return sinkQuery
+  const rowtimesInSink = sinkSchema
+    .map((c) => c.name)
+    .filter((n) => rowtimeCols.has(n))
+  if (rowtimesInSink.length < 2) return sinkQuery
+  // Keep the first rowtime in schema order; demote the rest.
+  const demote = new Set(rowtimesInSink.slice(1))
+  const cols = sinkSchema.map((c) =>
+    demote.has(c.name)
+      ? `CAST(${q(c.name)} AS ${c.type}) AS ${q(c.name)}`
+      : q(c.name),
+  )
+  return `SELECT ${cols.join(", ")} FROM (\n${sinkQuery}\n)`
 }
 
 /**
@@ -1976,6 +2019,7 @@ function collectSinkDml(
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
   parent?: ConstructNode,
   sinkMeta?: Map<string, SinkMetadata>,
+  rowtimeCols?: ReadonlySet<string>,
 ): void {
   if (node.kind === "Sink") {
     const sinkRef = resolveSinkRef(node)
@@ -2013,6 +2057,14 @@ function collectSinkDml(
       }
     }
 
+    if (rowtimeCols) {
+      upstream = wrapSinkQueryForMultiRowtime(
+        upstream,
+        sinkMeta?.get(node.id)?.schema,
+        rowtimeCols,
+      )
+    }
+
     const insertPrefix = `INSERT INTO ${sinkRef}\n`
     const fullSql = `${insertPrefix}${upstream};`
 
@@ -2039,14 +2091,30 @@ function collectSinkDml(
 
   // Route generates multiple INSERT statements (one per branch)
   if (node.component === "Route") {
-    collectRouteDml(node, nodeIndex, entries, pluginSql, parent, sinkMeta)
+    collectRouteDml(
+      node,
+      nodeIndex,
+      entries,
+      pluginSql,
+      parent,
+      sinkMeta,
+      rowtimeCols,
+    )
     return
   }
 
   // StatementSet is a transparent passthrough — recurse into children
   if (node.component === "StatementSet") {
     for (const child of node.children) {
-      collectSinkDml(child, nodeIndex, entries, pluginSql, node, sinkMeta)
+      collectSinkDml(
+        child,
+        nodeIndex,
+        entries,
+        pluginSql,
+        node,
+        sinkMeta,
+        rowtimeCols,
+      )
     }
     return
   }
@@ -2065,7 +2133,15 @@ function collectSinkDml(
 
   // Recurse into children to find sinks
   for (const child of node.children) {
-    collectSinkDml(child, nodeIndex, entries, pluginSql, node, sinkMeta)
+    collectSinkDml(
+      child,
+      nodeIndex,
+      entries,
+      pluginSql,
+      node,
+      sinkMeta,
+      rowtimeCols,
+    )
   }
 }
 
@@ -2269,6 +2345,7 @@ function collectRouteDml(
   pluginSql?: ReadonlyMap<string, PluginSqlGenerator>,
   parent?: ConstructNode,
   sinkMeta?: Map<string, SinkMetadata>,
+  rowtimeCols?: ReadonlySet<string>,
 ): void {
   const branches = routeNode.children.filter(
     (c) => c.component === "Route.Branch" || c.component === "Route.Default",
@@ -2347,6 +2424,14 @@ function collectRouteDml(
         if (partProjections.length > 0) {
           sinkQuery = `SELECT *, ${partProjections.join(", ")} FROM (\n${sinkQuery}\n)`
         }
+      }
+
+      if (rowtimeCols) {
+        sinkQuery = wrapSinkQueryForMultiRowtime(
+          sinkQuery,
+          sinkMeta?.get(sink.id)?.schema,
+          rowtimeCols,
+        )
       }
 
       const insertPrefix = `INSERT INTO ${sinkRef}\n`

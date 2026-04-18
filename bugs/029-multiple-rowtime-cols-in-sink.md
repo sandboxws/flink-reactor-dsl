@@ -1,4 +1,4 @@
-# BUG-029: Kafka sink rejects two rowtime attribute columns from upstream join
+# BUG-029: Kafka sink rejects two rowtime attribute columns from upstream join [FIXED]
 
 ## Affected Examples
 - `ecom-order-enrichment` (ecommerce template) — surfaced after BUG-019 fix
@@ -23,20 +23,53 @@ Flink allows at most one rowtime attribute per sink table; see
 `ValidationException: The query contains more than one rowtime
 attribute column`.
 
-## Where to Fix
-Two possible approaches — pick based on preference:
+## Where Fixed
 
-**(a) Sink-side DDL projection.** When inferring a KafkaSink schema
-from upstream, demote all-but-one rowtime attribute to plain
-`TIMESTAMP(3)` (strip the watermark metadata). The sink doesn't need
-rowtime attributes at write time. Likely lives in `generateSinkDdl` /
-`resolveSinkMetadata` in `src/codegen/sql-generator.ts`.
+`src/codegen/sql-generator.ts`. Wrapped at the **sink boundary**, not
+at the IntervalJoin level.
 
-**(b) Template-level projection.** Add a `Map` step before the sink
-that aliases `itemTime` to a plain-timestamp expression (e.g.,
-`CAST(itemTime AS TIMESTAMP(3))`). Surgical but doesn't generalise.
+### Why not at IntervalJoin
 
-Option (a) is the structural fix; (b) is a workaround.
+First attempt was to `CAST` the right side's rowtime column inside the
+IntervalJoin's projection. That fixed `ecom-order-enrichment` but broke
+`rides-trip-tracking`: that pipeline feeds the IntervalJoin output into
+a `MATCH_RECOGNIZE` with `orderBy: "eventTime"`, which requires
+`eventTime` to retain its rowtime-attribute marker. Demoting the
+attribute at the join level broke downstream time-dependent operators.
+
+The rule is: rowtime attributes must survive through intermediate
+operators (MATCH_RECOGNIZE, windows, temporal joins may legitimately
+depend on any of them) and only be demoted where Flink's sink contract
+actually requires it — at the `INSERT` projection.
+
+### The sink-boundary fix
+
+Added two things to `generateDml` / `collectSinkDml` /
+`collectRouteDml`:
+
+1. **Source watermark enumeration.** `generateDml` walks the pipeline's
+   `nodeIndex` once, collecting every `watermark.column` declared on a
+   `Source` node. Passed down to the sink emitters as
+   `rowtimeCols: ReadonlySet<string>`.
+
+2. **`wrapSinkQueryForMultiRowtime` helper.** Before each INSERT is
+   finalised, checks whether the sink's resolved schema contains two
+   or more columns that are watermark attributes on any upstream
+   source. If so, wraps the query with:
+
+   ```sql
+   SELECT col1, col2, ..., CAST(rt2 AS <type>) AS rt2, ... FROM (<upstream>)
+   ```
+
+   Keeps the first rowtime column in schema order, casts the rest to
+   plain TIMESTAMP — demoting the attribute only at the sink write
+   boundary. Zero effect on pipelines with ≤1 rowtime column.
+
+Applied both in `collectSinkDml` (direct sink path) and
+`collectRouteDml` (route-branch sinks). Scalar output unchanged for
+pipelines with a single rowtime — no snapshot regressions outside the
+one IntervalJoin fixture test that *intentionally* exercises two
+rowtime columns (snapshot rebaselined to include the new wrap).
 
 ## Verification
 ```bash
@@ -44,9 +77,13 @@ flink-reactor cluster up
 REQUIRE_SQL_GATEWAY=1 pnpm vitest run \
   src/cli/templates/__tests__/template-explain.test.ts -t ecom-order-enrichment
 ```
-Expect `ecom-order-enrichment` to pass EXPLAIN once this is fixed;
-remove it from `SKIP` then.
+Moves `ecommerce/ecom-order-enrichment` from `↓` → `✓`. Full suite:
++1 pass, -1 skip (1108 → 1109; 7 → 6). `rides-trip-tracking` still
+passes — proof that the fix correctly preserves rowtime through
+intermediate operators.
 
 ## Related
 - BUG-019 — interval-join table refs fixed, which uncovered this
   follow-up.
+- BUG-024 — `rides-trip-tracking` fix that exposed why the IntervalJoin-
+  level approach fails (MATCH_RECOGNIZE needs the rowtime downstream).
