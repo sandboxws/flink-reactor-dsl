@@ -130,7 +130,8 @@ const accounts = KafkaSource({
 
 const fraudPatterns = MatchRecognize({
   input: transactions,
-  pattern: "high{3,}",
+  orderBy: "txnTime",
+  pattern: "high{3,}?",
   define: { high: "amount > 1000" },
   measures: {
     accountId: 'FIRST(accountId)',
