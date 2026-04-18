@@ -152,6 +152,27 @@ export const CustomerSchema = Schema({
   },
   primaryKey: { columns: ['customerId'] },
 });
+
+// Output of ecom-order-enrichment: orders joined with their line-items
+// and denormalised product attributes. Bound to the ecom.order-enriched
+// topic on both the producer (enrichment pipeline sink) and the
+// consumer (revenue analytics pipeline source).
+export const OrderEnrichedSchema = Schema({
+  fields: {
+    orderId: Field.STRING(),
+    customerId: Field.STRING(),
+    amount: Field.DOUBLE(),
+    currency: Field.STRING(),
+    status: Field.STRING(),
+    orderTime: Field.TIMESTAMP(3),
+    productId: Field.STRING(),
+    productName: Field.STRING(),
+    category: Field.STRING(),
+    quantity: Field.INT(),
+    unitPrice: Field.DOUBLE(),
+  },
+  watermark: { column: 'orderTime', expression: "orderTime - INTERVAL '5' SECOND" },
+});
 `,
     },
 
@@ -248,7 +269,7 @@ export default (
   Aggregate,
   Route,
 } from '@flink-reactor/dsl';
-import { OrderSchema } from '@/schemas/ecommerce';
+import { OrderEnrichedSchema } from '@/schemas/ecommerce';
 
 export default (
   <Pipeline
@@ -267,7 +288,7 @@ export default (
   >
     <KafkaSource
       topic="ecom.order-enriched"
-      schema={OrderSchema}
+      schema={OrderEnrichedSchema}
       bootstrapServers="kafka:9092"
       consumerGroup="ecom-revenue"
     />

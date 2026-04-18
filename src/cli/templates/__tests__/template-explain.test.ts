@@ -28,8 +28,6 @@ const SKIP = new Set<string>([
   "bank-fraud-detection", // bugs/027 — type-inference side fixed by BUG-024; template still missing explicit `orderBy` for MATCH_RECOGNIZE over streaming input
   "grocery-order-fulfillment", // bugs/028 — temporal join needs full composite PK; template joins on partial key
   "iot-predictive-maintenance", // bugs/030 — temporal join requires a time-attribute field; windowed-agg output loses the attribute through the CTE alias
-  // ── Template authoring bug: schema missing required column ──────
-  "ecom-revenue-analytics", // bugs/025 — aggregates by `category` but OrderSchema lacks that field
 ])
 
 // ── Helpers ──────────────────────────────────────────────────────────

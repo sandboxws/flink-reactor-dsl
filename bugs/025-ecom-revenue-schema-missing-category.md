@@ -1,4 +1,4 @@
-# BUG-025: `ecom-revenue-analytics` aggregates by `category`, but `OrderSchema` has no such field
+# BUG-025: `ecom-revenue-analytics` aggregates by `category`, but `OrderSchema` has no such field [FIXED]
 
 ## Affected Templates/Pipelines
 - `ecommerce/ecom-revenue-analytics` — `Aggregate groupBy={['category']}` over a
@@ -47,24 +47,33 @@ This is a **template authoring bug**, not a codegen bug. In
 The codegen faithfully emits SQL based on the declared schema, so Flink
 correctly rejects the `GROUP BY category` reference.
 
-## Where to Fix
-`src/cli/templates/ecommerce.ts`. Two reasonable options:
+## Where Fixed
+`src/cli/templates/ecommerce.ts`. Took Option 1 from the investigation
+notes — introduced a new `OrderEnrichedSchema` export in
+`schemas/ecommerce.ts` with the full union of `OrderSchema` fields plus
+the denormalised product attributes the enrichment pipeline adds
+(`productId`, `productName`, `category`, `quantity`, `unitPrice`), and
+a watermark on `orderTime`.
 
-1. **Introduce `OrderEnrichedSchema`** in `schemas/ecommerce.ts` —
-   includes `OrderSchema` fields plus `category` (and likely `productId`,
-   `productName`, etc., to model the enrichment realistically). Update
-   `pipelines/ecom-revenue-analytics/index.tsx` to import and use it.
-   Preferred — better models the topic semantics.
+`pipelines/ecom-revenue-analytics/index.tsx` was updated to import
+`OrderEnrichedSchema` instead of `OrderSchema` and bind it to the
+`ecom.order-enriched` source. `OrderSchema` is unchanged — it remains
+the contract for raw orders on `ecom.orders` used by `pump-ecom` and
+the enrichment pipeline's input side.
 
-2. **Add `category` to `OrderSchema`** — minimal change, but conflates
-   raw-order and enriched-order shapes. Will cause confusion for
-   `ecom-order-enrichment` (which performs the actual enrichment from
-   `OrderSchema` + `ProductSchema`). Not recommended.
+## Why Not Option 2 (add `category` to `OrderSchema`)
+Would have been a 1-line change but conflates raw-order and
+enriched-order shapes. Every raw-order producer (including `pump-ecom`'s
+DataGen) would then be obliged to generate a `category` field that
+doesn't belong to its contract, and downstream consumers of the raw
+topic would get a misleading signal that `category` is available
+pre-enrichment. Keeping the two schemas distinct encodes topic
+semantics in the type system.
 
 ## Verification
 ```bash
 flink-reactor cluster up
-REQUIRE_SQL_GATEWAY=1 pnpm vitest run src/cli/templates/__tests__/template-explain.test.ts
+REQUIRE_SQL_GATEWAY=1 pnpm vitest run \
+  src/cli/templates/__tests__/template-explain.test.ts -t ecom-revenue-analytics
 ```
-`ecom-revenue-analytics` should move out of the `SKIP` set and pass
-EXPLAIN.
+Moves `ecommerce/ecom-revenue-analytics` from `↓` → `✓`.
