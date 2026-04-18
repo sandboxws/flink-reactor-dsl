@@ -1651,9 +1651,9 @@ function resolveSinkMetadata(
             // Prefer a same-name join key as the sink's PK (natural key of
             // the joined result). Fall back to the left source's PK.
             const onClause = sibling.props.on as string | undefined
-            const sharedKey = onClause ? sameNameJoinKey(onClause) : null
-            if (sharedKey) {
-              primaryKey = [sharedKey]
+            const sharedKeys = onClause ? sameNameJoinKeys(onClause) : null
+            if (sharedKeys) {
+              primaryKey = sharedKeys
             } else if (leftDeepest) {
               primaryKey = resolveSourcePrimaryKey(leftDeepest)
             }
@@ -3132,16 +3132,18 @@ function buildJoinQuery(
   // Same shared-key disambiguation as temporal / interval / lookup joins:
   // if both sides reference the same column in the ON clause, qualify
   // with side refs and drop the duplicate right-side column from SELECT *.
-  const sharedKey = sameNameJoinKey(onCondition)
-  const qualifiedOn = sharedKey
-    ? `${left.ref}.${q(sharedKey)} = ${right.ref}.${q(sharedKey)}`
+  const sharedKeys = sameNameJoinKeys(onCondition)
+  const qualifiedOn = sharedKeys
+    ? sharedKeys
+        .map((k) => `${left.ref}.${q(k)} = ${right.ref}.${q(k)}`)
+        .join(" AND ")
     : onCondition
-  const projection = sharedKey
-    ? buildJoinProjectionSkippingRightCol(
+  const projection = sharedKeys
+    ? buildJoinProjectionSkippingRightCols(
         left.ref,
         right.ref,
         rightId,
-        sharedKey,
+        sharedKeys,
         nodeIndex,
       )
     : "*"
@@ -3165,20 +3167,23 @@ function buildTemporalJoinQuery(
   const ctes = [stream.cte, temporal.cte].filter(Boolean)
   const ctePrefix = ctes.length > 0 ? `WITH ${ctes.join(",\n")}\n` : ""
 
-  const sharedKey = sameNameJoinKey(onCondition)
-  const qualifiedOn = sharedKey
-    ? `${stream.ref}.${q(sharedKey)} = ${temporal.ref}.${q(sharedKey)}`
+  const sharedKeys = sameNameJoinKeys(onCondition)
+  const qualifiedOn = sharedKeys
+    ? sharedKeys
+        .map((k) => `${stream.ref}.${q(k)} = ${temporal.ref}.${q(k)}`)
+        .join(" AND ")
     : onCondition
 
-  // When the join key has the same name on both sides, `SELECT *` produces
-  // a duplicate column that breaks downstream sinks expecting one. Project
-  // the left side fully and drop the duplicate join key from the right.
-  const projection = sharedKey
-    ? buildJoinProjectionSkippingRightCol(
+  // When the join keys have the same name on both sides, `SELECT *`
+  // produces duplicate columns that break downstream sinks expecting one.
+  // Project the left side fully and drop the duplicate join keys from the
+  // right.
+  const projection = sharedKeys
+    ? buildJoinProjectionSkippingRightCols(
         stream.ref,
         temporal.ref,
         temporalId,
-        sharedKey,
+        sharedKeys,
         nodeIndex,
       )
     : "*"
@@ -3187,16 +3192,28 @@ function buildTemporalJoinQuery(
 }
 
 /**
- * Returns the shared column name when an ON clause joins on the same
- * column on both sides. Accepts two forms:
- *   `col = col`           — unqualified, common in templates
- *   `left.col = right.col` — qualified, same column, different qualifiers
- * Both signal "join where both sides share this key"; the codegen
+ * Returns the shared column names when an ON clause joins on the same
+ * column on both sides. Accepts three forms:
+ *   `col = col`                          — unqualified, common in templates
+ *   `left.col = right.col`               — qualified, same column, different qualifiers
+ *   `a.c1 = b.c1 AND a.c2 = b.c2 [...]`  — compound of either form above
+ *
+ * All forms signal "join where both sides share these keys"; the codegen
  * disambiguates by qualifying with side-refs and pruning duplicate
- * projections. Compound ON clauses return null — the user is expected
- * to qualify their own then.
+ * projections. Returns null when any sub-clause isn't a same-name equality.
  */
-function sameNameJoinKey(on: string): string | null {
+function sameNameJoinKeys(on: string): string[] | null {
+  const clauses = on.split(/\s+AND\s+/i)
+  const keys: string[] = []
+  for (const clause of clauses) {
+    const key = sameNameJoinKeyScalar(clause)
+    if (!key) return null
+    keys.push(key)
+  }
+  return keys.length > 0 ? keys : null
+}
+
+function sameNameJoinKeyScalar(on: string): string | null {
   const unq = on.match(/^\s*([A-Za-z_][\w]*)\s*=\s*([A-Za-z_][\w]*)\s*$/)
   if (unq && unq[1] === unq[2]) return unq[1]
   const qual = on.match(
@@ -3208,16 +3225,17 @@ function sameNameJoinKey(on: string): string | null {
 
 /**
  * Project `left.*, right.col1, right.col2, ...` — i.e., the left side fully
- * plus every right-side column except `skipCol`. Used to suppress the
- * duplicate join-key column that `SELECT *` would otherwise produce. Falls
- * back to `*` when the right side's schema isn't directly knowable
- * (currently: only `Source` nodes with `props.schema` are introspectable).
+ * plus every right-side column except those in `skipCols`. Used to suppress
+ * the duplicate join-key column(s) that `SELECT *` would otherwise produce
+ * on shared-name joins. Falls back to `*` when the right side's schema
+ * isn't directly knowable (currently: only `Source` nodes with
+ * `props.schema` are introspectable).
  */
-function buildJoinProjectionSkippingRightCol(
+function buildJoinProjectionSkippingRightCols(
   leftRef: string,
   rightRef: string,
   rightNodeId: string,
-  skipCol: string,
+  skipCols: readonly string[],
   nodeIndex: Map<string, ConstructNode>,
 ): string {
   const rightNode = nodeIndex.get(rightNodeId)
@@ -3226,7 +3244,8 @@ function buildJoinProjectionSkippingRightCol(
       ? (rightNode.props.schema as SchemaDefinition | undefined)
       : undefined
   if (!schema) return "*"
-  const cols = Object.keys(schema.fields).filter((c) => c !== skipCol)
+  const skipSet = new Set(skipCols)
+  const cols = Object.keys(schema.fields).filter((c) => !skipSet.has(c))
   if (cols.length === 0) return `${leftRef}.*`
   return `${leftRef}.*, ${cols.map((c) => `${rightRef}.${q(c)}`).join(", ")}`
 }
@@ -3256,10 +3275,12 @@ function buildLookupJoinQuery(
   const rightRef = q(table)
 
   // Disambiguate same-name join keys (BUG-017 pattern) — qualify with
-  // side refs and prune the duplicate right column from SELECT *.
-  const sharedKey = sameNameJoinKey(onCondition)
-  const qualifiedOn = sharedKey
-    ? `${leftRef}.${q(sharedKey)} = ${rightRef}.${q(sharedKey)}`
+  // side refs and prune duplicate right columns from SELECT *.
+  const sharedKeys = sameNameJoinKeys(onCondition)
+  const qualifiedOn = sharedKeys
+    ? sharedKeys
+        .map((k) => `${leftRef}.${q(k)} = ${rightRef}.${q(k)}`)
+        .join(" AND ")
     : onCondition
 
   let projection: string
@@ -3267,12 +3288,12 @@ function buildLookupJoinQuery(
     projection = Object.entries(select)
       .map(([alias, expr]) => `${expr} AS ${q(alias)}`)
       .join(", ")
-  } else if (sharedKey) {
-    projection = buildJoinProjectionSkippingRightCol(
+  } else if (sharedKeys) {
+    projection = buildJoinProjectionSkippingRightCols(
       leftRef,
       rightRef,
       table,
-      sharedKey,
+      sharedKeys,
       nodeIndex,
     )
   } else {
@@ -3315,13 +3336,13 @@ function buildIntervalJoinQuery(
   // produces a duplicate column that breaks downstream sinks. Project left
   // fully and drop the duplicate join key from the right. Mirrors the fix
   // in buildTemporalJoinQuery / BUG-017.
-  const sharedKey = sameNameJoinKey(onCondition)
-  const projection = sharedKey
-    ? buildJoinProjectionSkippingRightCol(
+  const sharedKeys = sameNameJoinKeys(onCondition)
+  const projection = sharedKeys
+    ? buildJoinProjectionSkippingRightCols(
         left.ref,
         right.ref,
         rightId,
-        sharedKey,
+        sharedKeys,
         nodeIndex,
       )
     : "*"

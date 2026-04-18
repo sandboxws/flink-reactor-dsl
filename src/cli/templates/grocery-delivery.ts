@@ -39,6 +39,19 @@ export default defineConfig({
                   watermark: { column: 'orderTime', expression: "orderTime - INTERVAL '5' SECOND" },
                 },
                 {
+                  table: 'order_lines',
+                  topic: 'grocery.order-lines',
+                  format: 'json',
+                  columns: {
+                    orderId: 'STRING',
+                    storeId: 'STRING',
+                    productId: 'STRING',
+                    quantity: 'INT',
+                    lineTime: 'TIMESTAMP(3)',
+                  },
+                  watermark: { column: 'lineTime', expression: "lineTime - INTERVAL '5' SECOND" },
+                },
+                {
                   table: 'store_inventory',
                   topic: 'grocery.store-inventory',
                   format: 'debezium-json',
@@ -104,6 +117,19 @@ export const GroceryOrderSchema = Schema({
   watermark: { column: 'orderTime', expression: "orderTime - INTERVAL '5' SECOND" },
 });
 
+// One record per product-line within an order; bridges orders ×
+// inventory on the full (storeId, productId) composite key.
+export const OrderLineSchema = Schema({
+  fields: {
+    orderId: Field.STRING(),
+    storeId: Field.STRING(),
+    productId: Field.STRING(),
+    quantity: Field.INT(),
+    lineTime: Field.TIMESTAMP(3),
+  },
+  watermark: { column: 'lineTime', expression: "lineTime - INTERVAL '5' SECOND" },
+});
+
 export const StoreInventorySchema = Schema({
   fields: {
     storeId: Field.STRING(),
@@ -135,16 +161,18 @@ export const RatingSchema = Schema({
   Pipeline, KafkaSource, KafkaSink, JdbcSink,
   TemporalJoin, Route,
 } from '@flink-reactor/dsl';
-import { GroceryOrderSchema, StoreInventorySchema } from '@/schemas/grocery';
+import { OrderLineSchema, StoreInventorySchema } from '@/schemas/grocery';
 
-const orders = KafkaSource({
-  topic: "grocery.orders",
-  schema: GroceryOrderSchema,
+const orderLines = KafkaSource({
+  name: "orderLines",
+  topic: "grocery.order-lines",
+  schema: OrderLineSchema,
   bootstrapServers: "kafka:9092",
   consumerGroup: "grocery-fulfillment",
 });
 
 const inventory = KafkaSource({
+  name: "inventory",
   topic: "grocery.store-inventory",
   schema: StoreInventorySchema,
   format: "debezium-json",
@@ -153,10 +181,10 @@ const inventory = KafkaSource({
 });
 
 const enriched = TemporalJoin({
-  stream: orders,
+  stream: orderLines,
   temporal: inventory,
-  on: "storeId = storeId",
-  asOf: "orderTime",
+  on: "orderLines.storeId = inventory.storeId AND orderLines.productId = inventory.productId",
+  asOf: "lineTime",
 });
 
 export default (
@@ -173,7 +201,7 @@ export default (
       "s3.path.style.access": "true",
     }}
   >
-    {orders}
+    {orderLines}
     {inventory}
     {enriched}
     <Route>
