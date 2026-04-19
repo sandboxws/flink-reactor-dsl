@@ -8,7 +8,9 @@ import type {
   FlinkReactorConfig,
   InfraConfig,
   PipelineOverrides,
+  Runtime,
 } from "./config.js"
+import { SUPPORTED_RUNTIMES } from "./config.js"
 import type { Resolved } from "./env-var.js"
 import { resolveEnvVars } from "./env-var.js"
 import type { FlinkMajorVersion } from "./types.js"
@@ -38,6 +40,45 @@ export interface ResolvedConfig {
   }
   readonly pipelines: Record<string, PipelineOverrides>
   readonly environmentName?: string
+  /** Resolved runtime for this env. Always set after resolution. */
+  readonly runtime: Runtime
+  /** Runtimes reachable via `--runtime=<name>` override for this env. */
+  readonly supportedRuntimes: readonly Runtime[]
+  readonly kubectl: {
+    readonly context?: string
+  }
+  readonly sqlGateway: {
+    readonly url?: string
+  }
+  readonly flinkHome?: string
+}
+
+/**
+ * Default runtime picked when an env doesn't declare one. Privileged env
+ * names map to the runtime the platform docs position as canonical for that
+ * tier; unknown names fall back to `docker` (matches the docs' "easiest"
+ * positioning).
+ */
+export function defaultRuntimeForEnv(envName?: string): Runtime {
+  switch (envName) {
+    case "development":
+    case "local":
+      return "docker"
+    case "test":
+      return "minikube"
+    case "staging":
+    case "production":
+      return "kubernetes"
+    default:
+      return "docker"
+  }
+}
+
+function defaultKubectlContextForRuntime(runtime: Runtime): string | undefined {
+  if (runtime === "minikube") return "minikube"
+  // For `kubernetes` runtime, no sensible default exists — the adapter
+  // errors at deploy time with a pointer to config if a context isn't set.
+  return undefined
 }
 
 // ── Deep merge utility ──────────────────────────────────────────────
@@ -115,6 +156,12 @@ export function resolveConfig(
     if (envEntry.dashboard) envOverrides.dashboard = envEntry.dashboard
     if (envEntry.console) envOverrides.console = envEntry.console
     if (envEntry.pipelines) envOverrides.pipelines = envEntry.pipelines
+    if (envEntry.runtime) envOverrides.runtime = envEntry.runtime
+    if (envEntry.supportedRuntimes)
+      envOverrides.supportedRuntimes = envEntry.supportedRuntimes
+    if (envEntry.kubectl) envOverrides.kubectl = envEntry.kubectl
+    if (envEntry.sqlGateway) envOverrides.sqlGateway = envEntry.sqlGateway
+    if (envEntry.flinkHome) envOverrides.flinkHome = envEntry.flinkHome
 
     merged = deepMerge(common, envOverrides)
   }
@@ -129,6 +176,36 @@ export function resolveConfig(
   const kafka = resolved.kafka as Record<string, unknown> | undefined
   const dashboard = resolved.dashboard as Record<string, unknown> | undefined
   const console_ = resolved.console as Record<string, unknown> | undefined
+  const kubectl = resolved.kubectl as Record<string, unknown> | undefined
+  const sqlGateway = resolved.sqlGateway as Record<string, unknown> | undefined
+
+  const declaredRuntime = resolved.runtime as Runtime | undefined
+  if (declaredRuntime && !SUPPORTED_RUNTIMES.includes(declaredRuntime)) {
+    throw new Error(
+      `Unknown runtime '${declaredRuntime}' in environment '${envName ?? "<default>"}'. ` +
+        `Supported: ${SUPPORTED_RUNTIMES.join(", ")}`,
+    )
+  }
+  const runtime = declaredRuntime ?? defaultRuntimeForEnv(envName)
+
+  const declaredSupported = resolved.supportedRuntimes as
+    | readonly Runtime[]
+    | undefined
+  const supportedRuntimes: readonly Runtime[] = declaredSupported ?? [runtime]
+  for (const r of supportedRuntimes) {
+    if (!SUPPORTED_RUNTIMES.includes(r)) {
+      throw new Error(
+        `Unknown runtime '${r}' in supportedRuntimes for '${envName ?? "<default>"}'. ` +
+          `Supported: ${SUPPORTED_RUNTIMES.join(", ")}`,
+      )
+    }
+  }
+  if (!supportedRuntimes.includes(runtime)) {
+    throw new Error(
+      `Runtime '${runtime}' is not listed in supportedRuntimes [${supportedRuntimes.join(", ")}] ` +
+        `for environment '${envName ?? "<default>"}'. Add it or remove supportedRuntimes.`,
+    )
+  }
 
   return {
     flink: {
@@ -164,6 +241,17 @@ export function resolveConfig(
     },
     pipelines: (resolved.pipelines as Record<string, PipelineOverrides>) ?? {},
     environmentName: envName,
+    runtime,
+    supportedRuntimes,
+    kubectl: {
+      context:
+        (kubectl?.context as string | undefined) ??
+        defaultKubectlContextForRuntime(runtime),
+    },
+    sqlGateway: {
+      url: sqlGateway?.url as string | undefined,
+    },
+    flinkHome: resolved.flinkHome as string | undefined,
   }
 }
 

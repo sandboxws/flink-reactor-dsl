@@ -5,6 +5,7 @@ import { registerCompletionCommand } from "./commands/completion.js"
 import { registerDeployCommand } from "./commands/deploy.js"
 import { registerDevCommand } from "./commands/dev.js"
 import { registerDoctorCommand } from "./commands/doctor.js"
+import { registerDownCommand } from "./commands/down.js"
 import { registerGenerateCommand } from "./commands/generate.js"
 import { registerGraphCommand } from "./commands/graph.js"
 import { registerInstallCommand } from "./commands/install.js"
@@ -16,6 +17,7 @@ import { registerSimCommand } from "./commands/sim.js"
 import { registerStatusCommand } from "./commands/status.js"
 import { registerStopCommand } from "./commands/stop.js"
 import { registerSynthCommand } from "./commands/synth.js"
+import { registerUpCommand } from "./commands/up.js"
 import { registerUpgradeCommand } from "./commands/upgrade.js"
 import { registerValidateCommand } from "./commands/validate.js"
 import { DSL_VERSION } from "./templates/shared.js"
@@ -85,6 +87,8 @@ export function createProgram(): Command {
   registerGraphCommand(program)
   registerDevCommand(program)
   registerDeployCommand(program)
+  registerUpCommand(program)
+  registerDownCommand(program)
   registerClusterCommand(program)
   registerSchemaCommand(program)
   registerSimCommand(program)

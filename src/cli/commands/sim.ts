@@ -63,7 +63,7 @@ export function registerSimCommand(program: Command): void {
   const sim = program
     .command("sim")
     .description(
-      "Manage minikube simulation stack (full Flink platform on a single PC)",
+      "Minikube-runtime shortcut (alias of `fr up --runtime=minikube`). Provides K8s-specific extras: status.",
     )
 
   sim
@@ -217,7 +217,7 @@ function isOperatorInstalled(): boolean {
 
 // ── sim up ────────────────────────────────────────────────────────────
 
-async function runSimUp(opts: {
+export async function runSimUp(opts: {
   cpus: string
   memory: string
   disk: string
@@ -376,7 +376,15 @@ async function runSimUp(opts: {
   if (opts.init) {
     const config = await loadConfig(process.cwd())
     if (config) {
-      const resolvedEnv = opts.env ?? "minikube"
+      // Prefer explicit --env; otherwise look at `test` (minikube's canonical
+      // env in the new template) before `development` and legacy `minikube`.
+      const resolvedEnv =
+        opts.env ??
+        (config.environments?.test
+          ? "test"
+          : config.environments?.development
+            ? "development"
+            : "minikube")
       const envEntry = config.environments?.[resolvedEnv]
       initConfig = envEntry?.sim?.init
     }
@@ -598,8 +606,15 @@ async function runInitFromConfig(
     return
   }
 
-  // Resolve environment — prefer explicit --env, fall back to "minikube"
-  const resolvedEnv = envName ?? "minikube"
+  // Resolve environment — prefer explicit --env, then `test` (new template's
+  // minikube lane), then `development`, then legacy `minikube`.
+  const resolvedEnv =
+    envName ??
+    (config.environments?.test
+      ? "test"
+      : config.environments?.development
+        ? "development"
+        : "minikube")
   const envEntry = config.environments?.[resolvedEnv]
 
   if (!envEntry?.sim?.init) {
@@ -788,7 +803,7 @@ function execSqlViaGateway(sql: string, namespace: string): void {
 
 // ── sim down ──────────────────────────────────────────────────────────
 
-async function runSimDown(opts: {
+export async function runSimDown(opts: {
   volumes?: boolean
   all?: boolean
   namespace: string

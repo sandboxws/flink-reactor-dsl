@@ -1,12 +1,13 @@
-import { type ChildProcess, execSync, spawn } from "node:child_process"
+import { execSync } from "node:child_process"
 import { existsSync, type FSWatcher, watch } from "node:fs"
-import { basename, join } from "node:path"
+import { join } from "node:path"
 import type { Command } from "commander"
 import { Effect } from "effect"
 import pc from "picocolors"
-import { bundledComposePath, clusterDir } from "@/cli/cluster/paths.js"
-import { discoverPipelines } from "@/cli/discovery.js"
+import { discoverPipelines, resolveProjectContext } from "@/cli/discovery.js"
 import { runCommand } from "@/cli/effect-runner.js"
+import { selectAdapter } from "@/cli/runtime/index.js"
+import type { Runtime } from "@/core/config.js"
 import { CliError } from "@/core/errors.js"
 import { runGraph } from "./graph.js"
 import { runSynth } from "./synth.js"
@@ -21,6 +22,10 @@ export function registerDevCommand(program: Command): void {
     .option("-p, --pipeline <name>", "Watch a specific pipeline")
     .option("-e, --env <name>", "Environment name (default: auto-select)")
     .option("--no-cluster", "Skip starting local Flink cluster")
+    .option(
+      "--runtime <name>",
+      "Override the env's runtime (docker | minikube | homebrew | kubernetes)",
+    )
     .option("--port <port>", "Flink dashboard port", "8081")
     .option(
       "--console-url <url>",
@@ -31,6 +36,7 @@ export function registerDevCommand(program: Command): void {
         pipeline?: string
         env?: string
         cluster: boolean
+        runtime?: string
         port: string
         consoleUrl?: string
       }) => {
@@ -55,10 +61,11 @@ interface DevState {
   pipeline?: string
   envName?: string
   cluster: boolean
+  runtimeOverride?: Runtime
   port: string
   consoleUrl?: string
   watchers: FSWatcher[]
-  clusterProcess: ChildProcess | null
+  runtimeName?: string
   shuttingDown: boolean
 }
 
@@ -68,6 +75,7 @@ export async function runDev(opts: {
   pipeline?: string
   env?: string
   cluster: boolean
+  runtime?: string
   port: string
   consoleUrl?: string
   projectDir?: string
@@ -79,18 +87,19 @@ export async function runDev(opts: {
     pipeline: opts.pipeline,
     envName: opts.env,
     cluster: opts.cluster,
+    runtimeOverride: opts.runtime as Runtime | undefined,
     port: opts.port,
     consoleUrl: opts.consoleUrl,
     watchers: [],
-    clusterProcess: null,
+    runtimeName: undefined,
     shuttingDown: false,
   }
 
   console.log(pc.bold("\n  flink-reactor dev\n"))
 
-  // Start Flink cluster if requested
+  // Start the configured runtime if requested
   if (state.cluster) {
-    state.clusterProcess = await startCluster(state)
+    await startRuntime(state)
   }
 
   // Run initial synthesis
@@ -124,53 +133,22 @@ export async function runDev(opts: {
   })
 }
 
-// ── Docker cluster ──────────────────────────────────────────────────
+// ── Runtime startup ─────────────────────────────────────────────────
 
-function resolveComposePath(projectDir: string): {
-  composePath: string
-  cwd: string
-  source: "project" | "bundled"
-} {
-  const projectLocal = join(projectDir, "docker-compose.flink.yml")
-  if (existsSync(projectLocal)) {
-    return { composePath: projectLocal, cwd: projectDir, source: "project" }
-  }
-  return {
-    composePath: bundledComposePath(),
-    cwd: clusterDir(),
-    source: "bundled",
-  }
-}
-
-async function startCluster(state: DevState): Promise<ChildProcess | null> {
-  const { composePath, cwd, source } = resolveComposePath(state.projectDir)
-
-  const label =
-    source === "project"
-      ? `project ${basename(composePath)}`
-      : "bundled Flink stack"
-  console.log(pc.dim(`Starting ${label} on port ${state.port}...`))
-
+async function startRuntime(state: DevState): Promise<void> {
   try {
-    const child = spawn("docker", ["compose", "-f", composePath, "up", "-d"], {
-      cwd,
-      stdio: "pipe",
-      env: { ...process.env, FLINK_PORT: state.port },
+    const ctx = await resolveProjectContext(state.projectDir, {
+      env: state.envName,
     })
-
-    child.on("error", () => {
-      console.log(pc.yellow("Docker not available. Skipping cluster start."))
-    })
-
-    // Wait briefly for startup
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+    const adapter = selectAdapter(ctx, state.runtimeOverride)
+    state.runtimeName = adapter.name
+    console.log(pc.dim(`Starting runtime=${adapter.name}...`))
+    await adapter.up(ctx, { port: state.port })
     console.log(pc.green(`Flink dashboard: http://localhost:${state.port}\n`))
-    return child
-  } catch {
-    console.log(
-      pc.yellow("Failed to start Flink cluster. Continuing without it."),
-    )
-    return null
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.log(pc.yellow(`Runtime did not start: ${msg}`))
+    console.log(pc.dim("Continuing without a running cluster.\n"))
   }
 }
 
@@ -351,14 +329,14 @@ async function shutdown(state: DevState): Promise<void> {
     watcher.close()
   }
 
-  // Stop cluster
-  if (state.clusterProcess) {
-    const composePath = join(state.projectDir, "docker-compose.flink.yml")
+  // Stop runtime if dev started it (best-effort)
+  if (state.cluster && state.runtimeName) {
     try {
-      execSync(`docker compose -f "${composePath}" down`, {
-        cwd: state.projectDir,
-        stdio: "pipe",
+      const ctx = await resolveProjectContext(state.projectDir, {
+        env: state.envName,
       })
+      const adapter = selectAdapter(ctx, state.runtimeOverride)
+      await adapter.down(ctx, {})
     } catch {
       // Best-effort cleanup
     }

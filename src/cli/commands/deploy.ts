@@ -1,28 +1,29 @@
-import { existsSync, readFileSync } from "node:fs"
-import { join } from "node:path"
 import type { Command } from "commander"
 import { Effect } from "effect"
 import pc from "picocolors"
-import { discoverPipelines } from "@/cli/discovery.js"
+import { resolveProjectContext } from "@/cli/discovery.js"
 import { runCommand } from "@/cli/effect-runner.js"
-import {
-  CliError,
-  type DiscoveryError,
-  type FileSystemError,
-} from "@/core/errors.js"
-import { ProcessRunner } from "@/core/services.js"
-import { runSynth } from "./synth.js"
+import { selectAdapter } from "@/cli/runtime/index.js"
+import type { Runtime } from "@/core/config.js"
+import { CliError } from "@/core/errors.js"
 
 // ── Command registration ────────────────────────────────────────────
 
 export function registerDeployCommand(program: Command): void {
   program
     .command("deploy")
-    .description("Deploy pipelines to a Kubernetes cluster")
+    .description("Deploy pipelines to the runtime for the current environment")
     .option("-p, --pipeline <name>", "Deploy a specific pipeline")
-    .option("-e, --env <name>", "Environment name")
-    .option("--dry-run", "Synth only, print YAML without applying")
-    .option("--context <context>", "kubectl context")
+    .option("-e, --env <name>", "Environment name (default: auto-select)")
+    .option(
+      "--dry-run",
+      "Synth only, print generated artifacts without applying",
+    )
+    .option(
+      "--runtime <name>",
+      "Override the env's runtime (docker | minikube | homebrew | kubernetes)",
+    )
+    .option("--context <context>", "kubectl context (overrides env config)")
     .option(
       "--console-url <url>",
       "Push tap manifests to reactor-console at this URL",
@@ -32,133 +33,65 @@ export function registerDeployCommand(program: Command): void {
         pipeline?: string
         env?: string
         dryRun?: boolean
+        runtime?: string
         context?: string
         consoleUrl?: string
       }) => {
-        await runCommand(runDeployEffect(opts))
+        await runCommand(
+          Effect.tryPromise({
+            try: () => runDeploy(opts),
+            catch: (err) =>
+              new CliError({
+                reason: "invalid_args",
+                message: (err as Error).message,
+              }),
+          }),
+        )
       },
     )
 }
 
-// ── Effect variant ──────────────────────────────────────────────────
-
-function runDeployEffect(opts: {
+async function runDeploy(opts: {
   pipeline?: string
   env?: string
   dryRun?: boolean
+  runtime?: string
   context?: string
   consoleUrl?: string
   projectDir?: string
-}): Effect.Effect<
-  void,
-  DiscoveryError | FileSystemError | CliError,
-  ProcessRunner
-> {
-  return Effect.gen(function* () {
-    const runner = yield* ProcessRunner
-    const projectDir = opts.projectDir ?? process.cwd()
+}): Promise<void> {
+  const projectDir = opts.projectDir ?? process.cwd()
+  const ctx = await resolveProjectContext(projectDir, {
+    pipeline: opts.pipeline,
+    env: opts.env,
+  })
 
-    // Step 1: Synthesize (still imperative — complex, internal calls)
-    yield* Effect.sync(() => console.log(pc.dim("Running synthesis...\n")))
-    const artifacts = yield* Effect.tryPromise({
-      try: () =>
-        runSynth({
-          pipeline: opts.pipeline,
-          env: opts.env,
-          outdir: "dist",
-          projectDir,
-          consoleUrl: opts.consoleUrl,
-        }),
-      catch: (err) =>
-        new CliError({
-          reason: "invalid_args",
-          message: `Synthesis failed: ${(err as Error).message}`,
-        }),
-    })
-
-    if (artifacts.length === 0) {
-      yield* Effect.sync(() =>
-        console.log(pc.yellow("No pipelines to deploy.")),
-      )
-      return
+  // `--context` flag: inject into resolvedConfig so adapters see it.
+  let effectiveCtx = ctx
+  if (opts.context && ctx.resolvedConfig) {
+    effectiveCtx = {
+      ...ctx,
+      resolvedConfig: {
+        ...ctx.resolvedConfig,
+        kubectl: { context: opts.context },
+      },
     }
+  }
 
-    const pipelines = discoverPipelines(projectDir, opts.pipeline)
+  const adapter = selectAdapter(effectiveCtx, opts.runtime as Runtime)
+  console.log(
+    pc.dim(
+      `Deploying via runtime=${adapter.name}${
+        ctx.resolvedConfig?.environmentName
+          ? ` (env=${ctx.resolvedConfig.environmentName})`
+          : ""
+      }\n`,
+    ),
+  )
 
-    if (opts.dryRun) {
-      yield* Effect.sync(() => {
-        console.log(pc.dim("\n--- Dry run: showing generated CRDs ---\n"))
-        for (const p of pipelines) {
-          const yamlPath = join(projectDir, "dist", p.name, "deployment.yaml")
-          if (!existsSync(yamlPath)) continue
-          const yaml = readFileSync(yamlPath, "utf-8")
-          console.log(pc.bold(`# ${p.name}`))
-          console.log(yaml)
-          console.log("---")
-        }
-      })
-      return
-    }
-
-    // Step 2: Apply CRDs via kubectl
-    const contextArgs = opts.context ? ["--context", opts.context] : []
-    let hasFailures = false
-
-    for (const p of pipelines) {
-      const yamlPath = join(projectDir, "dist", p.name, "deployment.yaml")
-      if (!existsSync(yamlPath)) {
-        yield* Effect.sync(() =>
-          console.log(pc.yellow(`No deployment.yaml for ${p.name}. Skipping.`)),
-        )
-        continue
-      }
-
-      yield* Effect.sync(() => console.log(pc.dim(`\nApplying ${p.name}...`)))
-
-      const result = yield* runner.exec(
-        "kubectl",
-        ["apply", "-f", yamlPath, ...contextArgs],
-        { cwd: projectDir },
-      )
-
-      if (result.exitCode !== 0) {
-        yield* Effect.sync(() =>
-          console.error(
-            pc.red(`  ${p.name}: Failed to apply — ${result.stderr.trim()}`),
-          ),
-        )
-        hasFailures = true
-      } else {
-        yield* Effect.sync(() =>
-          console.log(pc.green(`  ${p.name}: ${result.stdout.trim()}`)),
-        )
-      }
-    }
-
-    // Step 3: Print status
-    yield* Effect.sync(() => {
-      console.log("")
-      if (!hasFailures) {
-        console.log(pc.green("Deployment complete."))
-        for (const p of pipelines) {
-          console.log(pc.dim(`  ${p.name}: deployed`))
-        }
-        console.log("")
-        const ctxFlag = opts.context ? ` --context ${opts.context}` : ""
-        console.log(pc.dim("Check status with:"))
-        console.log(pc.dim(`  kubectl get flinkdeployments${ctxFlag}`))
-      } else {
-        console.log(pc.red("Deployment finished with errors."))
-      }
-    })
-
-    if (hasFailures) {
-      return yield* Effect.fail(
-        new CliError({
-          reason: "invalid_args",
-          message: "Deployment finished with errors.",
-        }),
-      )
-    }
+  await adapter.deploy(effectiveCtx, {
+    pipeline: opts.pipeline,
+    dryRun: opts.dryRun,
+    consoleUrl: opts.consoleUrl,
   })
 }

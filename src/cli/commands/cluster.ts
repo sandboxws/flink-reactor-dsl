@@ -35,7 +35,9 @@ function pidFilePath(): string {
 export function registerClusterCommand(program: Command): void {
   const cluster = program
     .command("cluster")
-    .description("Manage local Flink dev cluster for dashboard development")
+    .description(
+      "Docker-runtime shortcut (alias of `fr up --runtime=docker`). Provides Docker-specific extras: seed, submit, status.",
+    )
 
   cluster
     .command("up")
@@ -702,11 +704,13 @@ async function initFlinkCatalogs(_flinkPort: number): Promise<void> {
   spinner.start("Registering Flink SQL catalogs and tables...")
 
   try {
-    // Load project config if available
+    // Load project config if available. `development` is the privileged name
+    // in the scaffolded template; legacy `docker` / `minikube` fall back for
+    // projects that predate the four-env template.
     const config = await loadConfig(process.cwd())
     let initConfig =
-      config?.environments?.docker?.sim?.init ??
       config?.environments?.development?.sim?.init ??
+      config?.environments?.docker?.sim?.init ??
       config?.environments?.minikube?.sim?.init
 
     // Fall back to first environment with sim.init

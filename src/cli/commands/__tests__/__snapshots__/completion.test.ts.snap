@@ -31,10 +31,12 @@ _flink_reactor() {
         'validate:Validate pipeline definitions and configuration'
         'graph:Visualize pipeline DAG'
         'dev:Start development mode with file watching'
-        'deploy:Deploy pipelines to a Kubernetes cluster'
-        'cluster:Manage local Flink dev cluster for dashboard development'
+        'deploy:Deploy pipelines to the runtime for the current environment'
+        'up:Start the runtime for the current environment (docker, minikube, or homebrew)'
+        'down:Stop the runtime for the current environment (docker, minikube, or homebrew)'
+        'cluster:Docker-runtime shortcut (alias of \`fr up --runtime=docker\`). Provides Docker-specific extras\\: seed, submit, status.'
         'schema:Display input and output schemas of a pipeline'
-        'sim:Manage minikube simulation stack (full Flink platform on a single PC)'
+        'sim:Minikube-runtime shortcut (alias of \`fr up --runtime=minikube\`). Provides K8s-specific extras\\: status.'
         'upgrade:Upgrade FlinkReactor packages to their latest versions'
         'stop:Stop pipelines by suspending their FlinkDeployments (triggers savepoint)'
         'resume:Resume suspended pipelines (restores from last savepoint)'
@@ -72,6 +74,12 @@ _flink_reactor() {
           ;;
         deploy)
           _flink_reactor_deploy
+          ;;
+        up)
+          _flink_reactor_up
+          ;;
+        down)
+          _flink_reactor_down
           ;;
         cluster)
           _flink_reactor_cluster
@@ -259,6 +267,7 @@ _flink_reactor_dev() {
     '(-p --pipeline)'{-p,--pipeline}'[Watch a specific pipeline]: : ' \\
     '(-e --env)'{-e,--env}'[Environment name (default\\: auto-select)]: : ' \\
     '--no-cluster[Skip starting local Flink cluster]' \\
+    '--runtime[Override the env'\\''s runtime (docker | minikube | homebrew | kubernetes)]: : ' \\
     '--port[Flink dashboard port]: : ' \\
     '--console-url[Push tap manifests to reactor-console at this URL]: : '
 }
@@ -266,10 +275,27 @@ _flink_reactor_dev() {
 _flink_reactor_deploy() {
   _arguments \\
     '(-p --pipeline)'{-p,--pipeline}'[Deploy a specific pipeline]: : ' \\
-    '(-e --env)'{-e,--env}'[Environment name]: : ' \\
-    '--dry-run[Synth only, print YAML without applying]' \\
-    '--context[kubectl context]: : ' \\
+    '(-e --env)'{-e,--env}'[Environment name (default\\: auto-select)]: : ' \\
+    '--dry-run[Synth only, print generated artifacts without applying]' \\
+    '--runtime[Override the env'\\''s runtime (docker | minikube | homebrew | kubernetes)]: : ' \\
+    '--context[kubectl context (overrides env config)]: : ' \\
     '--console-url[Push tap manifests to reactor-console at this URL]: : '
+}
+
+_flink_reactor_up() {
+  _arguments \\
+    '(-e --env)'{-e,--env}'[Environment name (default\\: auto-select)]: : ' \\
+    '--runtime[Override the env'\\''s runtime (docker | minikube | homebrew | kubernetes)]: : ' \\
+    '--port[Flink REST port]: : ' \\
+    '--seed[Submit example pipelines after startup (docker only)]'
+}
+
+_flink_reactor_down() {
+  _arguments \\
+    '(-e --env)'{-e,--env}'[Environment name (default\\: auto-select)]: : ' \\
+    '--runtime[Override the env'\\''s runtime (docker | minikube | homebrew | kubernetes)]: : ' \\
+    '--volumes[Remove persistent volumes]' \\
+    '--all[Full teardown (e.g. stop the minikube VM entirely)]'
 }
 
 _flink_reactor_cluster() {

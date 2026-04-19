@@ -140,6 +140,95 @@ describe("resolveConfig()", () => {
   })
 })
 
+describe("resolveConfig() runtime defaulting", () => {
+  it("defaults `development` env to docker runtime", () => {
+    const config = defineConfig({
+      environments: { development: {} },
+    })
+    const resolved = resolveConfig(config, "development")
+    expect(resolved.runtime).toBe("docker")
+    expect(resolved.supportedRuntimes).toEqual(["docker"])
+  })
+
+  it("defaults `local` env to docker runtime", () => {
+    const config = defineConfig({ environments: { local: {} } })
+    expect(resolveConfig(config, "local").runtime).toBe("docker")
+  })
+
+  it("defaults `test` env to minikube runtime with minikube kubectl context", () => {
+    const config = defineConfig({ environments: { test: {} } })
+    const resolved = resolveConfig(config, "test")
+    expect(resolved.runtime).toBe("minikube")
+    expect(resolved.kubectl.context).toBe("minikube")
+  })
+
+  it("defaults `staging` and `production` to kubernetes runtime (no default context)", () => {
+    const config = defineConfig({
+      environments: { staging: {}, production: {} },
+    })
+    const staging = resolveConfig(config, "staging")
+    const production = resolveConfig(config, "production")
+    expect(staging.runtime).toBe("kubernetes")
+    expect(staging.kubectl.context).toBeUndefined()
+    expect(production.runtime).toBe("kubernetes")
+    expect(production.kubectl.context).toBeUndefined()
+  })
+
+  it("defaults unknown env names to docker", () => {
+    const config = defineConfig({ environments: { qa: {} } })
+    expect(resolveConfig(config, "qa").runtime).toBe("docker")
+  })
+
+  it("honors an explicit runtime over the env-name default", () => {
+    const config = defineConfig({
+      environments: {
+        development: { runtime: "minikube", kubectl: { context: "dev-k8s" } },
+      },
+    })
+    const resolved = resolveConfig(config, "development")
+    expect(resolved.runtime).toBe("minikube")
+    expect(resolved.kubectl.context).toBe("dev-k8s")
+  })
+
+  it("rejects unknown runtime values", () => {
+    const config = defineConfig({
+      environments: {
+        development: { runtime: "swarm" as unknown as "docker" },
+      },
+    })
+    expect(() => resolveConfig(config, "development")).toThrow(
+      /Unknown runtime 'swarm'/,
+    )
+  })
+
+  it("exposes supportedRuntimes for multi-runtime envs", () => {
+    const config = defineConfig({
+      environments: {
+        development: {
+          runtime: "docker",
+          supportedRuntimes: ["docker", "minikube"],
+        },
+      },
+    })
+    const resolved = resolveConfig(config, "development")
+    expect(resolved.supportedRuntimes).toEqual(["docker", "minikube"])
+  })
+
+  it("rejects runtime not listed in supportedRuntimes", () => {
+    const config = defineConfig({
+      environments: {
+        development: {
+          runtime: "minikube",
+          supportedRuntimes: ["docker"],
+        },
+      },
+    })
+    expect(() => resolveConfig(config, "development")).toThrow(
+      /Runtime 'minikube' is not listed in supportedRuntimes/,
+    )
+  })
+})
+
 describe("toInfraConfigFromResolved()", () => {
   it("extracts InfraConfig from resolved config", () => {
     const config = defineConfig({

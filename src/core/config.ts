@@ -152,14 +152,54 @@ export interface SimConfig {
   readonly init?: SimInitConfig
 }
 
+// ── Runtime ─────────────────────────────────────────────────────────
+
+/**
+ * Where a pipeline's infrastructure runs. Drives CLI command dispatch
+ * (`fr up`, `fr deploy`) and determines which adapter handles lifecycle.
+ */
+export type Runtime = "docker" | "minikube" | "homebrew" | "kubernetes"
+
+export const SUPPORTED_RUNTIMES: readonly Runtime[] = [
+  "docker",
+  "minikube",
+  "homebrew",
+  "kubernetes",
+]
+
 // ── Environment entry ───────────────────────────────────────────────
 
 export interface EnvironmentEntry {
+  /**
+   * Runtime this environment targets. Omitted → defaulted by the resolver
+   * based on env name (`development`/`local` → `docker`, `test` → `minikube`,
+   * `staging`/`production` → `kubernetes`, otherwise → `docker`).
+   */
+  readonly runtime?: Runtime
+  /**
+   * Additional runtimes this env can be invoked with via `--runtime=<name>`.
+   * Enables patterns like "development defaults to docker but can be
+   * overridden to exercise the minikube lane locally".
+   */
+  readonly supportedRuntimes?: readonly Runtime[]
   readonly cluster?: ClusterConfig
   readonly kubernetes?: {
     readonly namespace?: string
     readonly image?: string
   }
+  /** kubectl context used when runtime is `minikube` or `kubernetes`. */
+  readonly kubectl?: {
+    readonly context?: string
+  }
+  /** SQL Gateway URL used when runtime is `docker` for pipeline submission. */
+  readonly sqlGateway?: {
+    readonly url?: string
+  }
+  /**
+   * Local Flink install root used when runtime is `homebrew`. Overrides
+   * `$FLINK_HOME` / `brew --prefix apache-flink` auto-detection.
+   */
+  readonly flinkHome?: string
   readonly kafka?: {
     readonly bootstrapServers?: string
   }

@@ -3,8 +3,10 @@
 // use the ProcessEnv service instead of direct process.env access.
 
 import { Effect } from "effect"
-import type { FlinkReactorConfig } from "./config.js"
+import type { FlinkReactorConfig, Runtime } from "./config.js"
+import { SUPPORTED_RUNTIMES } from "./config.js"
 import type { ResolvedConfig } from "./config-resolver.js"
+import { defaultRuntimeForEnv } from "./config-resolver.js"
 import type { EnvVarRef } from "./env-var.js"
 import { isEnvVarRef } from "./env-var.js"
 import { ConfigError } from "./errors.js"
@@ -149,6 +151,12 @@ export function resolveConfigEffect(
       if (envEntry.dashboard) envOverrides.dashboard = envEntry.dashboard
       if (envEntry.console) envOverrides.console = envEntry.console
       if (envEntry.pipelines) envOverrides.pipelines = envEntry.pipelines
+      if (envEntry.runtime) envOverrides.runtime = envEntry.runtime
+      if (envEntry.supportedRuntimes)
+        envOverrides.supportedRuntimes = envEntry.supportedRuntimes
+      if (envEntry.kubectl) envOverrides.kubectl = envEntry.kubectl
+      if (envEntry.sqlGateway) envOverrides.sqlGateway = envEntry.sqlGateway
+      if (envEntry.flinkHome) envOverrides.flinkHome = envEntry.flinkHome
 
       merged = deepMerge(common, envOverrides)
     }
@@ -164,6 +172,47 @@ export function resolveConfigEffect(
     const kafka = r.kafka as Record<string, unknown> | undefined
     const dashboard = r.dashboard as Record<string, unknown> | undefined
     const console_ = r.console as Record<string, unknown> | undefined
+    const kubectl = r.kubectl as Record<string, unknown> | undefined
+    const sqlGateway = r.sqlGateway as Record<string, unknown> | undefined
+
+    const declaredRuntime = r.runtime as Runtime | undefined
+    if (declaredRuntime && !SUPPORTED_RUNTIMES.includes(declaredRuntime)) {
+      return yield* Effect.fail(
+        new ConfigError({
+          reason: "unknown_environment",
+          message: `Unknown runtime '${declaredRuntime}' in environment '${envName ?? "<default>"}'. Supported: ${SUPPORTED_RUNTIMES.join(", ")}`,
+          environmentName: envName,
+        }),
+      )
+    }
+    const runtime: Runtime = declaredRuntime ?? defaultRuntimeForEnv(envName)
+
+    const declaredSupported = r.supportedRuntimes as
+      | readonly Runtime[]
+      | undefined
+    const supportedRuntimes: readonly Runtime[] = declaredSupported ?? [runtime]
+    for (const rt of supportedRuntimes) {
+      if (!SUPPORTED_RUNTIMES.includes(rt)) {
+        return yield* Effect.fail(
+          new ConfigError({
+            reason: "unknown_environment",
+            message: `Unknown runtime '${rt}' in supportedRuntimes for '${envName ?? "<default>"}'. Supported: ${SUPPORTED_RUNTIMES.join(", ")}`,
+            environmentName: envName,
+          }),
+        )
+      }
+    }
+    if (!supportedRuntimes.includes(runtime)) {
+      return yield* Effect.fail(
+        new ConfigError({
+          reason: "unknown_environment",
+          message: `Runtime '${runtime}' is not listed in supportedRuntimes [${supportedRuntimes.join(", ")}] for environment '${envName ?? "<default>"}'.`,
+          environmentName: envName,
+        }),
+      )
+    }
+
+    const defaultContext = runtime === "minikube" ? "minikube" : undefined
 
     return {
       flink: {
@@ -201,6 +250,15 @@ export function resolveConfigEffect(
         (r.pipelines as Record<string, ResolvedConfig["pipelines"][string]>) ??
         {},
       environmentName: envName,
+      runtime,
+      supportedRuntimes,
+      kubectl: {
+        context: (kubectl?.context as string | undefined) ?? defaultContext,
+      },
+      sqlGateway: {
+        url: sqlGateway?.url as string | undefined,
+      },
+      flinkHome: r.flinkHome as string | undefined,
     } satisfies ResolvedConfig
   })
 }

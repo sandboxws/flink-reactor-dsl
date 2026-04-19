@@ -12,9 +12,16 @@ export default defineConfig({
   flink: { version: '${opts.flinkVersion}' },
 
   environments: {
-    minikube: {
-      cluster: { url: 'http://localhost:8081' },
-      kafka: { bootstrapServers: 'kafka:9092' },
+    // Docker-compose by default — matches the platform docs' recommended
+    // local lane. Override with \`fr up --runtime=minikube\` to exercise the
+    // Kubernetes lane without editing config.
+    development: {
+      runtime: 'docker',
+      supportedRuntimes: ['docker', 'minikube'],
+      cluster:    { url: 'http://localhost:8081' },
+      kafka:      { bootstrapServers: 'localhost:9092' },
+      sqlGateway: { url: 'http://localhost:8083' },   // used when runtime=docker
+      kubectl:    { context: 'minikube' },             // used when runtime=minikube
       sim: {
         init: {
           kafka: {
@@ -40,10 +47,30 @@ export default defineConfig({
       },
       pipelines: { '*': { parallelism: 1 } },
     },
+
+    // CI / integration tests — full K8s lane on minikube.
+    test: {
+      runtime: 'minikube',
+      kubectl:    { context: 'minikube' },
+      kubernetes: { namespace: 'flink-test' },
+      kafka:      { bootstrapServers: 'kafka:9092' },
+      pipelines:  { '*': { parallelism: 1 } },
+    },
+
+    // Pre-prod validation on a remote cluster. \`kubectl.context\` is required —
+    // no sensible default exists.
+    staging: {
+      runtime: 'kubernetes',
+      kubectl:    { context: 'staging' },
+      kubernetes: { namespace: 'flink-staging' },
+      pipelines:  { '*': { parallelism: 2 } },
+    },
+
     production: {
-      cluster: { url: 'https://flink-prod:8081' },
+      runtime: 'kubernetes',
+      kubectl:    { context: 'production' },
       kubernetes: { namespace: 'flink-prod' },
-      pipelines: { '*': { parallelism: 4 } },
+      pipelines:  { '*': { parallelism: 4 } },
     },
   },
 });
