@@ -3,6 +3,7 @@
 // MainLive is the full production layer; test layers swap individual
 // services for in-memory or mock implementations.
 
+import { existsSync } from "node:fs"
 import { Effect, Layer } from "effect"
 import type { FlinkReactorConfig } from "./config.js"
 import type { ResolvedConfig } from "./config-resolver.js"
@@ -57,10 +58,7 @@ export const NodeFileSystemLive = Layer.succeed(FrFileSystem, {
 
   exists: (path: string) =>
     Effect.try({
-      try: () => {
-        const { existsSync } = require("node:fs") as typeof import("node:fs")
-        return existsSync(path)
-      },
+      try: () => existsSync(path),
       catch: (err) =>
         new FileSystemError({
           message: (err as Error).message,

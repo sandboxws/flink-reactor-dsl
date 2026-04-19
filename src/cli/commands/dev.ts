@@ -1,9 +1,10 @@
 import { type ChildProcess, execSync, spawn } from "node:child_process"
 import { existsSync, type FSWatcher, watch } from "node:fs"
-import { join } from "node:path"
+import { basename, join } from "node:path"
 import type { Command } from "commander"
 import { Effect } from "effect"
 import pc from "picocolors"
+import { bundledComposePath, clusterDir } from "@/cli/cluster/paths.js"
 import { discoverPipelines } from "@/cli/discovery.js"
 import { runCommand } from "@/cli/effect-runner.js"
 import { CliError } from "@/core/errors.js"
@@ -125,22 +126,34 @@ export async function runDev(opts: {
 
 // ── Docker cluster ──────────────────────────────────────────────────
 
-async function startCluster(state: DevState): Promise<ChildProcess | null> {
-  const composePath = join(state.projectDir, "docker-compose.flink.yml")
-
-  if (!existsSync(composePath)) {
-    console.log(
-      pc.yellow("No docker-compose.flink.yml found. Skipping cluster start."),
-    )
-    console.log(pc.dim("Create one or use --no-cluster to skip.\n"))
-    return null
+function resolveComposePath(projectDir: string): {
+  composePath: string
+  cwd: string
+  source: "project" | "bundled"
+} {
+  const projectLocal = join(projectDir, "docker-compose.flink.yml")
+  if (existsSync(projectLocal)) {
+    return { composePath: projectLocal, cwd: projectDir, source: "project" }
   }
+  return {
+    composePath: bundledComposePath(),
+    cwd: clusterDir(),
+    source: "bundled",
+  }
+}
 
-  console.log(pc.dim(`Starting Flink cluster on port ${state.port}...`))
+async function startCluster(state: DevState): Promise<ChildProcess | null> {
+  const { composePath, cwd, source } = resolveComposePath(state.projectDir)
+
+  const label =
+    source === "project"
+      ? `project ${basename(composePath)}`
+      : "bundled Flink stack"
+  console.log(pc.dim(`Starting ${label} on port ${state.port}...`))
 
   try {
     const child = spawn("docker", ["compose", "-f", composePath, "up", "-d"], {
-      cwd: state.projectDir,
+      cwd,
       stdio: "pipe",
       env: { ...process.env, FLINK_PORT: state.port },
     })

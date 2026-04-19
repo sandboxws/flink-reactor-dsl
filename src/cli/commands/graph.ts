@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process"
-import { writeFileSync } from "node:fs"
+import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { type Command, Option } from "commander"
 import { Effect } from "effect"
@@ -240,7 +240,6 @@ function generateSvg(
   const svgPath = join(projectDir, "dist", `${pipelineName}.svg`)
 
   try {
-    const { mkdirSync } = require("node:fs")
     mkdirSync(join(projectDir, "dist"), { recursive: true })
     writeFileSync(dotPath, dot, "utf-8")
 

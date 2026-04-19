@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { type Command, Option } from "commander"
 import { Effect } from "effect"
@@ -361,7 +361,7 @@ function getWorkspaceName(): string {
   try {
     const pkgPath = join(process.cwd(), "package.json")
     if (existsSync(pkgPath)) {
-      const pkg = JSON.parse(require("node:fs").readFileSync(pkgPath, "utf-8"))
+      const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"))
       return pkg.name ?? "workspace"
     }
   } catch {

@@ -7,13 +7,13 @@ import {
   writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
-import { dirname, join, resolve } from "node:path"
-import { fileURLToPath } from "node:url"
+import { join, resolve } from "node:path"
 import * as clack from "@clack/prompts"
 import { type Command, Option } from "commander"
 import { Effect } from "effect"
 import pc from "picocolors"
 import type { CdcDomain } from "@/cli/cluster/cdc-publisher.js"
+import { bundledComposePath, clusterDir } from "@/cli/cluster/paths.js"
 import {
   DB_SCHEMA,
   ensureSqlDumps,
@@ -21,28 +21,6 @@ import {
 } from "@/cli/cluster/pg-samples.js"
 import { runCommand } from "@/cli/effect-runner.js"
 import { CliError } from "@/core/errors.js"
-
-// ── Resource path resolution ─────────────────────────────────────────
-// When bundled by tsup → dist/index.js, __dirname = <root>/dist
-// When running from source, __dirname = <root>/src/cli/commands
-// In both cases we need to find <root>/src/cli/cluster/
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
-
-function clusterDir(): string {
-  // Bundled: dist/ → ../src/cli/cluster
-  const fromDist = join(__dirname, "..", "src", "cli", "cluster")
-  if (existsSync(join(fromDist, "docker-compose.yml"))) {
-    return fromDist
-  }
-  // Source: src/cli/commands/ → ../cluster
-  return join(__dirname, "..", "cluster")
-}
-
-function composePath(): string {
-  return join(clusterDir(), "docker-compose.yml")
-}
 
 function pipelinesDir(): string {
   return join(clusterDir(), "pipelines")
@@ -212,7 +190,7 @@ export async function runClusterUp(opts: {
     return
   }
 
-  const compose = composePath()
+  const compose = bundledComposePath()
   const dataDir = join(clusterDir(), "data")
   const pgProfile = resolvePostgresProfile(opts.timescaledb ?? true)
 
@@ -283,14 +261,23 @@ export async function runClusterUp(opts: {
 
   console.log("")
   console.log(
-    `  ${pc.green("✓")} Flink UI:     ${pc.dim(`http://localhost:${opts.port}`)}`,
+    `  ${pc.green("✓")} Flink UI:       ${pc.dim(`http://localhost:${opts.port}`)}`,
   )
   console.log(
-    `  ${pc.green("✓")} SQL Gateway:  ${pc.dim("http://localhost:8083")}`,
+    `  ${pc.green("✓")} SQL Gateway:    ${pc.dim("http://localhost:8083")}`,
   )
-  console.log(`  ${pc.green("✓")} Kafka:        ${pc.dim("localhost:9094")}`)
+  console.log(`  ${pc.green("✓")} Kafka:          ${pc.dim("localhost:9094")}`)
   console.log(
-    `  ${pc.green("✓")} PostgreSQL:   ${pc.dim("localhost:5433 (pagila, chinook, employees, flink_sink)")}`,
+    `  ${pc.green("✓")} PostgreSQL:     ${pc.dim("localhost:5433 (pagila, chinook, employees, flink_sink)")}`,
+  )
+  console.log(
+    `  ${pc.green("✓")} SeaweedFS (S3): ${pc.dim("http://localhost:8333 (admin/admin, bucket: flink-state)")}`,
+  )
+  console.log(
+    `  ${pc.green("✓")} SeaweedFS UI:   ${pc.dim("http://localhost:9333 (master) · http://localhost:8888 (filer)")}`,
+  )
+  console.log(
+    `  ${pc.green("✓")} Iceberg UI:     ${pc.dim("http://lakekeeper.localtest.me:8181/ui (Lakekeeper) · API: /catalog/v1")}`,
   )
   console.log("")
 
@@ -311,7 +298,7 @@ export async function runClusterDown(opts: {
   // Kill background CDC publisher if running
   killCdcPublisher()
 
-  const compose = composePath()
+  const compose = bundledComposePath()
   const args = [
     "compose",
     "-f",
@@ -392,7 +379,7 @@ async function seedPipelines(opts: {
       await publishCdcMessages({
         mode: "batch",
         domain,
-        composeFile: composePath(),
+        composeFile: bundledComposePath(),
       })
       spinner.stop(pc.green("CDC seed data published."))
     } catch (err) {
@@ -651,7 +638,7 @@ function startBackgroundCdcPublisher(domain: CdcDomain = "all"): void {
   const scriptPath = join(tmpdir(), "flink-reactor-cdc-continuous.mjs")
   const cdcModulePath = join(clusterDir(), "cdc-publisher.js")
 
-  const compose = composePath()
+  const compose = bundledComposePath()
   writeFileSync(
     scriptPath,
     `

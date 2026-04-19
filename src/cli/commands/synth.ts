@@ -1,3 +1,4 @@
+import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import type { Command } from "commander"
 import { Effect } from "effect"
@@ -173,8 +174,6 @@ function writePipelineOutput(
   outdir: string,
   projectDir: string,
 ): void {
-  const { mkdirSync, writeFileSync } =
-    require("node:fs") as typeof import("node:fs")
   const pipelineDir = join(projectDir, outdir, artifact.name)
   mkdirSync(pipelineDir, { recursive: true })
 
