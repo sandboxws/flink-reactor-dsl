@@ -84,7 +84,8 @@ import { OrderSchema } from '@/schemas/orders';
 const iceberg = IcebergCatalog({
   name: 'lakehouse',
   catalogType: 'rest',
-  uri: 'http://iceberg-rest:8181',
+  uri: 'http://lakekeeper.localtest.me:8181/catalog',
+  warehouse: 'flink-warehouse',
 });
 
 export default (

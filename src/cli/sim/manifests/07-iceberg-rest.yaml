@@ -1,3 +1,43 @@
+# Iceberg REST Catalog — served by Lakekeeper.
+# Service name `iceberg-rest` retained so iceberg-init.ts URI stays valid
+# across both Docker and minikube lanes. Lakekeeper exposes:
+#   /catalog/v1/*    — Iceberg REST Catalog API (used by Flink)
+#   /management/v1/* — bootstrap, warehouse management
+#   /ui              — admin UI (namespaces, tables, snapshots)
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: lakekeeper-pg-init
+  namespace: flink-demo
+spec:
+  backoffLimit: 5
+  template:
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:17-alpine
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h postgres -U reactor; do
+                echo "Waiting for PostgreSQL..."; sleep 2;
+              done
+      containers:
+        - name: create-db
+          image: postgres:17-alpine
+          env:
+            - name: PGPASSWORD
+              value: "reactor"
+          command:
+            - sh
+            - -c
+            - |
+              psql -h postgres -U reactor -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='lakekeeper'" | grep -q 1 || \
+                psql -h postgres -U reactor -d postgres -c 'CREATE DATABASE lakekeeper'
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -15,33 +55,70 @@ spec:
       labels:
         app: iceberg-rest
     spec:
+      initContainers:
+        - name: wait-for-pg-init
+          image: postgres:17-alpine
+          env:
+            - name: PGPASSWORD
+              value: "reactor"
+          command:
+            - sh
+            - -c
+            - |
+              until psql -h postgres -U reactor -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='lakekeeper'" | grep -q 1; do
+                echo "Waiting for lakekeeper database..."; sleep 2;
+              done
+        - name: migrate
+          image: quay.io/lakekeeper/catalog:latest
+          args: ["migrate"]
+          env:
+            - name: LAKEKEEPER__PG_DATABASE_URL_READ
+              value: "postgres://reactor:reactor@postgres:5432/lakekeeper"
+            - name: LAKEKEEPER__PG_DATABASE_URL_WRITE
+              value: "postgres://reactor:reactor@postgres:5432/lakekeeper"
+            - name: LAKEKEEPER__PG_ENCRYPTION_KEY
+              value: "dev-only-not-secret"
+            - name: RUST_LOG
+              value: "info"
       containers:
         - name: iceberg-rest
-          image: tabulario/iceberg-rest:latest
+          image: quay.io/lakekeeper/catalog:latest
+          args: ["serve"]
           ports:
             - name: rest
               containerPort: 8181
           env:
-            - name: CATALOG_WAREHOUSE
-              value: "s3://flink-state/warehouse"
-            - name: CATALOG_IO__IMPL
-              value: "org.apache.iceberg.aws.s3.S3FileIO"
-            - name: CATALOG_S3_ENDPOINT
-              value: "http://seaweedfs.flink-demo.svc:8333"
-            - name: CATALOG_S3_PATH__STYLE__ACCESS
-              value: "true"
-            - name: AWS_ACCESS_KEY_ID
-              value: "admin"
-            - name: AWS_SECRET_ACCESS_KEY
-              value: "admin"
-            - name: AWS_REGION
-              value: "us-east-1"
+            - name: LAKEKEEPER__PG_DATABASE_URL_READ
+              value: "postgres://reactor:reactor@postgres:5432/lakekeeper"
+            - name: LAKEKEEPER__PG_DATABASE_URL_WRITE
+              value: "postgres://reactor:reactor@postgres:5432/lakekeeper"
+            - name: LAKEKEEPER__PG_ENCRYPTION_KEY
+              value: "dev-only-not-secret"
+            # Published as the catalog URL to all clients. In-cluster Flink
+            # resolves this DNS name; browser UI access via `kubectl
+            # port-forward svc/iceberg-rest 8181:8181` will hit localhost,
+            # which won't match this BASE_URI. The minikube lane assumes UI
+            # access via an Ingress that exposes `iceberg-rest.flink-demo.svc`
+            # to the host (or override BASE_URI to your Ingress hostname).
+            - name: LAKEKEEPER__BASE_URI
+              value: "http://iceberg-rest.flink-demo.svc:8181"
+            - name: LAKEKEEPER__AUTHZ_BACKEND
+              value: "allow-all"
+            - name: RUST_LOG
+              value: "info"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8181
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 30
           resources:
             requests:
               cpu: 250m
-              memory: 128Mi
+              memory: 256Mi
             limits:
-              memory: 128Mi
+              memory: 512Mi
 ---
 apiVersion: v1
 kind: Service
@@ -55,3 +132,56 @@ spec:
     - name: rest
       port: 8181
       targetPort: 8181
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: iceberg-rest-bootstrap
+  namespace: flink-demo
+spec:
+  backoffLimit: 5
+  template:
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+        - name: wait-for-iceberg-rest
+          image: curlimages/curl:8.10.1
+          command:
+            - sh
+            - -c
+            - |
+              until curl -fsS http://iceberg-rest:8181/health >/dev/null; do
+                echo "Waiting for Lakekeeper..."; sleep 2;
+              done
+      containers:
+        - name: bootstrap
+          image: curlimages/curl:8.10.1
+          command:
+            - sh
+            - -c
+            - |
+              curl -fsS -X POST http://iceberg-rest:8181/management/v1/bootstrap \
+                -H 'content-type: application/json' \
+                -d '{"accept-terms-of-use":true}' || true
+              curl -fsS -X POST http://iceberg-rest:8181/management/v1/warehouse \
+                -H 'content-type: application/json' \
+                -d '{
+                  "warehouse-name":"flink-warehouse",
+                  "project-id":"00000000-0000-0000-0000-000000000000",
+                  "storage-profile":{
+                    "type":"s3",
+                    "bucket":"flink-state",
+                    "key-prefix":"warehouse",
+                    "endpoint":"http://seaweedfs.flink-demo.svc:8333",
+                    "region":"us-east-1",
+                    "path-style-access":true,
+                    "flavor":"minio",
+                    "sts-enabled":false
+                  },
+                  "storage-credential":{
+                    "type":"s3",
+                    "credential-type":"access-key",
+                    "aws-access-key-id":"admin",
+                    "aws-secret-access-key":"admin"
+                  }
+                }' || true

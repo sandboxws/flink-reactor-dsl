@@ -6,6 +6,12 @@ services:
     ports:
       - "${FLINK_PORT:-8081}:8081"
     command: jobmanager
+    # Override DNS for lakekeeper.localtest.me inside containers so it
+    # resolves to the host gateway instead of looping back to the container.
+    # Browser uses the same hostname via public DNS (→ 127.0.0.1) so the
+    # UI's API calls are same-origin with BASE_URI. See iceberg-init.ts.
+    extra_hosts:
+      - "lakekeeper.localtest.me:host-gateway"
     environment:
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: jobmanager
@@ -34,6 +40,8 @@ services:
       jobmanager:
         condition: service_healthy
     command: taskmanager
+    extra_hosts:
+      - "lakekeeper.localtest.me:host-gateway"
     environment:
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: jobmanager
@@ -58,6 +66,8 @@ services:
       jobmanager:
         condition: service_healthy
     command: taskmanager
+    extra_hosts:
+      - "lakekeeper.localtest.me:host-gateway"
     environment:
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: jobmanager
@@ -83,6 +93,8 @@ services:
         condition: service_healthy
     ports:
       - "${SQL_GATEWAY_PORT:-8083}:8083"
+    extra_hosts:
+      - "lakekeeper.localtest.me:host-gateway"
     command:
       [
         "bash",
@@ -165,6 +177,8 @@ services:
     command: server -s3 -s3.config=/etc/seaweedfs/s3.json -dir=/data
     ports:
       - "${SEAWEEDFS_S3_PORT:-8333}:8333"
+      - "${SEAWEEDFS_MASTER_PORT:-9333}:9333"
+      - "${SEAWEEDFS_FILER_PORT:-8888}:8888"
     volumes:
       - seaweedfs-data:/data
       - ./seaweedfs-s3-config.json:/etc/seaweedfs/s3.json:ro
@@ -193,26 +207,109 @@ services:
       - "aws --endpoint-url http://seaweedfs:8333 s3 mb s3://flink-state 2>/dev/null || true"
     restart: "no"
 
+  # Creates the `lakekeeper` Postgres database before Lakekeeper boots.
+  # Idempotent — uses pg_database lookup before issuing CREATE.
+  lakekeeper-pg-init:
+    image: postgres:17-alpine
+    environment:
+      PGPASSWORD: reactor
+    entrypoint:
+      - sh
+      - -c
+      - |
+        until pg_isready -h flink-reactor-postgres -U reactor; do
+          echo "Waiting for Postgres..."; sleep 2;
+        done
+        psql -h flink-reactor-postgres -U reactor -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='lakekeeper'" | grep -q 1 || \
+          psql -h flink-reactor-postgres -U reactor -d postgres -c 'CREATE DATABASE lakekeeper'
+    restart: "no"
+
+  # Runs Lakekeeper's DB migrations once before the main server starts.
+  # Idempotent — re-running on an already-migrated DB is a no-op.
+  lakekeeper-migrate:
+    image: quay.io/lakekeeper/catalog:latest
+    depends_on:
+      lakekeeper-pg-init:
+        condition: service_completed_successfully
+    environment:
+      LAKEKEEPER__PG_DATABASE_URL_READ: postgres://reactor:reactor@flink-reactor-postgres:5432/lakekeeper
+      LAKEKEEPER__PG_DATABASE_URL_WRITE: postgres://reactor:reactor@flink-reactor-postgres:5432/lakekeeper
+      LAKEKEEPER__PG_ENCRYPTION_KEY: dev-only-not-secret
+      RUST_LOG: info
+    command: ["migrate"]
+    restart: "no"
+
+  # Service name kept as `iceberg-rest` for backward-compat with iceberg-init.ts
+  # and minikube manifests; the image is Lakekeeper, which serves the catalog
+  # at /catalog/v1, the management API at /management/v1, and a UI at /ui.
   iceberg-rest:
-    image: tabulario/iceberg-rest:latest
+    image: quay.io/lakekeeper/catalog:latest
     depends_on:
       seaweedfs:
         condition: service_healthy
+      lakekeeper-migrate:
+        condition: service_completed_successfully
     ports:
       - "${ICEBERG_REST_PORT:-8181}:8181"
     environment:
-      CATALOG_WAREHOUSE: s3://flink-state/warehouse
-      CATALOG_IO__IMPL: org.apache.iceberg.aws.s3.S3FileIO
-      CATALOG_S3_ENDPOINT: http://seaweedfs:8333
-      CATALOG_S3_PATH__STYLE__ACCESS: "true"
-      AWS_ACCESS_KEY_ID: admin
-      AWS_SECRET_ACCESS_KEY: admin
-      AWS_REGION: us-east-1
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O- http://localhost:8181/v1/config >/dev/null || exit 1"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
+      LAKEKEEPER__PG_DATABASE_URL_READ: postgres://reactor:reactor@flink-reactor-postgres:5432/lakekeeper
+      LAKEKEEPER__PG_DATABASE_URL_WRITE: postgres://reactor:reactor@flink-reactor-postgres:5432/lakekeeper
+      LAKEKEEPER__PG_ENCRYPTION_KEY: dev-only-not-secret
+      # `lakekeeper.localtest.me` resolves to 127.0.0.1 via public DNS (works
+      # in any browser without /etc/hosts edits). Inside containers we
+      # override DNS via extra_hosts so the same URL routes to the host
+      # gateway. One URL satisfies the in-network Flink client AND the
+      # browser-served UI — making the UI's API calls same-origin.
+      LAKEKEEPER__BASE_URI: http://lakekeeper.localtest.me:8181
+      LAKEKEEPER__AUTHZ_BACKEND: allow-all
+      RUST_LOG: info
+    command: ["serve"]
+    # No in-container healthcheck — Lakekeeper's image is distroless (no shell,
+    # no wget/curl). Liveness is verified externally by health-check.ts, and
+    # downstream waits go through `iceberg-rest-init` which polls /health.
+
+  # One-shot bootstrap: wait for Lakekeeper's /health, accept terms, then
+  # register the warehouse pointing at SeaweedFS. Idempotent — re-runs return
+  # 409 / 404, which we swallow.
+  iceberg-rest-init:
+    image: curlimages/curl:8.10.1
+    depends_on:
+      iceberg-rest:
+        condition: service_started
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -e
+        until curl -fsS http://iceberg-rest:8181/health >/dev/null 2>&1; do
+          echo "Waiting for Lakekeeper..."; sleep 2;
+        done
+        curl -fsS -X POST http://iceberg-rest:8181/management/v1/bootstrap \
+          -H 'content-type: application/json' \
+          -d '{"accept-terms-of-use":true}' || true
+        curl -fsS -X POST http://iceberg-rest:8181/management/v1/warehouse \
+          -H 'content-type: application/json' \
+          -d '{
+            "warehouse-name":"flink-warehouse",
+            "project-id":"00000000-0000-0000-0000-000000000000",
+            "storage-profile":{
+              "type":"s3",
+              "bucket":"flink-state",
+              "key-prefix":"warehouse",
+              "endpoint":"http://seaweedfs:8333",
+              "region":"us-east-1",
+              "path-style-access":true,
+              "flavor":"minio",
+              "sts-enabled":false
+            },
+            "storage-credential":{
+              "type":"s3",
+              "credential-type":"access-key",
+              "aws-access-key-id":"admin",
+              "aws-secret-access-key":"admin"
+            }
+          }' || true
+    restart: "no"
 
 volumes:
   flink-checkpoints:

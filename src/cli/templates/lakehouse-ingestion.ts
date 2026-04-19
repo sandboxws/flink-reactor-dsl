@@ -144,7 +144,8 @@ import { EventSchema, ClickstreamSchema, TransactionSchema } from '@/schemas/lak
 const iceberg = IcebergCatalog({
   name: "lakehouse",
   catalogType: "rest",
-  uri: "http://iceberg-rest:8181",
+  uri: "http://lakekeeper.localtest.me:8181/catalog",
+  warehouse: "flink-warehouse",
 });
 
 export default (
@@ -274,7 +275,8 @@ Multi-topic Kafka → Iceberg raw landing tables.
    CREATE CATALOG lakehouse WITH (
      'type' = 'iceberg',
      'catalog-type' = 'rest',
-     'uri' = 'http://iceberg-rest:8181'
+     'uri' = 'http://lakekeeper.localtest.me:8181/catalog',
+     'warehouse' = 'flink-warehouse'
    );
    USE CATALOG lakehouse;
    CREATE DATABASE IF NOT EXISTS raw;

@@ -94,7 +94,7 @@ async function checkSqlGateway(port: number): Promise<boolean> {
 
 async function checkIcebergRest(port: number): Promise<boolean> {
   try {
-    const res = await fetch(`http://localhost:${port}/v1/config`)
+    const res = await fetch(`http://localhost:${port}/health`)
     return res.ok
   } catch {
     return false

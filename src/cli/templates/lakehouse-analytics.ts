@@ -120,7 +120,8 @@ import { OrderCdcSchema } from '@/schemas/medallion';
 const iceberg = IcebergCatalog({
   name: "lakehouse",
   catalogType: "rest",
-  uri: "http://iceberg-rest:8181",
+  uri: "http://lakekeeper.localtest.me:8181/catalog",
+  warehouse: "flink-warehouse",
 });
 
 export default (
@@ -173,7 +174,8 @@ import { OrderCleanSchema } from '@/schemas/medallion';
 const iceberg = IcebergCatalog({
   name: "lakehouse",
   catalogType: "rest",
-  uri: "http://iceberg-rest:8181",
+  uri: "http://lakekeeper.localtest.me:8181/catalog",
+  warehouse: "flink-warehouse",
 });
 
 export default (
@@ -230,7 +232,8 @@ import { OrderCdcSchema } from '@/schemas/medallion';
 const iceberg = IcebergCatalog({
   name: "lakehouse",
   catalogType: "rest",
-  uri: "http://iceberg-rest:8181",
+  uri: "http://lakekeeper.localtest.me:8181/catalog",
+  warehouse: "flink-warehouse",
 });
 
 export default (
@@ -345,7 +348,8 @@ Bronze → Silver → Gold data pipeline using Apache Iceberg.
    CREATE CATALOG lakehouse WITH (
      'type' = 'iceberg',
      'catalog-type' = 'rest',
-     'uri' = 'http://iceberg-rest:8181'
+     'uri' = 'http://lakekeeper.localtest.me:8181/catalog',
+     'warehouse' = 'flink-warehouse'
    );
    USE CATALOG lakehouse;
    CREATE DATABASE IF NOT EXISTS bronze;

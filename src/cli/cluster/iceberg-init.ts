@@ -5,8 +5,14 @@
  * (minikube) or compose network aliases (Docker).
  */
 
-const CATALOG_URI = "http://iceberg-rest:8181"
-const WAREHOUSE = "s3://flink-state/warehouse"
+// `lakekeeper.localtest.me` is a public DNS name that resolves to 127.0.0.1
+// from anywhere — works in any browser without /etc/hosts edits. Inside
+// docker-compose containers we override DNS for this name to the host
+// gateway via `extra_hosts`. Same URL satisfies both the browser-loaded
+// Lakekeeper UI (same-origin API calls) and Flink-in-docker (which gets
+// this URI back as a catalog override from /v1/config).
+const CATALOG_URI = "http://lakekeeper.localtest.me:8181/catalog"
+const WAREHOUSE = "flink-warehouse"
 const S3_ENDPOINT = "http://seaweedfs.flink-demo.svc:8333"
 
 function createCatalogDdl(): string {

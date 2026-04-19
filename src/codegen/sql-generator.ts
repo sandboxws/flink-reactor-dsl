@@ -965,6 +965,7 @@ function generateCatalogDdl(node: ConstructNode): string {
       withProps.type = "iceberg"
       withProps["catalog-type"] = props.catalogType as string
       withProps.uri = props.uri as string
+      if (props.warehouse) withProps.warehouse = props.warehouse as string
       break
     case "HiveCatalog":
       withProps.type = "hive"

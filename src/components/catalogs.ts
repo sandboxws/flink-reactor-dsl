@@ -58,6 +58,13 @@ export interface IcebergCatalogProps extends BaseComponentProps {
   readonly name: string
   readonly catalogType: IcebergCatalogType
   readonly uri: string
+  /**
+   * Warehouse identifier passed to the catalog server. Required by REST
+   * catalogs that host multiple warehouses (e.g. Lakekeeper) — the value is
+   * the registered warehouse name there. Optional for single-warehouse
+   * servers (e.g. tabulario/iceberg-rest).
+   */
+  readonly warehouse?: string
   readonly children?: ConstructNode | ConstructNode[]
 }
 
