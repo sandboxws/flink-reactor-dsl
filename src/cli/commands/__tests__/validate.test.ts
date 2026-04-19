@@ -101,4 +101,151 @@ export default pipeline;
 
     expect(result).toBe(true)
   })
+
+  it(
+    "accepts sibling-chain: <Source/><Sink/> under <Pipeline>",
+    { timeout: 15_000 },
+    async () => {
+      writePipeline(
+        "sibling-direct",
+        `
+import { createElement } from '${jsxPath()}';
+
+const pipeline = createElement('Pipeline', { name: 'sibling-direct' },
+  createElement('KafkaSource', {
+    topic: 'input',
+    format: 'json',
+    bootstrapServers: 'localhost:9092',
+    schema: {
+      fields: { amount: 'BIGINT' },
+      metadataColumns: [],
+    },
+  }),
+  createElement('KafkaSink', {
+    topic: 'output',
+    format: 'json',
+    bootstrapServers: 'localhost:9092',
+  })
+);
+
+export default pipeline;
+`,
+      )
+
+      const result = await runValidate({ projectDir: tempDir })
+      expect(result).toBe(true)
+    },
+  )
+
+  it(
+    "accepts sibling-chain with intermediate transform",
+    { timeout: 15_000 },
+    async () => {
+      writePipeline(
+        "sibling-transform",
+        `
+import { createElement } from '${jsxPath()}';
+
+const pipeline = createElement('Pipeline', { name: 'sibling-transform' },
+  createElement('KafkaSource', {
+    topic: 'input',
+    format: 'json',
+    bootstrapServers: 'localhost:9092',
+    schema: {
+      fields: { amount: 'BIGINT' },
+      metadataColumns: [],
+    },
+  }),
+  createElement('Filter', { condition: 'amount > 100' }),
+  createElement('KafkaSink', {
+    topic: 'output',
+    format: 'json',
+    bootstrapServers: 'localhost:9092',
+  })
+);
+
+export default pipeline;
+`,
+      )
+
+      const result = await runValidate({ projectDir: tempDir })
+      expect(result).toBe(true)
+    },
+  )
+
+  it(
+    "accepts StatementSet with multiple sibling source-sink pairs",
+    { timeout: 15_000 },
+    async () => {
+      writePipeline(
+        "statement-set",
+        `
+import { createElement } from '${jsxPath()}';
+
+const schema = { fields: { amount: 'BIGINT' }, metadataColumns: [] };
+
+const pipeline = createElement('Pipeline', { name: 'statement-set' },
+  createElement('StatementSet', {},
+    createElement('KafkaSource', {
+      topic: 'in-a',
+      format: 'json',
+      bootstrapServers: 'localhost:9092',
+      schema,
+    }),
+    createElement('KafkaSink', {
+      topic: 'out-a',
+      format: 'json',
+      bootstrapServers: 'localhost:9092',
+    }),
+    createElement('KafkaSource', {
+      topic: 'in-b',
+      format: 'json',
+      bootstrapServers: 'localhost:9092',
+      schema,
+    }),
+    createElement('KafkaSink', {
+      topic: 'out-b',
+      format: 'json',
+      bootstrapServers: 'localhost:9092',
+    })
+  )
+);
+
+export default pipeline;
+`,
+      )
+
+      const result = await runValidate({ projectDir: tempDir })
+      expect(result).toBe(true)
+    },
+  )
+
+  it(
+    "flags a StatementSet Source with no matching sink as orphan",
+    { timeout: 15_000 },
+    async () => {
+      writePipeline(
+        "statement-set-orphan",
+        `
+import { createElement } from '${jsxPath()}';
+
+const pipeline = createElement('Pipeline', { name: 'statement-set-orphan' },
+  createElement('StatementSet', {},
+    createElement('KafkaSource', {
+      topic: 'lonely',
+      format: 'json',
+      bootstrapServers: 'localhost:9092',
+      schema: { fields: { amount: 'BIGINT' }, metadataColumns: [] },
+    })
+  )
+);
+
+export default pipeline;
+`,
+      )
+
+      const result = await runValidate({ projectDir: tempDir })
+      expect(result).toBe(false)
+    },
+  )
 })

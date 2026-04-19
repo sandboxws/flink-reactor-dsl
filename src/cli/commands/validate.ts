@@ -11,6 +11,7 @@ import {
   validateExpressionSyntax,
   validateSchemaReferences,
 } from "@/core/schema-validation.js"
+import { resolveSiblingChains } from "@/core/sibling-chain.js"
 import {
   SynthContext,
   type ValidationDiagnostic,
@@ -238,19 +239,35 @@ async function validatePipeline(
 
 /**
  * Tree-aware validation that understands the construct tree's
- * parent→child (downstream→upstream) edge direction.
+ * parent→child (downstream→upstream) edge direction AND the sibling-chain
+ * topology (Source, zero-or-more Transforms, Sink under a common container),
+ * which codegen stitches via buildSiblingChainQuery / Pattern-2 resolution.
  */
 function validateTreeAware(
   pipelineNode: ConstructNode,
   ctx: SynthContext,
 ): ValidationDiagnostic[] {
   const diagnostics: ValidationDiagnostic[] = []
+  const { sinkToSource, sourceToSinks } = resolveSiblingChains(pipelineNode)
 
-  // Orphan sources: Sources that are direct children of Pipeline
-  // (not nested inside a transform or sink chain).
-  if (pipelineNode.kind === "Pipeline") {
-    for (const child of pipelineNode.children) {
-      if (child.kind === "Source") {
+  // A Source listed directly under <Pipeline>/<StatementSet> is considered
+  // consumed if ANY of:
+  //   1. the sibling-chain resolver bound it to a downstream Sink, OR
+  //   2. some operator node (Join/Transform/Window/CEP/Sink) has it as a
+  //      graph child — the join-embedded-source pattern, e.g. IntervalJoin
+  //      was called with this source as `left`/`right`, which adds it as a
+  //      child of the Join in addition to its declared position, OR
+  //   3. another node's props reference it by its SQL name (LookupJoin's
+  //      `table` prop pointing at a JdbcSource — name-based, not tree-based).
+  const nameIndex = buildSourceNameIndex(pipelineNode)
+  const referencedByName = collectNameReferences(pipelineNode, nameIndex)
+  const visitForOrphans = (node: ConstructNode): void => {
+    if (node.component === "Pipeline" || node.component === "StatementSet") {
+      for (const child of node.children) {
+        if (child.kind !== "Source") continue
+        if (sourceToSinks.has(child.id)) continue
+        if (hasOperatorParent(ctx, child.id)) continue
+        if (referencedByName.has(child.id)) continue
         diagnostics.push({
           severity: "error",
           message: `Orphan source '${child.component}' (${child.id}): declared but never consumed`,
@@ -259,22 +276,23 @@ function validateTreeAware(
         })
       }
     }
+    for (const child of node.children) visitForOrphans(child)
   }
+  visitForOrphans(pipelineNode)
 
-  // Dangling sinks: Sinks with no children (no upstream input)
+  // Dangling sinks: Sinks with no explicit children (Pattern 1) AND no
+  // incoming graph edge AND no sibling-chain source (Pattern 2).
   const sinks = ctx.getNodesByKind("Sink")
   for (const sink of sinks) {
-    if (sink.children.length === 0) {
-      const outgoing = ctx.getOutgoing(sink.id)
-      if (outgoing.size === 0) {
-        diagnostics.push({
-          severity: "error",
-          message: `Dangling sink '${sink.component}' (${sink.id}): no input path`,
-          nodeId: sink.id,
-          component: sink.component,
-        })
-      }
-    }
+    if (sink.children.length > 0) continue
+    if (ctx.getOutgoing(sink.id).size > 0) continue
+    if (sinkToSource.has(sink.id)) continue
+    diagnostics.push({
+      severity: "error",
+      message: `Dangling sink '${sink.component}' (${sink.id}): no input path`,
+      nodeId: sink.id,
+      component: sink.component,
+    })
   }
 
   // Cycles (DFS-based — works regardless of edge direction)
@@ -284,6 +302,75 @@ function validateTreeAware(
   // via validateChangelogModes() (full propagation, not just sink checks)
 
   return diagnostics
+}
+
+/**
+ * True when `sourceId` is a graph child of some non-container node (Join,
+ * Transform, Sink, etc.). Join factories like IntervalJoin/TemporalJoin/
+ * LookupJoin add their `left`/`right`/`input`/`stream`/`temporal` props as
+ * children — so a source declared at Pipeline level AND passed to a join
+ * ends up with two parents: the Pipeline (declaration) and the operator
+ * (real use). Only the latter counts as consumption.
+ */
+function hasOperatorParent(ctx: SynthContext, sourceId: string): boolean {
+  for (const parentId of ctx.getIncoming(sourceId)) {
+    const parent = ctx.getNode(parentId)
+    if (!parent) continue
+    if (parent.component === "Pipeline") continue
+    if (parent.component === "StatementSet") continue
+    return true
+  }
+  return false
+}
+
+/**
+ * Build an index from SQL identifier → source node id, covering the source's
+ * own id plus any explicit `name` or `table` props. Used to resolve string
+ * references like `LookupJoin({ table: "customers" })` back to the JdbcSource
+ * that declares that table.
+ */
+function buildSourceNameIndex(root: ConstructNode): Map<string, string> {
+  const map = new Map<string, string>()
+  const walk = (node: ConstructNode): void => {
+    if (node.kind === "Source") {
+      map.set(node.id, node.id)
+      const nameProp = node.props.name
+      if (typeof nameProp === "string") map.set(nameProp, node.id)
+      const tableProp = node.props.table
+      if (typeof tableProp === "string") map.set(tableProp, node.id)
+    }
+    for (const child of node.children) walk(child)
+  }
+  walk(root)
+  return map
+}
+
+/**
+ * Scan every non-source node's prop values for strings matching a known
+ * source identifier. Any hit means the corresponding source is referenced
+ * (typically via a lookup-table or temporal-table name reference).
+ */
+function collectNameReferences(
+  root: ConstructNode,
+  nameIndex: ReadonlyMap<string, string>,
+): Set<string> {
+  const refs = new Set<string>()
+  const consider = (value: unknown): void => {
+    if (typeof value !== "string") return
+    const sourceId = nameIndex.get(value)
+    if (sourceId) refs.add(sourceId)
+  }
+  const walk = (node: ConstructNode): void => {
+    if (node.kind !== "Source") {
+      for (const value of Object.values(node.props)) {
+        if (Array.isArray(value)) value.forEach(consider)
+        else consider(value)
+      }
+    }
+    for (const child of node.children) walk(child)
+  }
+  walk(root)
+  return refs
 }
 
 // ── Flink version feature gating ────────────────────────────────────

@@ -207,8 +207,20 @@ export function validateSchemaReferences(
 
     // If this node is a Transform or Join, validate its column references
     if (node.kind === "Transform" || node.kind === "Join") {
-      // If no inherited schema, try resolveNodeSchema (handles upstream-children pattern
-      // where children point toward the source, e.g. Sink → Filter → Source)
+      // Explicit children are an authoritative upstream declaration — prefer
+      // them over an inherited schema from an enclosing context. Example:
+      // `Aggregate({ children: windowed })` nested inside a LookupJoin's
+      // subtree must validate `groupBy`/`select` against `windowed`'s output,
+      // not the Join's inherited schema (which would be the *other* join
+      // input). We resolve child[0]'s OUTPUT, which is this node's INPUT —
+      // resolving the node itself would yield the transform's output and
+      // miss columns the node's expressions reference upstream.
+      if (node.children.length > 0) {
+        const upstreamSchema = resolveNodeSchema(node.children[0], nodeIndex)
+        if (upstreamSchema !== null) currentSchema = upstreamSchema
+      }
+      // Fall back to resolveNodeSchema when nothing is inherited (e.g. the
+      // Sink → Filter → Source reverse-nesting pattern with no parent).
       if (currentSchema === null) {
         currentSchema = resolveNodeSchema(node, nodeIndex)
       }

@@ -2,6 +2,7 @@ import { existsSync, readFileSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import type { TemplateName } from "@/cli/commands/new.js"
+import { runValidate } from "@/cli/commands/validate.js"
 import {
   EXPECTED_PIPELINES,
   scaffoldAndSynth,
@@ -55,6 +56,13 @@ describe("scaffold → synth", () => {
         )
         expect(diskSql).toContain("CREATE TABLE")
       }
+
+      // If codegen succeeded, `fr dev`'s validator must also pass — otherwise
+      // users hit "Validation failed." on pipelines that synthesize just fine
+      // (the exact mismatch that motivated this test).
+      const projectDir = join(tempRoot, "app")
+      const valid = await runValidate({ projectDir })
+      expect(valid).toBe(true)
     })
   }
 })
