@@ -1,5 +1,10 @@
 import type { ScaffoldOptions, TemplateFile } from "@/cli/commands/new.js"
-import { sharedFiles } from "./shared.js"
+import {
+  pipelineReadme,
+  sharedFiles,
+  templatePipelineTestStub,
+  templateReadme,
+} from "./shared.js"
 
 export function getLakehouseIngestionTemplates(
   opts: ScaffoldOptions,
@@ -250,58 +255,82 @@ export default (
 `,
     },
 
-    // ── README ───────────────────────────────────────────────────────
+    // ── Per-pipeline READMEs ──────────────────────────────────────────
 
-    {
-      path: "README.md",
-      content: `# Lakehouse Ingestion
+    pipelineReadme({
+      pipelineName: "lakehouse-ingest",
+      tagline:
+        "Three Kafka topics (events, clickstream, transactions) ingested into three Iceberg raw-landing tables under one shared catalog.",
+      demonstrates: [
+        "`<IcebergCatalog>` declaration referencing a REST catalog backed by SeaweedFS S3 storage.",
+        "`<StatementSet>` running three `<KafkaSource>` → `<IcebergSink>` flows in a single Flink job — efficient when many lightweight ingest jobs would otherwise be deployed separately.",
+        "All three sinks land in `raw.<table>` (default Iceberg format v1, append-only — bronze layer).",
+      ],
+      topology: `IcebergCatalog (REST → SeaweedFS S3 warehouse)
+  └── StatementSet
+        ├── KafkaSource (lake.events)        ─► IcebergSink (raw.events)
+        ├── KafkaSource (lake.clickstream)   ─► IcebergSink (raw.clickstream)
+        └── KafkaSource (lake.transactions)  ─► IcebergSink (raw.transactions)`,
+      schemas: [
+        "`schemas/lakehouse.ts` — `EventSchema`, `ClickstreamSchema`, `TransactionSchema` (each with their own watermark)",
+      ],
+      runCommand: `pnpm synth
+pnpm test`,
+    }),
+    pipelineReadme({
+      pipelineName: "pump-lakehouse",
+      tagline:
+        "Internal data-generator pipeline that pumps synthetic events, clickstream, and transactions into the corresponding Kafka topics.",
+      demonstrates: [
+        "Three `<DataGenSource>` driving three `<KafkaSink>` inside a single `<StatementSet>`.",
+        "Bundle-internal pump pattern (no upstream Apache Flink source — exists only to feed `lakehouse-ingest` on the local sim).",
+      ],
+      topology: `DataGenSource (Event)        ─► KafkaSink (lake.events)
+DataGenSource (Clickstream)  ─► KafkaSink (lake.clickstream)
+DataGenSource (Transaction)  ─► KafkaSink (lake.transactions)`,
+      schemas: ["`schemas/lakehouse.ts` — same schemas the consumer reads"],
+      runCommand: `pnpm synth
+pnpm test`,
+    }),
 
-Multi-topic Kafka → Iceberg raw landing tables.
+    // ── Tests ─────────────────────────────────────────────────────────
 
-## Pipelines
+    templatePipelineTestStub({
+      pipelineName: "lakehouse-ingest",
+      loadBearingPatterns: [/iceberg/i, /INSERT INTO/i, /raw/i],
+    }),
+    templatePipelineTestStub({
+      pipelineName: "pump-lakehouse",
+      loadBearingPatterns: [/INSERT INTO/i, /datagen/i],
+    }),
 
-- **lakehouse-ingest**: 3 Kafka topics (events, clickstream, transactions) → 3 Iceberg tables
-- **pump-lakehouse**: DataGen data pump for all 3 topics
+    // ── Project-root README ───────────────────────────────────────────
 
-## Prerequisites
-
-1. Deploy the Iceberg REST catalog:
-   \`\`\`bash
-   kubectl apply -f deploy/minikube/07-iceberg-rest.yaml
-   \`\`\`
-
-2. Create the Iceberg database (via Flink SQL Gateway):
-   \`\`\`sql
-   CREATE CATALOG lakehouse WITH (
-     'type' = 'iceberg',
-     'catalog-type' = 'rest',
-     'uri' = 'http://lakekeeper.localtest.me:8181/catalog',
-     'warehouse' = 'flink-warehouse'
-   );
-   USE CATALOG lakehouse;
-   CREATE DATABASE IF NOT EXISTS raw;
-   \`\`\`
-
-## Getting Started
-
-\`\`\`bash
-pnpm install
-flink-reactor synth          # Preview generated SQL
-flink-reactor deploy --env dev
-\`\`\`
-`,
-    },
-
-    // ── Tests ────────────────────────────────────────────────────────
-
-    {
-      path: "tests/pipelines/lakehouse-ingest.test.ts",
-      content: `import { describe, it } from 'vitest';
-
-describe('lakehouse-ingest pipeline', () => {
-  it.todo('synthesizes valid Flink SQL with Iceberg catalog and 3 sink tables');
-});
-`,
-    },
+    templateReadme({
+      templateName: "lakehouse-ingestion",
+      tagline:
+        "Multi-topic Kafka → Iceberg raw-landing pipeline plus an internal data pump. Three append-only ingest flows fan into one Flink job via `<StatementSet>`, all landing in the `raw` Iceberg database under a REST catalog backed by SeaweedFS S3 storage.",
+      pipelines: [
+        {
+          name: "lakehouse-ingest",
+          pitch:
+            "Three Kafka topics → three Iceberg `raw.<table>` sinks in one `<StatementSet>` Flink job.",
+        },
+        {
+          name: "pump-lakehouse",
+          pitch:
+            "Internal DataGen → Kafka pump for events, clickstream, and transactions topics.",
+        },
+      ],
+      prerequisites: [
+        "Deploy the Iceberg REST catalog: `kubectl apply -f deploy/minikube/07-iceberg-rest.yaml`",
+        "Create the Iceberg `raw` database via the Flink SQL Gateway (the README's Prerequisites section in the scaffolded project shows the exact `CREATE CATALOG ... CREATE DATABASE` block).",
+      ],
+      gettingStarted: [
+        "pnpm install",
+        "flink-reactor synth          # Preview generated SQL",
+        "flink-reactor deploy --env dev",
+      ],
+    }),
   ]
 }
