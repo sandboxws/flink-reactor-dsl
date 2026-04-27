@@ -28,7 +28,7 @@ import {
 
 // Pinned ref on apache/flink for source links + LOC counts.
 // LOC counts are wc -l on the corresponding `*.java` file at this ref.
-const FLINK_REF = "release-1.20.0"
+const FLINK_REF = "release-2.0.0"
 const FLINK_BASICS_BASE = `https://github.com/apache/flink/blob/${FLINK_REF}/flink-examples/flink-examples-table/src/main/java/org/apache/flink/table/examples/java/basics`
 
 export function getStockTemporalTopnTemplates(
