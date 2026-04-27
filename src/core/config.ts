@@ -90,6 +90,21 @@ export interface ConsoleConfig {
 
 // ── Simulation init configuration ───────────────────────────────────
 
+export interface KafkaTableDatagenFieldOptions {
+  /** DataGen generator kind. Maps to `fields.<col>.kind` on the Flink datagen connector. */
+  readonly kind: "random" | "sequence"
+  /** Min value for numeric fields. Maps to `fields.<col>.min`. */
+  readonly min?: number
+  /** Max value for numeric fields. Maps to `fields.<col>.max`. */
+  readonly max?: number
+  /** String length. Maps to `fields.<col>.length`. */
+  readonly length?: number
+  /** Sequence start value. Maps to `fields.<col>.start`. */
+  readonly start?: number
+  /** Sequence end value. Maps to `fields.<col>.end`. */
+  readonly end?: number
+}
+
 export interface KafkaTableDefinition {
   /** Flink SQL table name (e.g. 'orders', 'transactions') */
   readonly table: string
@@ -110,6 +125,8 @@ export interface KafkaTableDefinition {
   readonly scanStartupMode?: string
   /** DataGen rows-per-second for continuous seeding (default: 10, 0 = skip seeding) */
   readonly rowsPerSecond?: number
+  /** Per-column DataGen options (kind, min/max for numeric, length for strings) */
+  readonly fields?: Record<string, KafkaTableDatagenFieldOptions>
 }
 
 export interface KafkaCatalogDefinition {

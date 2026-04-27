@@ -1,0 +1,28 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`snapshot pins for canonical schemas > Order schema content is stable 1`] = `
+"import { Schema, Field } from '@flink-reactor/dsl';
+
+export default Schema({
+  fields: {
+    user: Field.BIGINT(),
+    product: Field.STRING(),
+    amount: Field.INT(),
+    ts: Field.TIMESTAMP(3),
+  },
+  watermark: { column: 'ts', expression: "ts - INTERVAL '5' SECOND" },
+});
+"
+`;
+
+exports[`snapshot pins for canonical schemas > Word schema content is stable 1`] = `
+"import { Schema, Field } from '@flink-reactor/dsl';
+
+export default Schema({
+  fields: {
+    word: Field.STRING(),
+    frequency: Field.INT(),
+  },
+});
+"
+`;
