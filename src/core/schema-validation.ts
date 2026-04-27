@@ -262,8 +262,9 @@ export function validateSchemaReferences(
     let siblingSchema = currentSchema
     for (const child of node.children) {
       walk(child, siblingSchema)
-      // After walking a Source child, update sibling schema for next siblings
-      if (child.kind === "Source") {
+      // After walking a Source or RawSQL child, update sibling schema for
+      // next siblings — both contribute their own declared output schema.
+      if (child.kind === "Source" || child.kind === "RawSQL") {
         siblingSchema = resolveNodeSchema(child, nodeIndex)
       } else if (child.kind === "Transform" && siblingSchema) {
         siblingSchema = resolveTransformSchema(child, siblingSchema)

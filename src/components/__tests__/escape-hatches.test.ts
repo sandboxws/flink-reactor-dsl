@@ -81,14 +81,27 @@ describe("RawSQL", () => {
     expect(ctx.getAllEdges()).toHaveLength(1)
   })
 
-  it("throws when no inputs are provided", () => {
-    expect(() =>
-      RawSQL({
-        sql: "SELECT 1",
-        inputs: [],
-        outputSchema: Schema({ fields: { x: Field.INT() } }),
-      }),
-    ).toThrow("RawSQL requires at least one input stream")
+  it("constructs without inputs for self-contained SQL bodies", () => {
+    // Self-contained SQL (e.g. VALUES literal, SELECT 1) has no upstream
+    // streams. RawSQL accepts an absent or empty `inputs` prop and produces
+    // a node with no DAG children — the SQL body stands on its own, and
+    // sibling-chain wiring (or downstream consumers) connects it forward.
+    const raw = RawSQL({
+      sql: "SELECT 1 AS x",
+      outputSchema: Schema({ fields: { x: Field.INT() } }),
+    })
+    expect(raw.kind).toBe("RawSQL")
+    expect(raw.props.inputIds).toEqual([])
+    expect(raw.children).toHaveLength(0)
+
+    // Explicit empty array behaves identically.
+    const rawEmpty = RawSQL({
+      sql: "SELECT 1 AS x",
+      inputs: [],
+      outputSchema: Schema({ fields: { x: Field.INT() } }),
+    })
+    expect(rawEmpty.props.inputIds).toEqual([])
+    expect(rawEmpty.children).toHaveLength(0)
   })
 })
 

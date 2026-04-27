@@ -1083,9 +1083,7 @@ CREATE TABLE \`users\` (
 
 CREATE TABLE \`enriched_orders\` (
   \`order_id\` BIGINT,
-  \`user_id\` STRING,
-  \`amount\` DECIMAL(10, 2),
-  \`event_time\` TIMESTAMP(3)
+  \`user_name\` STRING
 ) WITH (
   'connector' = 'kafka',
   'topic' = 'enriched-orders',

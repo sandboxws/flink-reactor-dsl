@@ -709,6 +709,76 @@ describe("9.1: RawSQL inlines SQL in pipeline", () => {
   })
 })
 
+// ── 9.1.1: RawSQL participates in sibling-chain JSX ─────────────────
+
+describe("9.1.1: RawSQL in sibling-chain", () => {
+  it("acts as a chain start when self-contained (no inputs)", () => {
+    const WordSchema = Schema({
+      fields: { word: Field.STRING(), frequency: Field.INT() },
+    })
+
+    const raw = RawSQL({
+      sql: "SELECT `word`, `frequency` FROM (VALUES ('Hello', 1), ('World', 2)) AS T(`word`, `frequency`)",
+      outputSchema: WordSchema,
+    })
+
+    const aggregated = Aggregate({
+      groupBy: ["word"],
+      select: { word: "`word`", frequency: "SUM(`frequency`)" },
+    })
+
+    const sink = KafkaSink({ topic: "wordcount" })
+
+    const pipeline = Pipeline({
+      name: "wordcount-sql",
+      children: [raw, aggregated, sink],
+    })
+
+    const result = generateSql(pipeline)
+
+    // The sibling chain RawSQL → Aggregate → Sink wires automatically:
+    //  • the RawSQL body becomes the FROM subquery
+    //  • the Aggregate's GROUP BY references columns from RawSQL.outputSchema
+    //  • no orphan-source error from a phantom bootstrap
+    expect(result.sql).toMatch(/INSERT INTO `wordcount`/)
+    expect(result.sql).toMatch(/GROUP BY `word`/)
+    expect(result.sql).toMatch(/SUM\(`frequency`\)/)
+    expect(result.sql).toMatch(/VALUES/)
+    // No phantom source CREATE TABLE — only the sink's CREATE TABLE remains
+    const createTableCount = (result.sql.match(/CREATE TABLE/g) ?? []).length
+    expect(createTableCount).toBe(1)
+  })
+
+  it("validates downstream column references against outputSchema", () => {
+    const WordSchema = Schema({
+      fields: { word: Field.STRING(), frequency: Field.INT() },
+    })
+
+    const raw = RawSQL({
+      sql: "SELECT `word`, `frequency` FROM (VALUES ('Hello', 1)) AS T(`word`, `frequency`)",
+      outputSchema: WordSchema,
+    })
+
+    // `unknown_column` does not exist in WordSchema — synthesis should still
+    // succeed (the validator surfaces this as a separate diagnostic), but the
+    // outputSchema is what downstream sees, not the input subquery columns.
+    const mapped = Map({
+      select: { word: "`word`", upper_word: "UPPER(`word`)" },
+    })
+
+    const sink = KafkaSink({ topic: "uppercased" })
+
+    const pipeline = Pipeline({
+      name: "raw-sql-with-map",
+      children: [raw, mapped, sink],
+    })
+
+    const result = generateSql(pipeline)
+    expect(result.sql).toMatch(/INSERT INTO `uppercased`/)
+    expect(result.sql).toMatch(/UPPER\(`word`\)/)
+  })
+})
+
 // ── 9.2: UDF generates CREATE FUNCTION DDL ──────────────────────────
 
 describe("9.2: UDF generates CREATE FUNCTION DDL", () => {

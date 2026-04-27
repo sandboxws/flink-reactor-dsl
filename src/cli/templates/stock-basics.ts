@@ -68,7 +68,7 @@ export function getStockBasicsTemplates(opts: ScaffoldOptions): TemplateFile[] {
     pipelineReadme({
       pipelineName: "wordcount-sql",
       tagline:
-        "Static `VALUES` literal → GROUP BY word, SUM frequency. Port of `WordCountSQLExample.java` (~48 Java LOC → ~25 TSX LOC).",
+        "Static `VALUES` literal → GROUP BY word, SUM frequency. Port of `WordCountSQLExample.java` (~48 Java LOC → ~20 TSX LOC).",
       source: `[\`WordCountSQLExample.java\`](${FLINK_BASICS_BASE}/WordCountSQLExample.java)`,
       demonstrates: [
         "Inline static input via `<RawSQL>` (the DSL has no `<Values>` source primitive).",
@@ -209,52 +209,34 @@ pnpm test`,
 
 const WORDCOUNT_SQL_PIPELINE = `import {
   Pipeline,
-  DataGenSource,
   RawSQL,
   Aggregate,
   GenericSink,
 } from '@flink-reactor/dsl';
 import WordSchema from '@/schemas/word';
 
-// RawSQL requires at least one structural input for DAG wiring; the SQL body
-// itself is self-contained (a static VALUES literal). The bootstrap source
-// emits a single bounded row that the VALUES expression below ignores.
-const bootstrap = DataGenSource({
-  schema: WordSchema,
-  numberOfRows: 1,
-  name: 'wordcount_bootstrap',
-});
-
-const words = RawSQL({
-  sql: \`SELECT \\\`word\\\`, \\\`frequency\\\` FROM (VALUES
-    ('Hello', 1),
-    ('World', 2),
-    ('Hello', 3),
-    ('World', 4),
-    ('Hello', 5)
-  ) AS T(\\\`word\\\`, \\\`frequency\\\`)\`,
-  inputs: [bootstrap],
-  outputSchema: WordSchema,
-});
-
-// Sibling-chain resolution doesn't currently recognise RawSQL as a
-// chainable upstream, so wire the chain explicitly via \`children\`:
-// words → Aggregate → GenericSink.
-const aggregated = Aggregate({
-  groupBy: ['word'],
-  select: {
-    word: '\\\`word\\\`',
-    frequency: 'SUM(\\\`frequency\\\`)',
-  },
-  children: words,
-});
-
-const sink = GenericSink({
-  connector: 'print',
-  children: aggregated,
-});
-
-export default <Pipeline name="wordcount-sql">{sink}</Pipeline>;
+export default (
+  <Pipeline name="wordcount-sql">
+    <RawSQL
+      sql={\`SELECT \\\`word\\\`, \\\`frequency\\\` FROM (VALUES
+        ('Hello', 1),
+        ('World', 2),
+        ('Hello', 3),
+        ('World', 4),
+        ('Hello', 5)
+      ) AS T(\\\`word\\\`, \\\`frequency\\\`)\`}
+      outputSchema={WordSchema}
+    />
+    <Aggregate
+      groupBy={['word']}
+      select={{
+        word: '\\\`word\\\`',
+        frequency: 'SUM(\\\`frequency\\\`)',
+      }}
+    />
+    <GenericSink connector="print" />
+  </Pipeline>
+);
 `
 
 const GETTING_STARTED_PIPELINE = `import {
@@ -374,21 +356,18 @@ final Table inputTable = tEnv.fromValues(
     Row.of("Hello", 5));
 \`\`\`
 
-The DSL has no \`<Values>\` source primitive (per the design — adding one is a separate concern), so the \`VALUES\` literal is inlined via the \`<RawSQL>\` escape hatch:
+The DSL has no \`<Values>\` source primitive (per the design — adding one is a separate concern), so the \`VALUES\` literal is inlined via the \`<RawSQL>\` escape hatch with no \`inputs\` (the SQL body is self-contained):
 
 \`\`\`tsx
-const words = RawSQL({
-  sql: \`SELECT \\\`word\\\`, \\\`frequency\\\` FROM (VALUES
+<RawSQL
+  sql={\`SELECT \\\`word\\\`, \\\`frequency\\\` FROM (VALUES
     ('Hello', 1), ('World', 2), ('Hello', 3), ('World', 4), ('Hello', 5)
-  ) AS T(\\\`word\\\`, \\\`frequency\\\`)\`,
-  inputs: [bootstrap],
-  outputSchema: WordSchema,
-});
+  ) AS T(\\\`word\\\`, \\\`frequency\\\`)\`}
+  outputSchema={WordSchema}
+/>
 \`\`\`
 
-\`<RawSQL>\` requires at least one structural input for DAG wiring even when the SQL body references none, so a 1-row bounded \`<DataGenSource>\` is passed and ignored by the \`VALUES\` expression.
-
-The pipeline also wires \`words → Aggregate → GenericSink\` via explicit \`children\` rather than sibling JSX, because the sibling-chain resolver does not currently recognise \`<RawSQL>\` as a chainable upstream. This is a DSL gap, not an example anti-pattern — once \`RawSQL\` participates in sibling-chain resolution, the same pipeline can be expressed as plain sibling JSX without wiring nodes by hand.`
+\`<RawSQL>\` participates in sibling-chain JSX, so it sits as a direct child of \`<Pipeline>\` and the downstream \`<Aggregate>\`/\`<GenericSink>\` wire automatically.`
 
 const GETTING_STARTED_TRANSLATION_NOTE = `The Apache Flink original defines a Java \`ScalarFunction\` UDF to normalize the address string:
 

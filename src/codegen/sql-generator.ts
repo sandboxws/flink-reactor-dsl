@@ -1611,6 +1611,8 @@ function resolveSinkMetadata(
           // they need upstream data and are applied as intermediate transforms.
           if (sibling.kind === "Source") {
             // Sources always resolve
+          } else if (sibling.kind === "RawSQL") {
+            // RawSQL is source-like — declares its own outputSchema
           } else if (
             (sibling.kind === "Transform" ||
               sibling.kind === "Window" ||
@@ -1663,7 +1665,11 @@ function resolveSinkMetadata(
           const transforms: ConstructNode[] = []
           for (let j = i + 1; j < sinkIndex; j++) {
             const transform = parent.children[j]
-            if (transform.kind === "Transform" || transform.kind === "Window") {
+            if (
+              transform.kind === "Transform" ||
+              transform.kind === "Window" ||
+              transform.kind === "RawSQL"
+            ) {
               transforms.push(transform)
               if (schema) schema = resolveTransformSchema(transform, schema)
             }
@@ -1689,6 +1695,8 @@ function resolveSinkMetadata(
           const sibling = parent.children[i]
           if (sibling.kind === "Source") {
             // Source — resolve directly
+          } else if (sibling.kind === "RawSQL") {
+            // RawSQL is source-like — declares its own outputSchema
           } else if (
             (sibling.kind === "Transform" ||
               sibling.kind === "Window" ||
@@ -1719,7 +1727,11 @@ function resolveSinkMetadata(
           const transforms: ConstructNode[] = []
           for (let j = i + 1; j < routeIndex; j++) {
             const transform = parent.children[j]
-            if (transform.kind === "Transform" || transform.kind === "Window") {
+            if (
+              transform.kind === "Transform" ||
+              transform.kind === "Window" ||
+              transform.kind === "RawSQL"
+            ) {
               transforms.push(transform)
               if (routeSchema)
                 routeSchema = resolveTransformSchema(transform, routeSchema)
@@ -1883,7 +1895,10 @@ function buildSiblingChainQuery(
   // unchanged.
   let chainStart = 0
   for (let i = sinkIndex - 1; i >= 0; i--) {
-    if (parent.children[i].kind === "Source") {
+    const k = parent.children[i].kind
+    // RawSQL is source-like for chain-start purposes — a self-contained
+    // SQL body opens a new chain segment just like a Source does.
+    if (k === "Source" || k === "RawSQL") {
       chainStart = i
       break
     }
@@ -1896,7 +1911,8 @@ function buildSiblingChainQuery(
       sibling.kind === "Transform" ||
       sibling.kind === "Window" ||
       sibling.kind === "Join" ||
-      sibling.kind === "CEP"
+      sibling.kind === "CEP" ||
+      sibling.kind === "RawSQL"
     ) {
       chain.push(sibling)
     }
@@ -1918,7 +1934,9 @@ function buildSiblingChainQuery(
 
   // Track schema through the chain for schema-aware transforms (Rename, Drop, Cast, etc.)
   let chainSchema: ResolvedColumn[] | null =
-    chain[0].kind === "Source" ? resolveNodeSchema(chain[0], nodeIndex) : null
+    chain[0].kind === "Source" || chain[0].kind === "RawSQL"
+      ? resolveNodeSchema(chain[0], nodeIndex)
+      : null
 
   const chainFragStart = _fragments?.length ?? 0
 

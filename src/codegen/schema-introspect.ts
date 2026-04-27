@@ -416,6 +416,16 @@ export function resolveNodeSchema(
       return columns
     }
 
+    // RawSQL — declared outputSchema is the source of truth, regardless of inputs
+    case "RawSQL": {
+      const schema = node.props.outputSchema as SchemaDefinition | undefined
+      if (!schema) return null
+      return Object.entries(schema.fields).map(([name, type]) => ({
+        name,
+        type: type as string,
+      }))
+    }
+
     // VirtualRef — internal node used by sibling/branch chaining
     case "VirtualRef": {
       // Schema carried from the previous transform in a sibling chain
@@ -515,6 +525,19 @@ export function resolveTransformSchema(
 
     case "Coalesce":
       return inputSchema // passthrough
+
+    // RawSQL replaces the input schema with its declared outputSchema —
+    // the SQL body is opaque, so we trust the user's declaration.
+    case "RawSQL": {
+      const schema = transform.props.outputSchema as
+        | SchemaDefinition
+        | undefined
+      if (!schema) return inputSchema // fall back to passthrough if undeclared
+      return Object.entries(schema.fields).map(([name, type]) => ({
+        name,
+        type: type as string,
+      }))
+    }
 
     case "AddField": {
       const addCols = transform.props.columns as Record<string, string>
@@ -783,6 +806,8 @@ function resolveSinkSchemas(
           // they need upstream data and are applied as intermediate transforms.
           if (sibling.kind === "Source") {
             // Sources always resolve
+          } else if (sibling.kind === "RawSQL") {
+            // RawSQL is source-like — declares its own outputSchema
           } else if (
             (sibling.kind === "Transform" ||
               sibling.kind === "Window" ||
@@ -802,7 +827,9 @@ function resolveSinkSchemas(
           for (let j = i + 1; j < sinkIndex; j++) {
             const transform = parent.children[j]
             if (
-              (transform.kind === "Transform" || transform.kind === "Window") &&
+              (transform.kind === "Transform" ||
+                transform.kind === "Window" ||
+                transform.kind === "RawSQL") &&
               schema
             ) {
               schema = resolveTransformSchema(transform, schema)

@@ -7,8 +7,14 @@ import type { BaseComponentProps, ConstructNode } from "@/core/types.js"
 export interface RawSQLProps extends BaseComponentProps {
   /** Arbitrary SQL string to inline as a subquery */
   readonly sql: string
-  /** Input streams referenced in the SQL */
-  readonly inputs: readonly ConstructNode[]
+  /**
+   * Input streams referenced by name in the SQL body. Optional: omit when
+   * the SQL is self-contained (e.g. a `VALUES` literal). When `<RawSQL>`
+   * sits in a sibling chain, the preceding sibling becomes the implicit
+   * upstream — so `inputs` is only needed for fan-in (RawSQL referencing
+   * two or more named sources at once that aren't already in the chain).
+   */
+  readonly inputs?: readonly ConstructNode[]
   /** Schema describing the output of the raw SQL */
   readonly outputSchema: SchemaDefinition
   readonly children?: ConstructNode | ConstructNode[]
@@ -17,17 +23,14 @@ export interface RawSQLProps extends BaseComponentProps {
 /**
  * RawSQL: escape hatch that inlines arbitrary SQL into the pipeline.
  *
- * The `inputs` array declares which upstream streams the SQL references.
- * The `outputSchema` declares the shape of the result, allowing
- * downstream components to consume it as a typed Stream.
+ * The optional `inputs` array declares upstream streams referenced by name
+ * in the SQL body (for fan-in patterns). The `outputSchema` declares the
+ * shape of the result, allowing downstream components to consume it as a
+ * typed Stream.
  */
 export function RawSQL(props: RawSQLProps): ConstructNode {
   const { inputs, children, ...rest } = props
-
-  // Validate that at least one input is provided
-  if (!inputs || inputs.length === 0) {
-    throw new Error("RawSQL requires at least one input stream")
-  }
+  const inputArray = inputs ?? []
 
   const childArray =
     children == null ? [] : Array.isArray(children) ? children : [children]
@@ -35,8 +38,8 @@ export function RawSQL(props: RawSQLProps): ConstructNode {
   // Input streams become children so the DAG wires correctly
   return createElement(
     "RawSQL",
-    { ...rest, inputIds: inputs.map((i) => i.id) },
-    ...inputs,
+    { ...rest, inputIds: inputArray.map((i) => i.id) },
+    ...inputArray,
     ...childArray,
   )
 }

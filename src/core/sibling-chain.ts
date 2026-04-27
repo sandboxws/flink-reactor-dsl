@@ -87,6 +87,9 @@ function findPrecedingSourceId(
   for (let i = from - 1; i >= 0; i--) {
     const sibling = siblings[i]
     if (sibling.kind === "Source") return sibling.id
+    // RawSQL is source-like: it carries its own SQL body and `outputSchema`,
+    // so a sink immediately following one binds to it directly.
+    if (sibling.kind === "RawSQL") return sibling.id
     if (
       (sibling.kind === "Transform" ||
         sibling.kind === "Window" ||
