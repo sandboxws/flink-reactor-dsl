@@ -1,5 +1,10 @@
 import type { ScaffoldOptions, TemplateFile } from "@/cli/commands/new.js"
-import { DSL_VERSION, makeConfig, makeGitignore } from "./shared.js"
+import {
+  DSL_VERSION,
+  makeConfig,
+  makeGitignore,
+  templateReadme,
+} from "./shared.js"
 
 export function getMonorepoTemplates(opts: ScaffoldOptions): TemplateFile[] {
   const workspacePkg = {
@@ -140,5 +145,22 @@ export default defineEnvironment({
       path: "apps/default-app/tests/.gitkeep",
       content: "",
     },
+    templateReadme({
+      templateName: "monorepo",
+      tagline:
+        "A pnpm-workspace FlinkReactor scaffold with shared `packages/schemas` and `packages/patterns` libraries plus an `apps/default-app` consumer. Use this when you have multiple apps that should share schema definitions and reusable pipeline patterns rather than copy-pasting them across projects.",
+      pipelines: [],
+      prerequisites: [
+        "`pnpm` (the workspace uses `pnpm-workspace.yaml`)",
+        "Node.js ≥ 18",
+      ],
+      gettingStarted: [
+        "pnpm install",
+        "# Add shared schemas to packages/schemas/index.ts",
+        "# Add reusable patterns to packages/patterns/index.ts",
+        "# Add pipelines to apps/default-app/pipelines/<name>/index.tsx",
+        "pnpm --filter @your-project/default-app synth",
+      ],
+    }),
   ]
 }
