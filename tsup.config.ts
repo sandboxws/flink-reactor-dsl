@@ -9,7 +9,11 @@ const dslVersion = pkg.version as string
 export default defineConfig([
   // Library entry — importable as `import { ... } from '@flink-reactor/dsl'`
   {
-    entry: { index: "src/index.ts", "jsx-runtime": "src/jsx-runtime.ts" },
+    entry: {
+      index: "src/index.ts",
+      "jsx-runtime": "src/jsx-runtime.ts",
+      "jsx-dev-runtime": "src/jsx-dev-runtime.ts",
+    },
     format: ["esm"],
     target: "node18",
     outDir: "dist",
