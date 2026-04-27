@@ -1,5 +1,10 @@
 import type { ScaffoldOptions, TemplateFile } from "@/cli/commands/new.js"
-import { sharedFiles } from "./shared.js"
+import {
+  pipelineReadme,
+  sharedFiles,
+  templatePipelineTestStub,
+  templateReadme,
+} from "./shared.js"
 
 export function getEcommerceTemplates(opts: ScaffoldOptions): TemplateFile[] {
   return [
@@ -446,16 +451,136 @@ export default (
 `,
     },
 
+    // ── Per-pipeline READMEs ──────────────────────────────────────────
+
+    pipelineReadme({
+      pipelineName: "ecom-order-enrichment",
+      tagline:
+        "Three-way join: orders × order-items (interval) × products (temporal/versioned) → enriched-orders Kafka topic.",
+      demonstrates: [
+        '`<KafkaSource>` × 3, including a `format="debezium-json"` versioned product stream.',
+        "`<IntervalJoin>` joining orders and order-items on `orderId` within a 30-second event-time window.",
+        "`<TemporalJoin>` enriching the joined stream against the versioned product dimension via `FOR SYSTEM_TIME AS OF orderTime`.",
+        "`<KafkaSink>` writing the enriched flow to `ecom.order-enriched`.",
+      ],
+      topology: `KafkaSource (orders)        ─┐
+KafkaSource (items)         ─┼─► IntervalJoin (orders.orderId = items.orderId, ±30s) ─┐
+                             │                                                       ├─► TemporalJoin (productId, AS OF orderTime) ─► KafkaSink (ecom.order-enriched)
+KafkaSource (products, debz) ────────────────────────────────────────────────────────┘`,
+      schemas: [
+        "`schemas/ecommerce.ts` — `OrderSchema`, `OrderItemSchema`, `ProductSchema` (with `productId` PK), `OrderEnrichedSchema`",
+      ],
+      runCommand: `pnpm synth
+pnpm test`,
+    }),
+    pipelineReadme({
+      pipelineName: "ecom-revenue-analytics",
+      tagline:
+        "5-minute hopping-window per-category revenue analytics with a Route branch for high-value alerts.",
+      demonstrates: [
+        "`<KafkaSource>` consuming the `ecom.order-enriched` topic produced by `ecom-order-enrichment`.",
+        "`<Route>` splitting the stream into a default analytics branch and a high-value-alerts branch.",
+        '`<SlideWindow size="5 MINUTE" slide="1 MINUTE">` for overlapping per-category aggregates.',
+        "`<JdbcSink>` for the rolling-window stats and `<KafkaSink>` for the alerting branch.",
+      ],
+      topology: `KafkaSource (ecom.order-enriched)
+  └── Route
+        ├── Default ─► SlideWindow (5min/1min, on=orderTime) ─► Aggregate (GROUP BY category, SUM/COUNT) ─► JdbcSink (revenue_by_category)
+        └── Branch (amount > 500) ─► KafkaSink (ecom.revenue-alerts)`,
+      schemas: [
+        "`schemas/ecommerce.ts` — `OrderEnrichedSchema` (consumer side)",
+      ],
+      runCommand: `pnpm synth
+pnpm test`,
+    }),
+    pipelineReadme({
+      pipelineName: "ecom-customer-360",
+      tagline:
+        "Per-customer 30-minute session aggregates with a JDBC dimension lookup, written upsert-style back to Postgres.",
+      demonstrates: [
+        "`<KafkaSource>` (orders) plus `<JdbcSource>` (customers) — heterogeneous source mix.",
+        "`<LookupJoin>` against the customers JDBC dimension with an LRU cache (10k rows, 10min TTL).",
+        '`<SessionWindow gap="30 MINUTE" on="orderTime">` modelling per-customer browsing sessions.',
+        "`<JdbcSink>` with `upsertMode` and `keyFields={['customerId']}` for the running-state output.",
+      ],
+      topology: `KafkaSource (orders) ─┐
+                       ├─► LookupJoin (customers JDBC, lru cache) ─► SessionWindow (30min, on=orderTime) ─► Aggregate (GROUP BY customerId/name/tier) ─► JdbcSink (customer_sessions, upsert)
+JdbcSource (customers) ─┘`,
+      schemas: [
+        "`schemas/ecommerce.ts` — `OrderSchema`, `CustomerSchema` (with `customerId` PK)",
+      ],
+      runCommand: `pnpm synth
+pnpm test`,
+    }),
+    pipelineReadme({
+      pipelineName: "pump-ecom",
+      tagline:
+        "Internal data-generator pipeline that pumps synthetic orders, order-items, products, and customers into the corresponding Kafka topics.",
+      demonstrates: [
+        "`<DataGenSource>` × 4 driving `<KafkaSink>` × 4 inside a single `<StatementSet>`.",
+        "Bundle-internal pump pattern (no upstream Apache Flink source — exists only to feed the three main ecommerce pipelines on the local sim).",
+      ],
+      topology: `DataGenSource (Order)          ─► KafkaSink (ecom.orders)
+DataGenSource (OrderItem)      ─► KafkaSink (ecom.order-items)
+DataGenSource (Product)        ─► KafkaSink (ecom.products)
+DataGenSource (Customer)       ─► KafkaSink (ecom.customers)`,
+      schemas: ["`schemas/ecommerce.ts` — same schemas the consumers read"],
+      runCommand: `pnpm synth
+pnpm test`,
+    }),
+
     // ── Tests ────────────────────────────────────────────────────────
 
-    {
-      path: "tests/pipelines/ecom-order-enrichment.test.ts",
-      content: `import { describe, it } from 'vitest';
+    templatePipelineTestStub({
+      pipelineName: "ecom-order-enrichment",
+      loadBearingPatterns: [
+        /BETWEEN/i,
+        /FOR SYSTEM_TIME AS OF/i,
+        /debezium-json/i,
+      ],
+    }),
+    templatePipelineTestStub({
+      pipelineName: "ecom-revenue-analytics",
+      loadBearingPatterns: [/HOP\(/i, /GROUP BY/i, /jdbc/i],
+    }),
+    templatePipelineTestStub({
+      pipelineName: "ecom-customer-360",
+      loadBearingPatterns: [/SESSION/i, /jdbc/i, /GROUP BY/i],
+    }),
+    templatePipelineTestStub({
+      pipelineName: "pump-ecom",
+      loadBearingPatterns: [/INSERT INTO/i, /datagen/i],
+    }),
 
-describe('ecom-order-enrichment pipeline', () => {
-  it.todo('synthesizes valid Flink SQL with interval + temporal join');
-});
-`,
-    },
+    // ── Project-root README ───────────────────────────────────────────
+
+    templateReadme({
+      templateName: "ecommerce",
+      tagline:
+        "Three end-to-end e-commerce pipelines plus a data pump: order-enrichment (3-way interval+temporal join), revenue-analytics (sliding window + Route branching), customer-360 (lookup join + session window). The richest scaffolder template — exercises the full DSL surface across joins, windows, route-branching, and heterogeneous sources/sinks.",
+      pipelines: [
+        {
+          name: "ecom-order-enrichment",
+          pitch:
+            "Orders × order-items (interval) × products (temporal) → enriched-orders Kafka topic.",
+        },
+        {
+          name: "ecom-revenue-analytics",
+          pitch:
+            "5-minute hopping-window per-category revenue with a high-value-alert branch via `<Route>`.",
+        },
+        {
+          name: "ecom-customer-360",
+          pitch:
+            "30-minute session aggregates with JDBC lookup-join enrichment, upsert sink to Postgres.",
+        },
+        {
+          name: "pump-ecom",
+          pitch:
+            "Internal DataGen → Kafka pump for orders, order-items, products, and customers.",
+        },
+      ],
+      gettingStarted: ["pnpm install", "pnpm synth", "pnpm test"],
+    }),
   ]
 }
