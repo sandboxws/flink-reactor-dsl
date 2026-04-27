@@ -22,6 +22,8 @@ import {
   productSalesSimTable,
   transactionSchemaFile,
   transactionSimTable,
+  userNameSchemaFile,
+  userNameSimTable,
   userScoreSchemaFile,
   userScoreSimTable,
   wordSchemaFile,
@@ -152,6 +154,13 @@ const cases: readonly SchemaCase[] = [
     simTable: userScoreSimTable(),
     expectedFields: ["name", "score", "ts"],
     expectedPath: "schemas/user-score.ts",
+  },
+  {
+    name: "userName",
+    file: userNameSchemaFile(),
+    simTable: userNameSimTable(),
+    expectedFields: ["id", "name"],
+    expectedPath: "schemas/user-name.ts",
   },
   {
     name: "productSales",

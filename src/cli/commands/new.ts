@@ -20,6 +20,8 @@ import { getRealtimeAnalyticsTemplates } from "@/cli/templates/realtime-analytic
 import { getRideSharingTemplates } from "@/cli/templates/ride-sharing.js"
 import { getStarterTemplates } from "@/cli/templates/starter.js"
 import { getStockBasicsTemplates } from "@/cli/templates/stock-basics.js"
+import { getStockDsEasyTemplates } from "@/cli/templates/stock-ds-easy.js"
+import { getStockDsModerateTemplates } from "@/cli/templates/stock-ds-moderate.js"
 import { getStockTemporalTopnTemplates } from "@/cli/templates/stock-temporal-topn.js"
 import { CliError } from "@/core/errors.js"
 
@@ -37,6 +39,8 @@ export type TemplateName =
   | "lakehouse-ingestion"
   | "lakehouse-analytics"
   | "stock-basics"
+  | "stock-ds-easy"
+  | "stock-ds-moderate"
   | "stock-temporal-topn"
 export type PackageManager = "pnpm" | "npm" | "yarn"
 export type FlinkVersion = "1.20" | "2.0" | "2.1" | "2.2"
@@ -79,6 +83,8 @@ const TEMPLATE_FACTORIES: Record<TemplateName, TemplateFactory> = {
   "lakehouse-ingestion": getLakehouseIngestionTemplates,
   "lakehouse-analytics": getLakehouseAnalyticsTemplates,
   "stock-basics": getStockBasicsTemplates,
+  "stock-ds-easy": getStockDsEasyTemplates,
+  "stock-ds-moderate": getStockDsModerateTemplates,
   "stock-temporal-topn": getStockTemporalTopnTemplates,
 }
 
@@ -100,6 +106,10 @@ const TEMPLATE_DESCRIPTIONS: Record<TemplateName, string> = {
     "Medallion architecture: bronze → silver → gold with Iceberg (3 pipelines + pump)",
   "stock-basics":
     "Apache Flink basics: WordCount, GettingStarted, Stream-SQL Union, Stream-Window SQL (4 pipelines)",
+  "stock-ds-easy":
+    "DataStream→FlinkSQL migration showcase (easy bucket): wordcount, session/tumble windows, interval join (5 pipelines)",
+  "stock-ds-moderate":
+    "DataStream→FlinkSQL migration showcase (moderate bucket): join DSv2, side-output routing, MATCH_RECOGNIZE state machine (4 pipelines + pump)",
   "stock-temporal-topn":
     "Apache Flink advanced: temporal/versioned joins + continuous Top-N (2 pipelines + pump)",
 }
@@ -358,6 +368,16 @@ async function promptTemplate(): Promise<TemplateName | symbol> {
         hint: TEMPLATE_DESCRIPTIONS["stock-basics"],
       },
       {
+        value: "stock-ds-easy",
+        label: "Stock examples — DataStream migration (easy)",
+        hint: TEMPLATE_DESCRIPTIONS["stock-ds-easy"],
+      },
+      {
+        value: "stock-ds-moderate",
+        label: "Stock examples — DataStream migration (moderate)",
+        hint: TEMPLATE_DESCRIPTIONS["stock-ds-moderate"],
+      },
+      {
         value: "stock-temporal-topn",
         label: "Stock examples — temporal join + Top-N",
         hint: TEMPLATE_DESCRIPTIONS["stock-temporal-topn"],
@@ -418,6 +438,8 @@ function validateTemplate(value: string | undefined): TemplateName | null {
     "lakehouse-ingestion",
     "lakehouse-analytics",
     "stock-basics",
+    "stock-ds-easy",
+    "stock-ds-moderate",
     "stock-temporal-topn",
   ]
   return valid.includes(value as TemplateName) ? (value as TemplateName) : null

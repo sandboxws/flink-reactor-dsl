@@ -43,6 +43,20 @@ export const EXPECTED_PIPELINES: Record<TemplateName, readonly string[]> = {
     "stream-window-sql",
     "wordcount-sql",
   ],
+  "stock-ds-easy": [
+    "session-windowing",
+    "socket-window-wordcount",
+    "window-join",
+    "window-wordcount",
+    "wordcount-streaming",
+  ],
+  "stock-ds-moderate": [
+    "count-product-sales-dsv2",
+    "join-dsv2",
+    "pump-state-machine-cep",
+    "side-output-routing",
+    "state-machine-cep",
+  ],
   "stock-temporal-topn": [
     "pump-temporal-join-fx",
     "temporal-join-fx",

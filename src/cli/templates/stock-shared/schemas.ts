@@ -511,6 +511,12 @@ export function alertSimTable(opts: SimTableOpts = {}): string {
 
 // ── ProductSales ─────────────────────────────────────────────────────
 // Apache Flink: CountProductSalesWindowing (DSv2)
+//
+// The Apache Flink original uses a Java `long timestamp` (epoch millis) and
+// derives a watermark from it via `withTimestampAssigner`. The DSL's window
+// operators require a TIMESTAMP-typed time attribute, so the port uses
+// TIMESTAMP_LTZ(3) — semantically equivalent (event-time, ms precision) and
+// the watermark declaration sits naturally on the schema.
 
 export function productSalesSchemaFile(): TemplateFile {
   return {
@@ -520,8 +526,9 @@ export function productSalesSchemaFile(): TemplateFile {
 export default Schema({
   fields: {
     productId: Field.BIGINT(),
-    timestamp: Field.BIGINT(),
+    timestamp: Field.TIMESTAMP_LTZ(3),
   },
+  watermark: { column: 'timestamp', expression: "timestamp - INTERVAL '5' SECOND" },
 });
 `,
   }
@@ -539,17 +546,22 @@ export function productSalesSimTable(opts: SimTableOpts = {}): string {
   rowsPerSecond: ${rowsPerSecond},
   columns: {
     productId: 'BIGINT',
-    timestamp: 'BIGINT',
+    timestamp: 'TIMESTAMP_LTZ(3)',
   },
+  watermark: { column: 'timestamp', expression: "timestamp - INTERVAL '5' SECOND" },
   fields: {
     productId: { kind: 'random', min: 1, max: 100 },
-    timestamp: { kind: 'sequence', start: 1, end: 1000000 },
   },
 }`
 }
 
 // ── KeyedEvent ───────────────────────────────────────────────────────
 // Apache Flink: SessionWindowing
+//
+// The Apache Flink original uses `long timestamp` plus a custom
+// `withTimestampAssigner`. SessionWindow in the DSL requires a
+// TIMESTAMP-typed time attribute with a watermark on it, so this schema
+// declares `ts` as TIMESTAMP_LTZ(3) with the watermark inline.
 
 export function keyedEventSchemaFile(): TemplateFile {
   return {
@@ -559,9 +571,10 @@ export function keyedEventSchemaFile(): TemplateFile {
 export default Schema({
   fields: {
     id: Field.STRING(),
-    ts: Field.BIGINT(),
+    ts: Field.TIMESTAMP_LTZ(3),
     value: Field.INT(),
   },
+  watermark: { column: 'ts', expression: "ts - INTERVAL '1' SECOND" },
 });
 `,
   }
@@ -579,13 +592,53 @@ export function keyedEventSimTable(opts: SimTableOpts = {}): string {
   rowsPerSecond: ${rowsPerSecond},
   columns: {
     id: 'STRING',
-    ts: 'BIGINT',
+    ts: 'TIMESTAMP_LTZ(3)',
     value: 'INT',
   },
+  watermark: { column: 'ts', expression: "ts - INTERVAL '1' SECOND" },
   fields: {
     id: { kind: 'random', length: 6 },
-    ts: { kind: 'sequence', start: 1, end: 1000000 },
     value: { kind: 'random', min: 0, max: 100 },
+  },
+}`
+}
+
+// ── UserName ─────────────────────────────────────────────────────────
+// Apache Flink: Join (DSv2)
+// Java POJO: simple {id, name} pair joined against UserScore by name = id.
+
+export function userNameSchemaFile(): TemplateFile {
+  return {
+    path: "schemas/user-name.ts",
+    content: `${HEADER}
+
+export default Schema({
+  fields: {
+    id: Field.STRING(),
+    name: Field.STRING(),
+  },
+});
+`,
+  }
+}
+
+export function userNameSimTable(opts: SimTableOpts = {}): string {
+  const table = opts.table ?? "user_names"
+  const topic = opts.topic ?? "user-names"
+  const format = opts.format ?? "json"
+  const rowsPerSecond = opts.rowsPerSecond ?? 5
+  return `{
+  table: '${table}',
+  topic: '${topic}',
+  format: '${format}',
+  rowsPerSecond: ${rowsPerSecond},
+  columns: {
+    id: 'STRING',
+    name: 'STRING',
+  },
+  fields: {
+    id: { kind: 'random', length: 8 },
+    name: { kind: 'random', length: 12 },
   },
 }`
 }
