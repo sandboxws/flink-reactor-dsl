@@ -1,5 +1,10 @@
 import type { ScaffoldOptions, TemplateFile } from "@/cli/commands/new.js"
-import { sharedFiles } from "./shared.js"
+import {
+  pipelineReadme,
+  sharedFiles,
+  templatePipelineTestStub,
+  templateReadme,
+} from "./shared.js"
 
 export function getStarterTemplates(opts: ScaffoldOptions): TemplateFile[] {
   return [
@@ -115,15 +120,44 @@ export default (
 );
 `,
     },
-    {
-      path: "tests/pipelines/hello-world.test.ts",
-      content: `import { describe, it, expect } from 'vitest';
-// import { synth } from '@flink-reactor/dsl/testing';
-
-describe('hello-world pipeline', () => {
-  it.todo('synthesizes valid Flink SQL');
-});
-`,
-    },
+    pipelineReadme({
+      pipelineName: "hello-world",
+      tagline:
+        "Filter an in-stock products CDC stream and write the survivors to a downstream Kafka topic.",
+      demonstrates: [
+        '`<KafkaSource>` consuming `format="debezium-json"` (CDC retract changelog).',
+        "`<Filter>` with a per-record SQL predicate (`quantity > 0`).",
+        "`<KafkaSink>` writing the filtered stream to a downstream topic.",
+      ],
+      topology: `KafkaSource (cdc.inventory.products, debezium-json)
+  └── Filter (quantity > 0)
+        └── KafkaSink (in-stock-products)`,
+      schemas: [
+        "`schemas/products.ts` — `{ id, name, category, price, quantity }` with `id` as primary key",
+      ],
+      runCommand: `pnpm synth
+pnpm test`,
+    }),
+    templatePipelineTestStub({
+      pipelineName: "hello-world",
+      loadBearingPatterns: [
+        /cdc\.inventory\.products/,
+        /quantity > 0/,
+        /debezium-json/,
+      ],
+    }),
+    templateReadme({
+      templateName: "starter",
+      tagline:
+        "A minimal end-to-end FlinkReactor pipeline: Kafka CDC source → SQL Filter → Kafka sink. The smallest scaffold that exercises the full synthesis loop (DSL → Flink SQL → FlinkDeployment CRD).",
+      pipelines: [
+        {
+          name: "hello-world",
+          pitch:
+            "CDC source filtered to in-stock products, written to a downstream Kafka topic.",
+        },
+      ],
+      gettingStarted: ["pnpm install", "pnpm synth", "pnpm test"],
+    }),
   ]
 }
