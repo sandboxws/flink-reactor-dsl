@@ -84,14 +84,16 @@ export async function scaffoldAndSynth(
   return { artifacts, tempRoot }
 }
 
-function linkDslPackage(projectDir: string): void {
+export const REPO_ROOT_PATH = REPO_ROOT
+
+export function linkDslPackage(projectDir: string): void {
   const scope = join(projectDir, "node_modules", "@flink-reactor")
   mkdirSync(scope, { recursive: true })
   symlinkSync(REPO_ROOT, join(scope, "dsl"), "dir")
 }
 
 let builtChecked = false
-function ensureBuilt(): void {
+export function ensureBuilt(): void {
   if (builtChecked) return
   const distIndex = join(REPO_ROOT, "dist", "index.js")
   if (!existsSync(distIndex)) {
