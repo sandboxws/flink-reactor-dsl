@@ -114,6 +114,24 @@ export function makeNpmrc(registry: string): string {
   return `registry=${registry}\n`
 }
 
+// Vitest needs `resolve.alias` to mirror the tsconfig `@/*` path mapping.
+// Vite intentionally ignores tsconfig `paths` (it's a typecheck contract,
+// not a runtime contract), so without this file every `import x from '@/...'`
+// inside a pipeline blows up under `pnpm test`.
+export function makeVitestConfig(): string {
+  return `import { fileURLToPath } from 'node:url'
+import { defineConfig } from 'vitest/config'
+
+export default defineConfig({
+  resolve: {
+    alias: {
+      '@': fileURLToPath(new URL('.', import.meta.url)),
+    },
+  },
+})
+`
+}
+
 export function sharedFiles(opts: ScaffoldOptions): TemplateFile[] {
   const files: TemplateFile[] = [
     {
@@ -121,6 +139,7 @@ export function sharedFiles(opts: ScaffoldOptions): TemplateFile[] {
       content: makePackageJson(opts),
     },
     { path: "tsconfig.json", content: makeTsconfig(opts) },
+    { path: "vitest.config.ts", content: makeVitestConfig() },
     { path: "flink-reactor.config.ts", content: makeConfig(opts) },
     { path: ".gitignore", content: makeGitignore() },
   ]
@@ -303,8 +322,8 @@ import {
 import pipeline from '../../pipelines/${opts.pipelineName}/index.js'
 
 function synth(node: ConstructNode): string {
-  const result = synthesizeApp({ children: [node] })
-  return result.artifacts[0].sql.sql
+  const result = synthesizeApp({ name: '${opts.pipelineName}', children: [node] })
+  return result.pipelines[0].sql.sql
 }
 
 describe('${opts.pipelineName} pipeline', () => {
