@@ -1,5 +1,10 @@
 import type { ScaffoldOptions, TemplateFile } from "@/cli/commands/new.js"
-import { sharedFiles } from "./shared.js"
+import {
+  pipelineReadme,
+  sharedFiles,
+  templatePipelineTestStub,
+  templateReadme,
+} from "./shared.js"
 
 export function getIotFactoryTemplates(opts: ScaffoldOptions): TemplateFile[] {
   return [
@@ -211,5 +216,81 @@ export default (
 );
 `,
     },
+
+    // ── Per-pipeline READMEs ──────────────────────────────────────────
+
+    pipelineReadme({
+      pipelineName: "iot-predictive-maintenance",
+      tagline:
+        "5-minute hopping-window per-device sensor stats with JDBC dimension lookup, routed to alerts vs dashboard sinks.",
+      demonstrates: [
+        '`<SlideWindow size="5 MINUTE" slide="30 SECOND" on="readingTime">` for overlapping sensor windows.',
+        "`<Aggregate>` computing `AVG`, `STDDEV_POP`, `MAX`, and `COUNT(*)` per `(deviceId, sensorType)`.",
+        "`<LookupJoin>` against a JDBC device-registry dimension with LRU cache (10k rows, 10min TTL) — the canonical pattern for slow-changing dimension enrichment without rowtime-attribute issues.",
+        "`<Route>` forking high-stddev readings to `iot.maintenance-alerts` and the rest to `sensor_dashboard` JDBC.",
+      ],
+      topology: `KafkaSource (sensor-readings)
+  └── SlideWindow (5min/30s, on=readingTime)
+        └── Aggregate (GROUP BY deviceId, sensorType — AVG/STDDEV/MAX/COUNT)
+              └── LookupJoin (devices, lru cache)
+                    └── Route
+                          ├── Branch (stddevValue > thresholdTemp) ─► KafkaSink (iot.maintenance-alerts)
+                          └── Default ─► JdbcSink (sensor_dashboard)`,
+      schemas: [
+        "`schemas/iot.ts` — `SensorReadingSchema` (with `readingTime` watermark), `DeviceRegistrySchema` (with `deviceId` PK)",
+      ],
+      runCommand: `pnpm synth
+pnpm test`,
+    }),
+    pipelineReadme({
+      pipelineName: "pump-iot",
+      tagline:
+        "Internal data-generator pipeline that pumps synthetic sensor readings and device-registry records into the corresponding Kafka topics.",
+      demonstrates: [
+        "Two `<DataGenSource>` driving two `<KafkaSink>` inside a single `<StatementSet>`.",
+        "Bundle-internal pump pattern (no upstream Apache Flink source — exists only to feed `iot-predictive-maintenance` on the local sim).",
+      ],
+      topology: `DataGenSource (SensorReading)   ─► KafkaSink (iot.sensor-readings)
+DataGenSource (DeviceRegistry) ─► KafkaSink (iot.device-registry)`,
+      schemas: ["`schemas/iot.ts` — same schemas the consumer reads"],
+      runCommand: `pnpm synth
+pnpm test`,
+    }),
+
+    // ── Tests ─────────────────────────────────────────────────────────
+
+    templatePipelineTestStub({
+      pipelineName: "iot-predictive-maintenance",
+      loadBearingPatterns: [
+        /HOP\(/i,
+        /STDDEV_POP\(/i,
+        /iot\.maintenance-alerts/,
+      ],
+    }),
+    templatePipelineTestStub({
+      pipelineName: "pump-iot",
+      loadBearingPatterns: [/INSERT INTO/i, /datagen/i],
+    }),
+
+    // ── Project-root README ───────────────────────────────────────────
+
+    templateReadme({
+      templateName: "iot-factory",
+      tagline:
+        "IoT smart-factory predictive-maintenance pipeline plus an internal data pump. The main pipeline runs sliding-window per-device sensor stats, JDBC-lookup-joins against a device registry, and routes high-deviation readings to a maintenance-alerts topic.",
+      pipelines: [
+        {
+          name: "iot-predictive-maintenance",
+          pitch:
+            "Sliding-window sensor stats × JDBC device-registry lookup, routed by stddev threshold to alerts or dashboard sinks.",
+        },
+        {
+          name: "pump-iot",
+          pitch:
+            "Internal DataGen → Kafka pump for sensor-readings and device-registry topics.",
+        },
+      ],
+      gettingStarted: ["pnpm install", "pnpm synth", "pnpm test"],
+    }),
   ]
 }
