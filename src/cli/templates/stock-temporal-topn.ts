@@ -6,10 +6,10 @@
 //   • updating-top-city       ← UpdatingTopCityExample.java
 //   • pump-temporal-join-fx   ← internal data-generator helper
 //
-// See `openspec/changes/add-stock-example-temporal-topn/design.md` (in
-// `flink-reactor-specs`) for the rationale behind each translation choice
-// (debezium-json over Kafka instead of in-process changelog rows; DataGen
-// instead of CSV; <TopN> lowering vs LATERAL correlated subquery).
+// Per-pipeline READMEs document each translation choice (debezium-json
+// over Kafka instead of in-process changelog rows; DataGen instead of CSV;
+// <TopN> lowering vs LATERAL correlated subquery) under their Translation
+// Notes.
 import type { ScaffoldOptions, TemplateFile } from "@/cli/commands/new.js"
 import {
   pipelineReadme,

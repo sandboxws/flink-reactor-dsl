@@ -7,9 +7,6 @@
 // `flink-reactor.config.ts` `sim.init.kafka.tables` — keeping the
 // scaffolded schema definition in lockstep with the simulator's
 // Kafka-topic spec so Flink type drift can't sneak in.
-//
-// See `openspec/changes/add-stock-example-schemas/design.md` for the
-// rationale behind the scaffolder-side approach.
 import type { TemplateFile } from "@/cli/commands/new.js"
 
 const HEADER = "import { Schema, Field } from '@flink-reactor/dsl';"

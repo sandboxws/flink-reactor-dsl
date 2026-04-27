@@ -7,9 +7,8 @@
 //   • stream-sql-union     ← StreamSQLExample.java
 //   • stream-window-sql    ← StreamWindowSQLExample.java
 //
-// See `openspec/changes/add-stock-example-basics/design.md` (in
-// `flink-reactor-specs`) for the rationale behind each translation choice
-// (RawSQL/VALUES, inline SQL UDF, DataGen instead of CSV).
+// Per-pipeline READMEs document each translation choice (RawSQL/VALUES,
+// inline SQL UDF, DataGen instead of CSV) under their Translation Notes.
 import type { ScaffoldOptions, TemplateFile } from "@/cli/commands/new.js"
 import {
   pipelineReadme,
