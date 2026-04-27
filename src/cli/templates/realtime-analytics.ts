@@ -1,5 +1,10 @@
 import type { ScaffoldOptions, TemplateFile } from "@/cli/commands/new.js"
-import { sharedFiles } from "./shared.js"
+import {
+  pipelineReadme,
+  sharedFiles,
+  templatePipelineTestStub,
+  templateReadme,
+} from "./shared.js"
 
 export function getRealtimeAnalyticsTemplates(
   opts: ScaffoldOptions,
@@ -115,15 +120,42 @@ export default (
 );
 `,
     },
-    {
-      path: "tests/pipelines/page-view-analytics.test.ts",
-      content: `import { describe, it, expect } from 'vitest';
-// import { synth } from '@flink-reactor/dsl/testing';
-
-describe('page-view-analytics pipeline', () => {
-  it.todo('synthesizes valid Flink SQL with windowed aggregation');
-});
-`,
-    },
+    pipelineReadme({
+      pipelineName: "page-view-analytics",
+      tagline:
+        "Per-URL view counts in 1-minute event-time tumbling windows, written to Postgres via JDBC.",
+      demonstrates: [
+        "`<KafkaSource>` reading a JSON page-view stream with a watermark on `viewTimestamp`.",
+        '`<TumbleWindow size="1 MINUTE" on="viewTimestamp">` producing fixed event-time buckets.',
+        "`<Aggregate>` emitting `COUNT(*)` per `pageUrl` plus `window_start` / `window_end` metadata.",
+        "`<JdbcSink>` writing the per-window stats to a Postgres `page_view_stats` table.",
+      ],
+      topology: `KafkaSource (page-views, json, watermark on viewTimestamp)
+  └── TumbleWindow (1 MINUTE, on=viewTimestamp)
+        └── Aggregate (GROUP BY pageUrl — COUNT(*), window_start, window_end)
+              └── JdbcSink (postgres analytics.page_view_stats)`,
+      schemas: [
+        "`schemas/page-views.ts` — `PageViewSchema` with watermark on `viewTimestamp`; `PageViewStatsSchema` for the per-window output shape",
+      ],
+      runCommand: `pnpm synth
+pnpm test`,
+    }),
+    templatePipelineTestStub({
+      pipelineName: "page-view-analytics",
+      loadBearingPatterns: [/TUMBLE\(/i, /GROUP BY/i, /jdbc/i],
+    }),
+    templateReadme({
+      templateName: "realtime-analytics",
+      tagline:
+        "Continuous per-URL traffic analytics: Kafka page-views → 1-minute tumbling windows → Postgres. Demonstrates the canonical event-time + watermark + windowed-aggregate + JDBC-sink pattern.",
+      pipelines: [
+        {
+          name: "page-view-analytics",
+          pitch:
+            "1-minute tumbling-window page-view counts, written to Postgres via JDBC.",
+        },
+      ],
+      gettingStarted: ["pnpm install", "pnpm synth", "pnpm test"],
+    }),
   ]
 }
