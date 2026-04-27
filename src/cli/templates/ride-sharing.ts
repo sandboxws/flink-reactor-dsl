@@ -1,5 +1,10 @@
 import type { ScaffoldOptions, TemplateFile } from "@/cli/commands/new.js"
-import { sharedFiles } from "./shared.js"
+import {
+  pipelineReadme,
+  sharedFiles,
+  templatePipelineTestStub,
+  templateReadme,
+} from "./shared.js"
 
 export function getRideSharingTemplates(opts: ScaffoldOptions): TemplateFile[] {
   return [
@@ -205,6 +210,72 @@ export default (
 );
 `,
     },
+    pipelineReadme({
+      pipelineName: "rides-trip-tracking",
+      tagline:
+        "Per-ride trip-state CEP detection: requests × trip-events (interval-joined) → MATCH_RECOGNIZE → routed sinks.",
+      demonstrates: [
+        "Two `<KafkaSource>` event-time streams — `rides.requests` and `rides.trip-events`.",
+        "`<IntervalJoin>` joining each request to events within a 5-minute window after the request time.",
+        "`<MatchRecognize>` detecting the trip-state sequence `request → accept? → pickup → dropoff`.",
+        "`<Route>` writing completed trips to Postgres and cancelled trips to a Kafka driver-alerts topic.",
+      ],
+      topology: `KafkaSource (requests) ─┐
+                       ├─► IntervalJoin (rideId, ±5min) ─► MatchRecognize (request → accept? → pickup → dropoff)
+KafkaSource (events)   ─┘                                      └── Route
+                                                                    ├── Branch (tripStatus = 'dropoff')   ─► JdbcSink (completed_trips)
+                                                                    └── Branch (tripStatus = 'cancelled') ─► KafkaSink (rides.driver-alerts)`,
+      schemas: [
+        "`schemas/rides.ts` — `RideRequestSchema` (with `requestTime` watermark), `TripEventSchema` (with `eventTime` watermark)",
+      ],
+      runCommand: `pnpm synth
+pnpm test`,
+    }),
+    pipelineReadme({
+      pipelineName: "rides-surge-pricing",
+      tagline:
+        "Per-zone tumbling-window demand counts joined to a small surge-zones dimension via broadcast hint.",
+      demonstrates: [
+        '`<TumbleWindow size="1 MINUTE" on="requestTime">` for per-zone demand snapshots.',
+        "`<Aggregate>` producing `COUNT(*)` per zone.",
+        "`<BroadcastJoin>` enriching the demand stream against the small surge-zones table — a `BROADCAST` hint avoids shuffling the small side.",
+        "`<KafkaSink>` writing the surge-priced output to `rides.surge-prices`.",
+      ],
+      topology: `KafkaSource (requests) ─► TumbleWindow (1 MINUTE, on=requestTime) ─► Aggregate (GROUP BY zoneId — COUNT(*))    ─┐
+                                                                                                       ├─► BroadcastJoin (zoneId) ─► KafkaSink (rides.surge-prices)
+KafkaSource (surge-zones, debezium-json)                                                              ─┘`,
+      schemas: [
+        "`schemas/rides.ts` — `RideRequestSchema`, `SurgeZoneSchema` (with `zoneId` PK)",
+      ],
+      runCommand: `pnpm synth
+pnpm test`,
+    }),
+    templatePipelineTestStub({
+      pipelineName: "rides-trip-tracking",
+      loadBearingPatterns: [/MATCH_RECOGNIZE/i, /BETWEEN/i, /jdbc/i],
+    }),
+    templatePipelineTestStub({
+      pipelineName: "rides-surge-pricing",
+      loadBearingPatterns: [/TUMBLE\(/i, /BROADCAST/i, /rides\.surge-prices/],
+    }),
+    templateReadme({
+      templateName: "ride-sharing",
+      tagline:
+        "Two ride-sharing pipelines: `rides-trip-tracking` (CEP via `<MatchRecognize>` over an interval-joined request × event stream) and `rides-surge-pricing` (tumbling-window demand counts × broadcast-joined surge zones).",
+      pipelines: [
+        {
+          name: "rides-trip-tracking",
+          pitch:
+            "MATCH_RECOGNIZE over interval-joined requests × events with routed completed-vs-cancelled sinks.",
+        },
+        {
+          name: "rides-surge-pricing",
+          pitch:
+            "Tumbling-window per-zone demand counts × broadcast-joined surge zones, written to a Kafka surge-prices topic.",
+        },
+      ],
+      gettingStarted: ["pnpm install", "pnpm synth", "pnpm test"],
+    }),
     {
       path: "pipelines/rides-surge-pricing/index.tsx",
       content: `import {
