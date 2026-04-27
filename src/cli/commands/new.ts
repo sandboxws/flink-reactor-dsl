@@ -19,6 +19,7 @@ import { getMonorepoTemplates } from "@/cli/templates/monorepo.js"
 import { getRealtimeAnalyticsTemplates } from "@/cli/templates/realtime-analytics.js"
 import { getRideSharingTemplates } from "@/cli/templates/ride-sharing.js"
 import { getStarterTemplates } from "@/cli/templates/starter.js"
+import { getStockBasicsTemplates } from "@/cli/templates/stock-basics.js"
 import { CliError } from "@/core/errors.js"
 
 export type TemplateName =
@@ -34,6 +35,7 @@ export type TemplateName =
   | "iot-factory"
   | "lakehouse-ingestion"
   | "lakehouse-analytics"
+  | "stock-basics"
 export type PackageManager = "pnpm" | "npm" | "yarn"
 export type FlinkVersion = "1.20" | "2.0" | "2.1" | "2.2"
 
@@ -74,6 +76,7 @@ const TEMPLATE_FACTORIES: Record<TemplateName, TemplateFactory> = {
   "iot-factory": getIotFactoryTemplates,
   "lakehouse-ingestion": getLakehouseIngestionTemplates,
   "lakehouse-analytics": getLakehouseAnalyticsTemplates,
+  "stock-basics": getStockBasicsTemplates,
 }
 
 const TEMPLATE_DESCRIPTIONS: Record<TemplateName, string> = {
@@ -92,6 +95,8 @@ const TEMPLATE_DESCRIPTIONS: Record<TemplateName, string> = {
     "Multi-topic Kafka → Iceberg raw landing (3 tables + pump)",
   "lakehouse-analytics":
     "Medallion architecture: bronze → silver → gold with Iceberg (3 pipelines + pump)",
+  "stock-basics":
+    "Apache Flink basics: WordCount, GettingStarted, Stream-SQL Union, Stream-Window SQL (4 pipelines)",
 }
 
 export function registerNewCommand(program: Command): void {
@@ -342,6 +347,11 @@ async function promptTemplate(): Promise<TemplateName | symbol> {
         label: "IoT / Smart Factory",
         hint: TEMPLATE_DESCRIPTIONS["iot-factory"],
       },
+      {
+        value: "stock-basics",
+        label: "Stock examples — basics",
+        hint: TEMPLATE_DESCRIPTIONS["stock-basics"],
+      },
     ],
   }) as Promise<TemplateName | symbol>
 }
@@ -397,6 +407,7 @@ function validateTemplate(value: string | undefined): TemplateName | null {
     "iot-factory",
     "lakehouse-ingestion",
     "lakehouse-analytics",
+    "stock-basics",
   ]
   return valid.includes(value as TemplateName) ? (value as TemplateName) : null
 }

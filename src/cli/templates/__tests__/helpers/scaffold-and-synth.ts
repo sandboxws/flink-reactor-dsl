@@ -37,6 +37,12 @@ export const EXPECTED_PIPELINES: Record<TemplateName, readonly string[]> = {
     "medallion-silver",
     "pump-medallion",
   ],
+  "stock-basics": [
+    "getting-started",
+    "stream-sql-union",
+    "stream-window-sql",
+    "wordcount-sql",
+  ],
 }
 
 /**
