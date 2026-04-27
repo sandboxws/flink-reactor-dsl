@@ -20,6 +20,7 @@ import { getRealtimeAnalyticsTemplates } from "@/cli/templates/realtime-analytic
 import { getRideSharingTemplates } from "@/cli/templates/ride-sharing.js"
 import { getStarterTemplates } from "@/cli/templates/starter.js"
 import { getStockBasicsTemplates } from "@/cli/templates/stock-basics.js"
+import { getStockTemporalTopnTemplates } from "@/cli/templates/stock-temporal-topn.js"
 import { CliError } from "@/core/errors.js"
 
 export type TemplateName =
@@ -36,6 +37,7 @@ export type TemplateName =
   | "lakehouse-ingestion"
   | "lakehouse-analytics"
   | "stock-basics"
+  | "stock-temporal-topn"
 export type PackageManager = "pnpm" | "npm" | "yarn"
 export type FlinkVersion = "1.20" | "2.0" | "2.1" | "2.2"
 
@@ -77,6 +79,7 @@ const TEMPLATE_FACTORIES: Record<TemplateName, TemplateFactory> = {
   "lakehouse-ingestion": getLakehouseIngestionTemplates,
   "lakehouse-analytics": getLakehouseAnalyticsTemplates,
   "stock-basics": getStockBasicsTemplates,
+  "stock-temporal-topn": getStockTemporalTopnTemplates,
 }
 
 const TEMPLATE_DESCRIPTIONS: Record<TemplateName, string> = {
@@ -97,6 +100,8 @@ const TEMPLATE_DESCRIPTIONS: Record<TemplateName, string> = {
     "Medallion architecture: bronze → silver → gold with Iceberg (3 pipelines + pump)",
   "stock-basics":
     "Apache Flink basics: WordCount, GettingStarted, Stream-SQL Union, Stream-Window SQL (4 pipelines)",
+  "stock-temporal-topn":
+    "Apache Flink advanced: temporal/versioned joins + continuous Top-N (2 pipelines + pump)",
 }
 
 export function registerNewCommand(program: Command): void {
@@ -352,6 +357,11 @@ async function promptTemplate(): Promise<TemplateName | symbol> {
         label: "Stock examples — basics",
         hint: TEMPLATE_DESCRIPTIONS["stock-basics"],
       },
+      {
+        value: "stock-temporal-topn",
+        label: "Stock examples — temporal join + Top-N",
+        hint: TEMPLATE_DESCRIPTIONS["stock-temporal-topn"],
+      },
     ],
   }) as Promise<TemplateName | symbol>
 }
@@ -408,6 +418,7 @@ function validateTemplate(value: string | undefined): TemplateName | null {
     "lakehouse-ingestion",
     "lakehouse-analytics",
     "stock-basics",
+    "stock-temporal-topn",
   ]
   return valid.includes(value as TemplateName) ? (value as TemplateName) : null
 }

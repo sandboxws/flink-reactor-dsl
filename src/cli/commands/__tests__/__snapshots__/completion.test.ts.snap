@@ -115,7 +115,7 @@ _flink_reactor() {
 
 _flink_reactor_new() {
   _arguments \\
-    '(-t --template)'{-t,--template}'[Project template]: :(starter minimal cdc-lakehouse realtime-analytics monorepo ecommerce ride-sharing grocery-delivery banking iot-factory lakehouse-ingestion lakehouse-analytics stock-basics)' \\
+    '(-t --template)'{-t,--template}'[Project template]: :(starter minimal cdc-lakehouse realtime-analytics monorepo ecommerce ride-sharing grocery-delivery banking iot-factory lakehouse-ingestion lakehouse-analytics stock-basics stock-temporal-topn)' \\
     '--pm[Package manager]: :(pnpm npm yarn)' \\
     '--flink-version[Flink version]: :(1.20 2.0 2.1 2.2)' \\
     '--registry[npm registry]: :(npm verdaccio)' \\

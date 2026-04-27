@@ -43,6 +43,11 @@ export const EXPECTED_PIPELINES: Record<TemplateName, readonly string[]> = {
     "stream-window-sql",
     "wordcount-sql",
   ],
+  "stock-temporal-topn": [
+    "pump-temporal-join-fx",
+    "temporal-join-fx",
+    "updating-top-city",
+  ],
 }
 
 /**
