@@ -374,8 +374,9 @@ $RECYCLE.BIN/
 # Verdaccio local registry data
 .verdaccio/
 
-# Private docs (not for public repo)
-docs/
+# Private docs (not for public repo) — except contributor-facing docs
+docs/*
+!docs/contributors/
 
 # AI/IDE agent config (contains local settings and internal workflows)
 .agent/

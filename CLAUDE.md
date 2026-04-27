@@ -26,6 +26,7 @@ Core DSL library + CLI for FlinkReactor. React-style TSX DSL that synthesizes to
 - Flink types: uppercase strings (`'BIGINT'`, `'TIMESTAMP(3)'`)
 - No default exports except pipeline entry points and config files
 - Tests: Vitest, snapshot tests for SQL output (`toMatchSnapshot()`)
+- Scaffolder templates (`src/cli/templates/`) follow [`docs/contributors/template-conventions.md`](docs/contributors/template-conventions.md) — README + per-pipeline test contract
 
 ## Commands
 

@@ -276,7 +276,13 @@ export type {
 // Core: Flink version compat
 export { FlinkVersionCompat } from "./core/flink-compat.js"
 // Core: JSX runtime
-export { createElement, Fragment, jsx, jsxs } from "./core/jsx-runtime.js"
+export {
+  createElement,
+  Fragment,
+  jsx,
+  jsxs,
+  resetNodeIdCounter,
+} from "./core/jsx-runtime.js"
 // Core: Effect foundation — layers
 export {
   CliOutputLive,
