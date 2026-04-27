@@ -1,5 +1,10 @@
 import type { ScaffoldOptions, TemplateFile } from "@/cli/commands/new.js"
-import { sharedFiles } from "./shared.js"
+import {
+  pipelineReadme,
+  sharedFiles,
+  templatePipelineTestStub,
+  templateReadme,
+} from "./shared.js"
 
 export function getGroceryDeliveryTemplates(
   opts: ScaffoldOptions,
@@ -255,5 +260,85 @@ export default (
 );
 `,
     },
+
+    // ── Per-pipeline READMEs ──────────────────────────────────────────
+
+    pipelineReadme({
+      pipelineName: "grocery-order-fulfillment",
+      tagline:
+        "Order-line fulfillment routing: per-line inventory lookup via temporal join, then split between Postgres queue and Kafka substitution alerts.",
+      demonstrates: [
+        "Two `<KafkaSource>`: order lines (event-time) and store inventory (`debezium-json`, versioned).",
+        "`<TemporalJoin>` against a versioned inventory dimension on `(storeId, productId)` `AS OF lineTime`.",
+        "`<Route>` with two predicate branches: in-stock → JDBC fulfillment queue; out-of-stock → Kafka substitution-alerts topic.",
+      ],
+      topology: `KafkaSource (orderLines)              ─┐
+                                       ├─► TemporalJoin (storeId+productId AS OF lineTime)
+KafkaSource (inventory, debezium-json) ─┘                       └── Route
+                                                                      ├── Branch (stockLevel > 0) ─► JdbcSink (fulfillment_queue)
+                                                                      └── Branch (stockLevel = 0) ─► KafkaSink (grocery.substitution-alerts)`,
+      schemas: [
+        "`schemas/grocery.ts` — `OrderLineSchema`, `StoreInventorySchema` (with `(storeId, productId)` composite PK)",
+      ],
+      runCommand: `pnpm synth
+pnpm test`,
+    }),
+    pipelineReadme({
+      pipelineName: "grocery-store-rankings",
+      tagline:
+        "Per-store 15-minute rolling rating averages with first-row deduplication on `orderId` to dampen duplicate ratings.",
+      demonstrates: [
+        '`<Deduplicate key={[\'orderId\']} order="ratingTime" keep="first">` → `ROW_NUMBER()` first-row pattern.',
+        '`<TumbleWindow size="15 MINUTE" on="ratingTime">` for the per-store aggregation window.',
+        "`<Aggregate>` computing `AVG(storeRating)` and `COUNT(*)` per store.",
+        "`<JdbcSink>` with `upsertMode` and `keyFields={['storeId']}` for the live per-store rankings table.",
+      ],
+      topology: `KafkaSource (ratings, watermark on ratingTime)
+  └── Deduplicate (key=orderId, order=ratingTime, keep=first)
+        └── TumbleWindow (15 MINUTE, on=ratingTime)
+              └── Aggregate (GROUP BY storeId — AVG, COUNT)
+                    └── JdbcSink (store_rankings, upsert)`,
+      schemas: [
+        "`schemas/grocery.ts` — `RatingSchema` (with watermark on `ratingTime`)",
+      ],
+      runCommand: `pnpm synth
+pnpm test`,
+    }),
+
+    // ── Tests ─────────────────────────────────────────────────────────
+
+    templatePipelineTestStub({
+      pipelineName: "grocery-order-fulfillment",
+      loadBearingPatterns: [
+        /FOR SYSTEM_TIME AS OF/i,
+        /debezium-json/i,
+        /grocery\.substitution-alerts/,
+      ],
+    }),
+    templatePipelineTestStub({
+      pipelineName: "grocery-store-rankings",
+      loadBearingPatterns: [/ROW_NUMBER\(\)/i, /TUMBLE\(/i, /AVG\(/i],
+    }),
+
+    // ── Project-root README ───────────────────────────────────────────
+
+    templateReadme({
+      templateName: "grocery-delivery",
+      tagline:
+        "Two grocery-delivery pipelines: `grocery-order-fulfillment` (CDC-versioned inventory temporal join + `<Route>` to in-stock vs substitution-alerts) and `grocery-store-rankings` (deduplicate + tumbling-window per-store rating averages).",
+      pipelines: [
+        {
+          name: "grocery-order-fulfillment",
+          pitch:
+            "Order lines × versioned inventory temporal join, routed to fulfillment queue or substitution alerts.",
+        },
+        {
+          name: "grocery-store-rankings",
+          pitch:
+            "Deduplicated per-store rolling-window rating averages with upsert sink.",
+        },
+      ],
+      gettingStarted: ["pnpm install", "pnpm synth", "pnpm test"],
+    }),
   ]
 }
