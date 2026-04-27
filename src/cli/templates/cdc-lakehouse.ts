@@ -1,5 +1,10 @@
 import type { ScaffoldOptions, TemplateFile } from "@/cli/commands/new.js"
-import { sharedFiles } from "./shared.js"
+import {
+  pipelineReadme,
+  sharedFiles,
+  templatePipelineTestStub,
+  templateReadme,
+} from "./shared.js"
 
 export function getCdcLakehouseTemplates(
   opts: ScaffoldOptions,
@@ -124,15 +129,44 @@ export default (
 );
 `,
     },
-    {
-      path: "tests/pipelines/cdc-to-lakehouse.test.ts",
-      content: `import { describe, it, expect } from 'vitest';
-// import { synth } from '@flink-reactor/dsl/testing';
-
-describe('cdc-to-lakehouse pipeline', () => {
-  it.todo('synthesizes valid Flink SQL with Debezium source');
-});
-`,
-    },
+    pipelineReadme({
+      pipelineName: "cdc-to-lakehouse",
+      tagline:
+        "Stream a Debezium order CDC topic into an Iceberg upsert sink (format v2) on a SeaweedFS-backed REST catalog.",
+      demonstrates: [
+        '`<KafkaSource format="debezium-json">` consuming a CDC retract changelog.',
+        "`<IcebergCatalog>` declaration referencing a REST catalog with S3 (SeaweedFS) warehouse storage.",
+        "`<IcebergSink>` with `formatVersion={2}` and `upsertEnabled` so primary-key updates produce equality deletes.",
+      ],
+      topology: `IcebergCatalog (REST → SeaweedFS S3 warehouse)
+  └── KafkaSource (dbserver1.inventory.orders, debezium-json)
+        └── IcebergSink (lakehouse.inventory.orders, format v2 upsert)`,
+      schemas: [
+        "`schemas/orders.ts` — `{ orderId, customerId, product, amount, status, createdAt, updatedAt }` with `orderId` as primary key",
+      ],
+      runCommand: `pnpm synth
+pnpm test`,
+    }),
+    templatePipelineTestStub({
+      pipelineName: "cdc-to-lakehouse",
+      loadBearingPatterns: [
+        /debezium-json/,
+        /iceberg/i,
+        /'format-version'\s*=\s*'2'/i,
+      ],
+    }),
+    templateReadme({
+      templateName: "cdc-lakehouse",
+      tagline:
+        "End-to-end CDC pipeline: Debezium-formatted Kafka topic → Iceberg upsert sink (format v2). Demonstrates the canonical streaming-CDC-to-lakehouse pattern with row-level deletes via primary-key equality.",
+      pipelines: [
+        {
+          name: "cdc-to-lakehouse",
+          pitch:
+            "Order CDC stream (debezium-json) → Iceberg upsert table on a SeaweedFS-backed REST catalog.",
+        },
+      ],
+      gettingStarted: ["pnpm install", "pnpm synth", "pnpm test"],
+    }),
   ]
 }
