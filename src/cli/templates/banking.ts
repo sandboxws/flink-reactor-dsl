@@ -1,5 +1,10 @@
 import type { ScaffoldOptions, TemplateFile } from "@/cli/commands/new.js"
-import { sharedFiles } from "./shared.js"
+import {
+  pipelineReadme,
+  sharedFiles,
+  templatePipelineTestStub,
+  templateReadme,
+} from "./shared.js"
 
 export function getBankingTemplates(opts: ScaffoldOptions): TemplateFile[] {
   return [
@@ -212,5 +217,87 @@ export default (
 );
 `,
     },
+
+    // ── Per-pipeline READMEs ──────────────────────────────────────────
+
+    pipelineReadme({
+      pipelineName: "bank-fraud-detection",
+      tagline:
+        "Per-account 3+ high-value transactions detected via `<MatchRecognize>`, enriched with current account state via temporal join.",
+      demonstrates: [
+        "`<MatchRecognize>` with `pattern: 'high{3,}?'` and `define: { high: 'amount > 1000' }` — three or more consecutive high-value transactions per account.",
+        "`<TemporalJoin>` enriching each match with the current account state (`debezium-json` versioned source).",
+        "`<KafkaSink>` writing the alerts to `bank.fraud-alerts`.",
+      ],
+      topology: `KafkaSource (transactions)             ─► MatchRecognize (pattern=high{3,}?, define amount>1000)     ─┐
+                                                                                                            ├─► TemporalJoin (accountId AS OF lastTxn) ─► KafkaSink (bank.fraud-alerts)
+KafkaSource (accounts, debezium-json)  ──────────────────────────────────────────────────────────────────────┘`,
+      schemas: [
+        "`schemas/banking.ts` — `TransactionSchema` (with `txnTime` watermark), `AccountSchema` (with `accountId` PK and `updateTime` watermark)",
+      ],
+      runCommand: `pnpm synth
+pnpm test`,
+    }),
+    pipelineReadme({
+      pipelineName: "bank-compliance-agg",
+      tagline:
+        "Hourly tumbling-window compliance fan-out: per-account aggregates, per-country aggregates, plus a Kafka alert branch for transactions over $10k.",
+      demonstrates: [
+        '`<TumbleWindow size="1 HOUR" on="txnTime">` for hourly windows.',
+        "`<Route>` fan-out with three branches: per-account aggregate to `large_txn_report`, per-country aggregate to `cross_border_report`, individual large transactions to `bank.compliance-reports`.",
+        "Two `<JdbcSink>` and one `<KafkaSink>` consuming the same windowed input via the route.",
+      ],
+      topology: `KafkaSource (transactions)
+  └── TumbleWindow (1 HOUR, on=txnTime)
+        └── Route
+              ├── Branch ─► Aggregate (GROUP BY accountId — SUM, COUNT) ─► JdbcSink (large_txn_report)
+              ├── Branch ─► Aggregate (GROUP BY country — COUNT, SUM)   ─► JdbcSink (cross_border_report)
+              └── Branch (amount > 10000) ─► KafkaSink (bank.compliance-reports)`,
+      schemas: [
+        "`schemas/banking.ts` — `TransactionSchema` (with `txnTime` watermark)",
+      ],
+      runCommand: `pnpm synth
+pnpm test`,
+    }),
+
+    // ── Tests ─────────────────────────────────────────────────────────
+
+    templatePipelineTestStub({
+      pipelineName: "bank-fraud-detection",
+      loadBearingPatterns: [
+        /MATCH_RECOGNIZE/i,
+        /FOR SYSTEM_TIME AS OF/i,
+        /bank\.fraud-alerts/,
+      ],
+    }),
+    templatePipelineTestStub({
+      pipelineName: "bank-compliance-agg",
+      loadBearingPatterns: [
+        /TUMBLE\(/i,
+        /GROUP BY/i,
+        /bank\.compliance-reports/,
+      ],
+    }),
+
+    // ── Project-root README ───────────────────────────────────────────
+
+    templateReadme({
+      templateName: "banking",
+      tagline:
+        "Two banking pipelines: `bank-fraud-detection` (CEP via `<MatchRecognize>` over high-value transactions, enriched with current account state via `<TemporalJoin>`) and `bank-compliance-agg` (hourly tumbling-window fan-out to per-account, per-country, and per-transaction reports).",
+      pipelines: [
+        {
+          name: "bank-fraud-detection",
+          pitch:
+            "MATCH_RECOGNIZE detects 3+ consecutive high-value transactions; temporal-joined to current account state.",
+        },
+        {
+          name: "bank-compliance-agg",
+          pitch:
+            "Hourly tumbling-window compliance fan-out via `<Route>` → per-account, per-country, and per-transaction sinks.",
+        },
+      ],
+      gettingStarted: ["pnpm install", "pnpm synth", "pnpm test"],
+    }),
   ]
 }
