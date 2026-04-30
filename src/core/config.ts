@@ -163,6 +163,12 @@ export interface SimInitConfig {
     /** JDBC catalogs for auto-discovering PostgreSQL tables */
     readonly catalogs?: readonly JdbcCatalogDefinition[]
   }
+  readonly fluss?: {
+    /** Fluss databases to create under `fluss_catalog` during sim init */
+    readonly databases?: readonly string[]
+    /** Bootstrap servers for the Fluss catalog (defaults to `fluss-coordinator:9123`) */
+    readonly bootstrapServers?: string
+  }
 }
 
 export interface SimConfig {

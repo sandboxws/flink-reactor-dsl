@@ -569,6 +569,12 @@ export async function runSimUp(opts: {
       label: "Dashboard",
     },
     { svc: "svc/postgres", local: 5433, remote: 5432, label: "Postgres" },
+    {
+      svc: "svc/fluss-coordinator",
+      local: 9123,
+      remote: 9123,
+      label: "Fluss",
+    },
   ]
 
   for (const pf of portForwards) {
@@ -633,12 +639,16 @@ async function runInit(init: SimInitConfig, namespace: string): Promise<void> {
   const topics = init.kafka?.topics ?? []
   const kafkaCatalogs = init.kafka?.catalogs ?? []
   const jdbcCatalogs = init.jdbc?.catalogs ?? []
+  const flussDatabases = init.fluss?.databases ?? []
+  const flussBootstrap =
+    init.fluss?.bootstrapServers ?? "fluss-coordinator:9123"
 
   if (
     databases.length === 0 &&
     topics.length === 0 &&
     kafkaCatalogs.length === 0 &&
-    jdbcCatalogs.length === 0
+    jdbcCatalogs.length === 0 &&
+    flussDatabases.length === 0
   )
     return
 
@@ -695,6 +705,24 @@ async function runInit(init: SimInitConfig, namespace: string): Promise<void> {
       spinner.stop(pc.green(`Iceberg databases: ${databases.length} created`))
     } catch {
       spinner.stop(pc.yellow("Iceberg database creation failed."))
+    }
+  }
+
+  // ── Create Fluss databases ───────────────────────────────────────
+  if (flussDatabases.length > 0) {
+    const { flussInitStatements } = await import("@/cli/cluster/fluss-init.js")
+    const stmts = flussInitStatements(flussDatabases, flussBootstrap)
+
+    const spinner = clack.spinner()
+    spinner.start(`Creating ${flussDatabases.length} Fluss database(s)...`)
+
+    try {
+      execSqlViaGateway(stmts.join("; "), namespace)
+      spinner.stop(
+        pc.green(`Fluss databases: ${flussDatabases.length} created`),
+      )
+    } catch {
+      spinner.stop(pc.yellow("Fluss database creation failed."))
     }
   }
 

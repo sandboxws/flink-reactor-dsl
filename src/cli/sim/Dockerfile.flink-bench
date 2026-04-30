@@ -1,0 +1,23 @@
+# Bench Flink image for the sim lane — extends the S3-enabled base
+# image with the Apache Fluss connector JAR. Used by minikube-deployed
+# pipelines that target Fluss/Paimon (e.g. the pg-fluss-paimon template).
+#
+# Build (from flink-reactor-dsl repo root, inside minikube docker-env):
+#   eval $(minikube docker-env)
+#   docker build -t flink-reactor:2.0.1 -f src/cli/cluster/Dockerfile.flink .
+#   docker build -t flink-reactor-s3:2.0.1 -f src/cli/cluster/Dockerfile.flink-s3 .
+#   docker build -t flink-reactor-bench:2.0.1 -f src/cli/sim/Dockerfile.flink-bench .
+#
+# Multi-platform (Apple Silicon / x86_64) — pass --platform=linux/arm64 or amd64.
+
+FROM flink-reactor-s3:2.0.1
+
+# Apache Fluss 0.9.0-incubating Flink connector.
+# Maven coordinate: org.apache.fluss:fluss-connector-flink:0.9.0-incubating
+# (registered in the DSL connector registry by change 45).
+#
+# Note: incubating artifacts may not yet be on Maven Central; if the
+# wget below fails, fall back to https://repository.apache.org/content/repositories/releases/
+# or a staging URL named in the 0.9 release announcement.
+RUN wget -q -P /opt/flink/lib/ \
+  https://repo1.maven.org/maven2/org/apache/fluss/fluss-connector-flink/0.9.0-incubating/fluss-connector-flink-0.9.0-incubating.jar

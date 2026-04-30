@@ -1,0 +1,19 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`flussInitStatements > emits CREATE CATALOG + USE CATALOG + CREATE DATABASE for a single db 1`] = `
+[
+  "CREATE CATALOG IF NOT EXISTS fluss_catalog WITH ('type' = 'fluss', 'bootstrap.servers' = 'fluss-coordinator:9123')",
+  "USE CATALOG fluss_catalog",
+  "CREATE DATABASE IF NOT EXISTS \`benchmark\`",
+]
+`;
+
+exports[`flussInitStatements > emits one CREATE DATABASE per name in input order 1`] = `
+[
+  "CREATE CATALOG IF NOT EXISTS fluss_catalog WITH ('type' = 'fluss', 'bootstrap.servers' = 'fluss-coordinator:9123')",
+  "USE CATALOG fluss_catalog",
+  "CREATE DATABASE IF NOT EXISTS \`orders\`",
+  "CREATE DATABASE IF NOT EXISTS \`analytics\`",
+  "CREATE DATABASE IF NOT EXISTS \`lineage\`",
+]
+`;

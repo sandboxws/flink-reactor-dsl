@@ -1,0 +1,56 @@
+################################################################
+# Apache Fluss 0.9.0-incubating server.yaml
+#
+# This file is the SINGLE SOURCE OF TRUTH for the Fluss broker
+# config across both runtime lanes:
+#
+#   • Minikube — mounted via the `fluss-config` ConfigMap defined
+#     in `src/cli/sim/manifests/11-fluss.yaml`. The ConfigMap
+#     `kubectl create configmap fluss-config --from-file=...` step
+#     in `sim.ts` reads this file directly.
+#
+#   • Docker  — to be mounted via a compose volume by change 52
+#     (`52-add-fluss-docker-compose-services`). Lane-specific
+#     overrides (e.g. ZK address list size) are passed via env
+#     vars rather than a divergent file.
+#
+# Reference: https://fluss.apache.org/docs/0.9/install-deploy/
+################################################################
+
+# ── Coordination ──────────────────────────────────────────────
+# ZooKeeper is still required in 0.9; Raft is roadmap-only.
+# Three-node ensemble in minikube; single-node in docker (the
+# extra entries are ignored if unreachable in 0.9 ZK-client mode).
+zookeeper.address: "zk-fluss-0.zk-fluss:2181,zk-fluss-1.zk-fluss:2181,zk-fluss-2.zk-fluss:2181"
+zookeeper.path.root: "/fluss"
+
+# ── Coordinator ───────────────────────────────────────────────
+coordinator.host: "fluss-coordinator"
+coordinator.port: "9123"
+bind.listeners: "FLUSS://0.0.0.0:9123"
+internal.listener.name: "FLUSS"
+
+# ── Tablet server ─────────────────────────────────────────────
+# tablet-server.host and tablet-server.id are pod-specific and
+# overridden via env vars in 11-fluss.yaml (and per-service in
+# the compose file). Listed here as documentation of the keys.
+# tablet-server.host: <set per-pod>
+# tablet-server.id:   <set per-pod>
+tablet-server.port: "9124"
+
+# ── Storage ───────────────────────────────────────────────────
+data.dir: "/tmp/fluss-data"
+remote.data.dir: "s3a://flink-state/fluss-remote"
+
+# ── S3 (SeaweedFS) for remote-storage tier ────────────────────
+# Reuses the same SeaweedFS bucket created by 06-seaweedfs-init.
+s3.endpoint: "http://seaweedfs.flink-demo.svc:8333"
+s3.path.style.access: "true"
+s3.access.key: "admin"
+s3.secret.key: "admin"
+s3.region: "us-east-1"
+
+# ── Defaults ──────────────────────────────────────────────────
+default.replication.factor: "1"
+default.bucket.number: "3"
+log.segment.bytes: "1073741824"

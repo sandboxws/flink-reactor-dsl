@@ -1,0 +1,205 @@
+################################################################
+# Apache Fluss 0.9.0-incubating — CoordinatorServer + TabletServers
+#
+# The `fluss-config` ConfigMap below is kept in sync with
+# `src/cli/sim/fluss-config/server.yaml` — that standalone file is
+# the canonical source for the docker-compose lane (change 52)
+# and is mirrored here so the K8s manifest is self-contained.
+# When editing one, edit both. (CI parity check is a follow-up.)
+################################################################
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluss-config
+  namespace: flink-demo
+data:
+  server.yaml: |
+    zookeeper.address: "zk-fluss-0.zk-fluss:2181,zk-fluss-1.zk-fluss:2181,zk-fluss-2.zk-fluss:2181"
+    zookeeper.path.root: "/fluss"
+    coordinator.host: "fluss-coordinator"
+    coordinator.port: "9123"
+    bind.listeners: "FLUSS://0.0.0.0:9123"
+    internal.listener.name: "FLUSS"
+    tablet-server.port: "9124"
+    data.dir: "/tmp/fluss-data"
+    remote.data.dir: "s3a://flink-state/fluss-remote"
+    s3.endpoint: "http://seaweedfs.flink-demo.svc:8333"
+    s3.path.style.access: "true"
+    s3.access.key: "admin"
+    s3.secret.key: "admin"
+    s3.region: "us-east-1"
+    default.replication.factor: "1"
+    default.bucket.number: "3"
+    log.segment.bytes: "1073741824"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fluss-coordinator
+  namespace: flink-demo
+  labels:
+    app: fluss-coordinator
+spec:
+  selector:
+    app: fluss-coordinator
+  ports:
+    - name: fluss
+      port: 9123
+      targetPort: 9123
+  clusterIP: None
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: fluss-coordinator
+  namespace: flink-demo
+  labels:
+    app: fluss-coordinator
+spec:
+  serviceName: fluss-coordinator
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fluss-coordinator
+  template:
+    metadata:
+      labels:
+        app: fluss-coordinator
+    spec:
+      containers:
+        - name: coordinator
+          image: fluss/fluss:0.9.0-incubating
+          imagePullPolicy: IfNotPresent
+          command: ["/opt/fluss/bin/coordinator-server.sh", "start-foreground"]
+          ports:
+            - name: fluss
+              containerPort: 9123
+          env:
+            - name: FLUSS_HOME
+              value: /opt/fluss
+            - name: COORDINATOR_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              memory: 1Gi
+          readinessProbe:
+            tcpSocket:
+              port: 9123
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: 9123
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          volumeMounts:
+            - name: config
+              mountPath: /opt/fluss/conf/server.yaml
+              subPath: server.yaml
+              readOnly: true
+            - name: data
+              mountPath: /tmp/fluss-data
+      volumes:
+        - name: config
+          configMap:
+            name: fluss-config
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fluss-tabletserver
+  namespace: flink-demo
+  labels:
+    app: fluss-tabletserver
+spec:
+  selector:
+    app: fluss-tabletserver
+  ports:
+    - name: fluss
+      port: 9124
+      targetPort: 9124
+  clusterIP: None
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: fluss-tabletserver
+  namespace: flink-demo
+  labels:
+    app: fluss-tabletserver
+spec:
+  serviceName: fluss-tabletserver
+  replicas: 3
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: fluss-tabletserver
+  template:
+    metadata:
+      labels:
+        app: fluss-tabletserver
+    spec:
+      containers:
+        - name: tabletserver
+          image: fluss/fluss:0.9.0-incubating
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              # Pod ordinal becomes the tablet-server.id (zk-fluss-0 → 0, etc.)
+              export TABLET_SERVER_ID=${HOSTNAME##*-}
+              export TABLET_SERVER_HOST=${HOSTNAME}.fluss-tabletserver.flink-demo.svc
+              exec /opt/fluss/bin/tablet-server.sh start-foreground \
+                -D tablet-server.id=${TABLET_SERVER_ID} \
+                -D tablet-server.host=${TABLET_SERVER_HOST}
+          ports:
+            - name: fluss
+              containerPort: 9124
+          env:
+            - name: FLUSS_HOME
+              value: /opt/fluss
+          resources:
+            requests:
+              cpu: "1"
+              memory: 2Gi
+            limits:
+              memory: 2Gi
+          readinessProbe:
+            tcpSocket:
+              port: 9124
+            initialDelaySeconds: 15
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: 9124
+            initialDelaySeconds: 45
+            periodSeconds: 15
+          volumeMounts:
+            - name: config
+              mountPath: /opt/fluss/conf/server.yaml
+              subPath: server.yaml
+              readOnly: true
+            - name: data
+              mountPath: /tmp/fluss-data
+      volumes:
+        - name: config
+          configMap:
+            name: fluss-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: standard
+        resources:
+          requests:
+            storage: 10Gi
