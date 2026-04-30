@@ -1,0 +1,1061 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`pg-fluss-paimon-ingest (Pipeline-YAML branch) > synthesizes a stable artifact bundle for initial + latency 1`] = `
+{
+  "crd": {
+    "apiVersion": "flink.apache.org/v1beta1",
+    "kind": "FlinkDeployment",
+    "metadata": {
+      "name": "pg-fluss-paimon-ingest",
+    },
+    "spec": {
+      "flinkConfiguration": {
+        "execution.checkpointing.interval": "2000",
+        "execution.checkpointing.mode": "EXACTLY_ONCE",
+        "execution.runtime-mode": "STREAMING",
+      },
+      "flinkVersion": "v2_0",
+      "image": "flink:2.0",
+      "job": {
+        "args": [
+          "--pipeline",
+          "/etc/flink-cdc/pipeline.yaml",
+        ],
+        "jarURI": "local:///opt/flink-cdc/lib/flink-cdc-cli.jar",
+        "parallelism": 4,
+      },
+      "jobManager": {
+        "replicas": 1,
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+      "podTemplate": {
+        "spec": {
+          "containers": [
+            {
+              "env": [
+                {
+                  "name": "PG_PRIMARY_PASSWORD",
+                  "valueFrom": {
+                    "secretKeyRef": {
+                      "key": "password",
+                      "name": "pg-primary-password",
+                    },
+                  },
+                },
+              ],
+              "name": "flink-main-container",
+              "volumeMounts": [
+                {
+                  "mountPath": "/etc/flink-cdc",
+                  "name": "pipeline-yaml",
+                  "readOnly": true,
+                },
+              ],
+            },
+          ],
+          "volumes": [
+            {
+              "configMap": {
+                "name": "pg-fluss-paimon-ingest-pipeline",
+              },
+              "name": "pipeline-yaml",
+            },
+          ],
+        },
+      },
+      "taskManager": {
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+    },
+  },
+  "jars": [
+    "org.apache.flink:flink-cdc-pipeline-connector-fluss:3.6.0",
+    "org.apache.flink:flink-cdc-pipeline-connector-postgres:3.6.0",
+  ],
+  "pipelineYaml": "source:
+  type: postgres
+  hostname: pg-primary
+  port: 5432
+  username: flink_cdc
+  password: \${env:PG_PRIMARY_PASSWORD}
+  database-name: tpch
+  schema-name: public
+  table-name: public.orders,public.lineitem,public.customer
+  decoding.plugin.name: pgoutput
+  slot.name: fr_pg_fluss_paimon_ingest_slot
+  publication.name: fr_pg_fluss_paimon_ingest_pub
+  scan.startup.mode: initial
+  scan.snapshot.enabled: true
+  scan.incremental.snapshot.chunk.size: 100000
+sink:
+  type: fluss
+  name: pg-fluss-paimon-ingest-fluss-sink
+  bootstrap.servers: fluss-coordinator:9123
+  table.properties.bucket.num: '8'
+  table.properties.bucket.key: o_orderkey
+  schema.evolution.behavior: lenient
+pipeline:
+  name: pg-fluss-paimon-ingest
+  parallelism: 4
+  schema.change.behavior: evolve
+",
+}
+`;
+
+exports[`pg-fluss-paimon-ingest (Pipeline-YAML branch) > synthesizes a stable artifact bundle for initial + throughput 1`] = `
+{
+  "crd": {
+    "apiVersion": "flink.apache.org/v1beta1",
+    "kind": "FlinkDeployment",
+    "metadata": {
+      "name": "pg-fluss-paimon-ingest",
+    },
+    "spec": {
+      "flinkConfiguration": {
+        "execution.checkpointing.interval": "10000",
+        "execution.checkpointing.mode": "EXACTLY_ONCE",
+        "execution.runtime-mode": "STREAMING",
+      },
+      "flinkVersion": "v2_0",
+      "image": "flink:2.0",
+      "job": {
+        "args": [
+          "--pipeline",
+          "/etc/flink-cdc/pipeline.yaml",
+        ],
+        "jarURI": "local:///opt/flink-cdc/lib/flink-cdc-cli.jar",
+        "parallelism": 4,
+      },
+      "jobManager": {
+        "replicas": 1,
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+      "podTemplate": {
+        "spec": {
+          "containers": [
+            {
+              "env": [
+                {
+                  "name": "PG_PRIMARY_PASSWORD",
+                  "valueFrom": {
+                    "secretKeyRef": {
+                      "key": "password",
+                      "name": "pg-primary-password",
+                    },
+                  },
+                },
+              ],
+              "name": "flink-main-container",
+              "volumeMounts": [
+                {
+                  "mountPath": "/etc/flink-cdc",
+                  "name": "pipeline-yaml",
+                  "readOnly": true,
+                },
+              ],
+            },
+          ],
+          "volumes": [
+            {
+              "configMap": {
+                "name": "pg-fluss-paimon-ingest-pipeline",
+              },
+              "name": "pipeline-yaml",
+            },
+          ],
+        },
+      },
+      "taskManager": {
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+    },
+  },
+  "jars": [
+    "org.apache.flink:flink-cdc-pipeline-connector-fluss:3.6.0",
+    "org.apache.flink:flink-cdc-pipeline-connector-postgres:3.6.0",
+  ],
+  "pipelineYaml": "source:
+  type: postgres
+  hostname: pg-primary
+  port: 5432
+  username: flink_cdc
+  password: \${env:PG_PRIMARY_PASSWORD}
+  database-name: tpch
+  schema-name: public
+  table-name: public.orders,public.lineitem,public.customer
+  decoding.plugin.name: pgoutput
+  slot.name: fr_pg_fluss_paimon_ingest_slot
+  publication.name: fr_pg_fluss_paimon_ingest_pub
+  scan.startup.mode: initial
+  scan.snapshot.enabled: true
+  scan.incremental.snapshot.chunk.size: 100000
+sink:
+  type: fluss
+  name: pg-fluss-paimon-ingest-fluss-sink
+  bootstrap.servers: fluss-coordinator:9123
+  table.properties.bucket.num: '8'
+  table.properties.bucket.key: o_orderkey
+  schema.evolution.behavior: lenient
+pipeline:
+  name: pg-fluss-paimon-ingest
+  parallelism: 4
+  schema.change.behavior: evolve
+",
+}
+`;
+
+exports[`pg-fluss-paimon-ingest (Pipeline-YAML branch) > synthesizes a stable artifact bundle for never + latency 1`] = `
+{
+  "crd": {
+    "apiVersion": "flink.apache.org/v1beta1",
+    "kind": "FlinkDeployment",
+    "metadata": {
+      "name": "pg-fluss-paimon-ingest",
+    },
+    "spec": {
+      "flinkConfiguration": {
+        "execution.checkpointing.interval": "2000",
+        "execution.checkpointing.mode": "EXACTLY_ONCE",
+        "execution.runtime-mode": "STREAMING",
+      },
+      "flinkVersion": "v2_0",
+      "image": "flink:2.0",
+      "job": {
+        "args": [
+          "--pipeline",
+          "/etc/flink-cdc/pipeline.yaml",
+        ],
+        "jarURI": "local:///opt/flink-cdc/lib/flink-cdc-cli.jar",
+        "parallelism": 4,
+      },
+      "jobManager": {
+        "replicas": 1,
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+      "podTemplate": {
+        "spec": {
+          "containers": [
+            {
+              "env": [
+                {
+                  "name": "PG_PRIMARY_PASSWORD",
+                  "valueFrom": {
+                    "secretKeyRef": {
+                      "key": "password",
+                      "name": "pg-primary-password",
+                    },
+                  },
+                },
+              ],
+              "name": "flink-main-container",
+              "volumeMounts": [
+                {
+                  "mountPath": "/etc/flink-cdc",
+                  "name": "pipeline-yaml",
+                  "readOnly": true,
+                },
+              ],
+            },
+          ],
+          "volumes": [
+            {
+              "configMap": {
+                "name": "pg-fluss-paimon-ingest-pipeline",
+              },
+              "name": "pipeline-yaml",
+            },
+          ],
+        },
+      },
+      "taskManager": {
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+    },
+  },
+  "jars": [
+    "org.apache.flink:flink-cdc-pipeline-connector-fluss:3.6.0",
+    "org.apache.flink:flink-cdc-pipeline-connector-postgres:3.6.0",
+  ],
+  "pipelineYaml": "source:
+  type: postgres
+  hostname: pg-primary
+  port: 5432
+  username: flink_cdc
+  password: \${env:PG_PRIMARY_PASSWORD}
+  database-name: tpch
+  schema-name: public
+  table-name: public.orders,public.lineitem,public.customer
+  decoding.plugin.name: pgoutput
+  slot.name: fr_pg_fluss_paimon_ingest_slot
+  publication.name: fr_pg_fluss_paimon_ingest_pub
+  scan.startup.mode: initial
+  scan.snapshot.enabled: false
+  scan.incremental.snapshot.chunk.size: 100000
+sink:
+  type: fluss
+  name: pg-fluss-paimon-ingest-fluss-sink
+  bootstrap.servers: fluss-coordinator:9123
+  table.properties.bucket.num: '8'
+  table.properties.bucket.key: o_orderkey
+  schema.evolution.behavior: lenient
+pipeline:
+  name: pg-fluss-paimon-ingest
+  parallelism: 4
+  schema.change.behavior: evolve
+",
+}
+`;
+
+exports[`pg-fluss-paimon-ingest (Pipeline-YAML branch) > synthesizes a stable artifact bundle for never + throughput 1`] = `
+{
+  "crd": {
+    "apiVersion": "flink.apache.org/v1beta1",
+    "kind": "FlinkDeployment",
+    "metadata": {
+      "name": "pg-fluss-paimon-ingest",
+    },
+    "spec": {
+      "flinkConfiguration": {
+        "execution.checkpointing.interval": "10000",
+        "execution.checkpointing.mode": "EXACTLY_ONCE",
+        "execution.runtime-mode": "STREAMING",
+      },
+      "flinkVersion": "v2_0",
+      "image": "flink:2.0",
+      "job": {
+        "args": [
+          "--pipeline",
+          "/etc/flink-cdc/pipeline.yaml",
+        ],
+        "jarURI": "local:///opt/flink-cdc/lib/flink-cdc-cli.jar",
+        "parallelism": 4,
+      },
+      "jobManager": {
+        "replicas": 1,
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+      "podTemplate": {
+        "spec": {
+          "containers": [
+            {
+              "env": [
+                {
+                  "name": "PG_PRIMARY_PASSWORD",
+                  "valueFrom": {
+                    "secretKeyRef": {
+                      "key": "password",
+                      "name": "pg-primary-password",
+                    },
+                  },
+                },
+              ],
+              "name": "flink-main-container",
+              "volumeMounts": [
+                {
+                  "mountPath": "/etc/flink-cdc",
+                  "name": "pipeline-yaml",
+                  "readOnly": true,
+                },
+              ],
+            },
+          ],
+          "volumes": [
+            {
+              "configMap": {
+                "name": "pg-fluss-paimon-ingest-pipeline",
+              },
+              "name": "pipeline-yaml",
+            },
+          ],
+        },
+      },
+      "taskManager": {
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+    },
+  },
+  "jars": [
+    "org.apache.flink:flink-cdc-pipeline-connector-fluss:3.6.0",
+    "org.apache.flink:flink-cdc-pipeline-connector-postgres:3.6.0",
+  ],
+  "pipelineYaml": "source:
+  type: postgres
+  hostname: pg-primary
+  port: 5432
+  username: flink_cdc
+  password: \${env:PG_PRIMARY_PASSWORD}
+  database-name: tpch
+  schema-name: public
+  table-name: public.orders,public.lineitem,public.customer
+  decoding.plugin.name: pgoutput
+  slot.name: fr_pg_fluss_paimon_ingest_slot
+  publication.name: fr_pg_fluss_paimon_ingest_pub
+  scan.startup.mode: initial
+  scan.snapshot.enabled: false
+  scan.incremental.snapshot.chunk.size: 100000
+sink:
+  type: fluss
+  name: pg-fluss-paimon-ingest-fluss-sink
+  bootstrap.servers: fluss-coordinator:9123
+  table.properties.bucket.num: '8'
+  table.properties.bucket.key: o_orderkey
+  schema.evolution.behavior: lenient
+pipeline:
+  name: pg-fluss-paimon-ingest
+  parallelism: 4
+  schema.change.behavior: evolve
+",
+}
+`;
+
+exports[`pg-fluss-paimon-serve (Flink-SQL branch) > synthesizes a stable artifact bundle for deduplicate + latency 1`] = `
+{
+  "crd": {
+    "apiVersion": "flink.apache.org/v1beta1",
+    "kind": "FlinkDeployment",
+    "metadata": {
+      "name": "pg-fluss-paimon-serve",
+    },
+    "spec": {
+      "flinkConfiguration": {
+        "execution.checkpointing.interval": "2000",
+        "execution.checkpointing.mode": "EXACTLY_ONCE",
+        "execution.runtime-mode": "STREAMING",
+      },
+      "flinkVersion": "v2_0",
+      "image": "flink:2.0",
+      "job": {
+        "jarURI": "local:///opt/flink/usrlib/sql-runner.jar",
+        "parallelism": 4,
+      },
+      "jobManager": {
+        "replicas": 1,
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+      "taskManager": {
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+    },
+  },
+  "jars": [
+    "org.apache.fluss:fluss-connector-flink:0.9.0-incubating",
+    "org.apache.paimon:paimon-flink-2.0:1.0.0",
+  ],
+  "sql": "-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : pg-fluss-paimon-serve
+-- parallelism : 4
+-- checkpoint  : 2s
+-- cp-mode     : exactly-once
+-- ====================================================================
+
+SET 'pipeline.name' = 'pg-fluss-paimon-serve';
+
+SET 'parallelism.default' = '4';
+
+SET 'execution.checkpointing.interval' = '2000';
+
+SET 'execution.checkpointing.mode' = 'EXACTLY_ONCE';
+
+-- ====================================================================
+-- CATALOG
+-- --------------------------------------------------------------------
+-- id          : FlussCatalog_0
+-- type        : fluss
+-- ====================================================================
+
+CREATE CATALOG \`fluss_catalog\` WITH (
+  'type' = 'fluss',
+  'bootstrap.servers' = 'fluss-coordinator:9123'
+);
+
+-- ====================================================================
+-- CATALOG
+-- --------------------------------------------------------------------
+-- id          : PaimonCatalog_1
+-- type        : paimon
+-- warehouse   : s3a://benchmark/paimon
+-- ====================================================================
+
+CREATE CATALOG \`paimon_catalog\` WITH (
+  'type' = 'paimon',
+  'warehouse' = 's3a://benchmark/paimon'
+);
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : benchmark_orders
+-- type        : fluss
+-- catalog     : fluss_catalog
+-- database    : benchmark
+-- table       : orders
+-- startup     : initial
+-- table-type  : PrimaryKey (retract)
+-- ====================================================================
+
+CREATE TABLE \`benchmark_orders\` (
+  \`o_orderkey\` BIGINT,
+  \`o_custkey\` BIGINT,
+  \`o_orderstatus\` STRING,
+  \`o_totalprice\` DECIMAL(15, 2),
+  \`o_orderdate\` DATE,
+  \`o_orderpriority\` STRING,
+  \`o_clerk\` STRING,
+  \`o_shippriority\` INT,
+  \`o_comment\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS event_time - INTERVAL '5' SECOND,
+  PRIMARY KEY (\`o_orderkey\`) NOT ENFORCED
+) WITH (
+  'connector' = 'fluss',
+  'catalog' = 'fluss_catalog',
+  'database' = 'benchmark',
+  'table' = 'orders',
+  'scan.startup.mode' = 'initial'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : PaimonSink_4
+-- type        : paimon
+-- ====================================================================
+
+CREATE DATABASE IF NOT EXISTS \`paimon_catalog\`.\`benchmark\`;
+CREATE TABLE IF NOT EXISTS \`paimon_catalog\`.\`benchmark\`.\`orders\` (
+  \`o_orderkey\` BIGINT,
+  \`o_custkey\` BIGINT,
+  \`o_orderstatus\` STRING,
+  \`o_totalprice\` DECIMAL(15, 2),
+  \`o_orderdate\` DATE,
+  \`o_orderpriority\` STRING,
+  \`o_clerk\` STRING,
+  \`o_shippriority\` INT,
+  \`o_comment\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  PRIMARY KEY (\`o_orderkey\`) NOT ENFORCED
+) WITH (
+  'merge-engine' = 'deduplicate',
+  'changelog-producer' = 'input',
+  'bucket' = '8',
+  'bucket-key' = 'o_orderkey'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Filter_3
+-- type        : Filter
+-- input       : benchmark_orders
+-- output      : paimon_catalog
+-- rule        : o_orderstatus = 'O'
+-- ====================================================================
+
+INSERT INTO \`paimon_catalog\`.\`benchmark\`.\`orders\`
+SELECT * FROM \`benchmark_orders\` WHERE o_orderstatus = 'O';
+",
+}
+`;
+
+exports[`pg-fluss-paimon-serve (Flink-SQL branch) > synthesizes a stable artifact bundle for deduplicate + throughput 1`] = `
+{
+  "crd": {
+    "apiVersion": "flink.apache.org/v1beta1",
+    "kind": "FlinkDeployment",
+    "metadata": {
+      "name": "pg-fluss-paimon-serve",
+    },
+    "spec": {
+      "flinkConfiguration": {
+        "execution.checkpointing.interval": "10000",
+        "execution.checkpointing.mode": "EXACTLY_ONCE",
+        "execution.runtime-mode": "STREAMING",
+      },
+      "flinkVersion": "v2_0",
+      "image": "flink:2.0",
+      "job": {
+        "jarURI": "local:///opt/flink/usrlib/sql-runner.jar",
+        "parallelism": 4,
+      },
+      "jobManager": {
+        "replicas": 1,
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+      "taskManager": {
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+    },
+  },
+  "jars": [
+    "org.apache.fluss:fluss-connector-flink:0.9.0-incubating",
+    "org.apache.paimon:paimon-flink-2.0:1.0.0",
+  ],
+  "sql": "-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : pg-fluss-paimon-serve
+-- parallelism : 4
+-- checkpoint  : 10s
+-- cp-mode     : exactly-once
+-- ====================================================================
+
+SET 'pipeline.name' = 'pg-fluss-paimon-serve';
+
+SET 'parallelism.default' = '4';
+
+SET 'execution.checkpointing.interval' = '10000';
+
+SET 'execution.checkpointing.mode' = 'EXACTLY_ONCE';
+
+-- ====================================================================
+-- CATALOG
+-- --------------------------------------------------------------------
+-- id          : FlussCatalog_0
+-- type        : fluss
+-- ====================================================================
+
+CREATE CATALOG \`fluss_catalog\` WITH (
+  'type' = 'fluss',
+  'bootstrap.servers' = 'fluss-coordinator:9123'
+);
+
+-- ====================================================================
+-- CATALOG
+-- --------------------------------------------------------------------
+-- id          : PaimonCatalog_1
+-- type        : paimon
+-- warehouse   : s3a://benchmark/paimon
+-- ====================================================================
+
+CREATE CATALOG \`paimon_catalog\` WITH (
+  'type' = 'paimon',
+  'warehouse' = 's3a://benchmark/paimon'
+);
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : benchmark_orders
+-- type        : fluss
+-- catalog     : fluss_catalog
+-- database    : benchmark
+-- table       : orders
+-- startup     : initial
+-- table-type  : PrimaryKey (retract)
+-- ====================================================================
+
+CREATE TABLE \`benchmark_orders\` (
+  \`o_orderkey\` BIGINT,
+  \`o_custkey\` BIGINT,
+  \`o_orderstatus\` STRING,
+  \`o_totalprice\` DECIMAL(15, 2),
+  \`o_orderdate\` DATE,
+  \`o_orderpriority\` STRING,
+  \`o_clerk\` STRING,
+  \`o_shippriority\` INT,
+  \`o_comment\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS event_time - INTERVAL '5' SECOND,
+  PRIMARY KEY (\`o_orderkey\`) NOT ENFORCED
+) WITH (
+  'connector' = 'fluss',
+  'catalog' = 'fluss_catalog',
+  'database' = 'benchmark',
+  'table' = 'orders',
+  'scan.startup.mode' = 'initial'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : PaimonSink_4
+-- type        : paimon
+-- ====================================================================
+
+CREATE DATABASE IF NOT EXISTS \`paimon_catalog\`.\`benchmark\`;
+CREATE TABLE IF NOT EXISTS \`paimon_catalog\`.\`benchmark\`.\`orders\` (
+  \`o_orderkey\` BIGINT,
+  \`o_custkey\` BIGINT,
+  \`o_orderstatus\` STRING,
+  \`o_totalprice\` DECIMAL(15, 2),
+  \`o_orderdate\` DATE,
+  \`o_orderpriority\` STRING,
+  \`o_clerk\` STRING,
+  \`o_shippriority\` INT,
+  \`o_comment\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  PRIMARY KEY (\`o_orderkey\`) NOT ENFORCED
+) WITH (
+  'merge-engine' = 'deduplicate',
+  'changelog-producer' = 'input',
+  'bucket' = '8',
+  'bucket-key' = 'o_orderkey'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Filter_3
+-- type        : Filter
+-- input       : benchmark_orders
+-- output      : paimon_catalog
+-- rule        : o_orderstatus = 'O'
+-- ====================================================================
+
+INSERT INTO \`paimon_catalog\`.\`benchmark\`.\`orders\`
+SELECT * FROM \`benchmark_orders\` WHERE o_orderstatus = 'O';
+",
+}
+`;
+
+exports[`pg-fluss-paimon-serve (Flink-SQL branch) > synthesizes a stable artifact bundle for partial-update + latency 1`] = `
+{
+  "crd": {
+    "apiVersion": "flink.apache.org/v1beta1",
+    "kind": "FlinkDeployment",
+    "metadata": {
+      "name": "pg-fluss-paimon-serve",
+    },
+    "spec": {
+      "flinkConfiguration": {
+        "execution.checkpointing.interval": "2000",
+        "execution.checkpointing.mode": "EXACTLY_ONCE",
+        "execution.runtime-mode": "STREAMING",
+      },
+      "flinkVersion": "v2_0",
+      "image": "flink:2.0",
+      "job": {
+        "jarURI": "local:///opt/flink/usrlib/sql-runner.jar",
+        "parallelism": 4,
+      },
+      "jobManager": {
+        "replicas": 1,
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+      "taskManager": {
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+    },
+  },
+  "jars": [
+    "org.apache.fluss:fluss-connector-flink:0.9.0-incubating",
+    "org.apache.paimon:paimon-flink-2.0:1.0.0",
+  ],
+  "sql": "-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : pg-fluss-paimon-serve
+-- parallelism : 4
+-- checkpoint  : 2s
+-- cp-mode     : exactly-once
+-- ====================================================================
+
+SET 'pipeline.name' = 'pg-fluss-paimon-serve';
+
+SET 'parallelism.default' = '4';
+
+SET 'execution.checkpointing.interval' = '2000';
+
+SET 'execution.checkpointing.mode' = 'EXACTLY_ONCE';
+
+-- ====================================================================
+-- CATALOG
+-- --------------------------------------------------------------------
+-- id          : FlussCatalog_0
+-- type        : fluss
+-- ====================================================================
+
+CREATE CATALOG \`fluss_catalog\` WITH (
+  'type' = 'fluss',
+  'bootstrap.servers' = 'fluss-coordinator:9123'
+);
+
+-- ====================================================================
+-- CATALOG
+-- --------------------------------------------------------------------
+-- id          : PaimonCatalog_1
+-- type        : paimon
+-- warehouse   : s3a://benchmark/paimon
+-- ====================================================================
+
+CREATE CATALOG \`paimon_catalog\` WITH (
+  'type' = 'paimon',
+  'warehouse' = 's3a://benchmark/paimon'
+);
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : benchmark_orders
+-- type        : fluss
+-- catalog     : fluss_catalog
+-- database    : benchmark
+-- table       : orders
+-- startup     : initial
+-- table-type  : PrimaryKey (retract)
+-- ====================================================================
+
+CREATE TABLE \`benchmark_orders\` (
+  \`o_orderkey\` BIGINT,
+  \`o_custkey\` BIGINT,
+  \`o_orderstatus\` STRING,
+  \`o_totalprice\` DECIMAL(15, 2),
+  \`o_orderdate\` DATE,
+  \`o_orderpriority\` STRING,
+  \`o_clerk\` STRING,
+  \`o_shippriority\` INT,
+  \`o_comment\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS event_time - INTERVAL '5' SECOND,
+  PRIMARY KEY (\`o_orderkey\`) NOT ENFORCED
+) WITH (
+  'connector' = 'fluss',
+  'catalog' = 'fluss_catalog',
+  'database' = 'benchmark',
+  'table' = 'orders',
+  'scan.startup.mode' = 'initial'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : PaimonSink_4
+-- type        : paimon
+-- ====================================================================
+
+CREATE DATABASE IF NOT EXISTS \`paimon_catalog\`.\`benchmark\`;
+CREATE TABLE IF NOT EXISTS \`paimon_catalog\`.\`benchmark\`.\`orders\` (
+  \`o_orderkey\` BIGINT,
+  \`o_custkey\` BIGINT,
+  \`o_orderstatus\` STRING,
+  \`o_totalprice\` DECIMAL(15, 2),
+  \`o_orderdate\` DATE,
+  \`o_orderpriority\` STRING,
+  \`o_clerk\` STRING,
+  \`o_shippriority\` INT,
+  \`o_comment\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  PRIMARY KEY (\`o_orderkey\`) NOT ENFORCED
+) WITH (
+  'merge-engine' = 'partial-update',
+  'changelog-producer' = 'input',
+  'bucket' = '8',
+  'bucket-key' = 'o_orderkey'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Filter_3
+-- type        : Filter
+-- input       : benchmark_orders
+-- output      : paimon_catalog
+-- rule        : o_orderstatus = 'O'
+-- ====================================================================
+
+INSERT INTO \`paimon_catalog\`.\`benchmark\`.\`orders\`
+SELECT * FROM \`benchmark_orders\` WHERE o_orderstatus = 'O';
+",
+}
+`;
+
+exports[`pg-fluss-paimon-serve (Flink-SQL branch) > synthesizes a stable artifact bundle for partial-update + throughput 1`] = `
+{
+  "crd": {
+    "apiVersion": "flink.apache.org/v1beta1",
+    "kind": "FlinkDeployment",
+    "metadata": {
+      "name": "pg-fluss-paimon-serve",
+    },
+    "spec": {
+      "flinkConfiguration": {
+        "execution.checkpointing.interval": "10000",
+        "execution.checkpointing.mode": "EXACTLY_ONCE",
+        "execution.runtime-mode": "STREAMING",
+      },
+      "flinkVersion": "v2_0",
+      "image": "flink:2.0",
+      "job": {
+        "jarURI": "local:///opt/flink/usrlib/sql-runner.jar",
+        "parallelism": 4,
+      },
+      "jobManager": {
+        "replicas": 1,
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+      "taskManager": {
+        "resource": {
+          "cpu": "1",
+          "memory": "1024m",
+        },
+      },
+    },
+  },
+  "jars": [
+    "org.apache.fluss:fluss-connector-flink:0.9.0-incubating",
+    "org.apache.paimon:paimon-flink-2.0:1.0.0",
+  ],
+  "sql": "-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : pg-fluss-paimon-serve
+-- parallelism : 4
+-- checkpoint  : 10s
+-- cp-mode     : exactly-once
+-- ====================================================================
+
+SET 'pipeline.name' = 'pg-fluss-paimon-serve';
+
+SET 'parallelism.default' = '4';
+
+SET 'execution.checkpointing.interval' = '10000';
+
+SET 'execution.checkpointing.mode' = 'EXACTLY_ONCE';
+
+-- ====================================================================
+-- CATALOG
+-- --------------------------------------------------------------------
+-- id          : FlussCatalog_0
+-- type        : fluss
+-- ====================================================================
+
+CREATE CATALOG \`fluss_catalog\` WITH (
+  'type' = 'fluss',
+  'bootstrap.servers' = 'fluss-coordinator:9123'
+);
+
+-- ====================================================================
+-- CATALOG
+-- --------------------------------------------------------------------
+-- id          : PaimonCatalog_1
+-- type        : paimon
+-- warehouse   : s3a://benchmark/paimon
+-- ====================================================================
+
+CREATE CATALOG \`paimon_catalog\` WITH (
+  'type' = 'paimon',
+  'warehouse' = 's3a://benchmark/paimon'
+);
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : benchmark_orders
+-- type        : fluss
+-- catalog     : fluss_catalog
+-- database    : benchmark
+-- table       : orders
+-- startup     : initial
+-- table-type  : PrimaryKey (retract)
+-- ====================================================================
+
+CREATE TABLE \`benchmark_orders\` (
+  \`o_orderkey\` BIGINT,
+  \`o_custkey\` BIGINT,
+  \`o_orderstatus\` STRING,
+  \`o_totalprice\` DECIMAL(15, 2),
+  \`o_orderdate\` DATE,
+  \`o_orderpriority\` STRING,
+  \`o_clerk\` STRING,
+  \`o_shippriority\` INT,
+  \`o_comment\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  WATERMARK FOR \`event_time\` AS event_time - INTERVAL '5' SECOND,
+  PRIMARY KEY (\`o_orderkey\`) NOT ENFORCED
+) WITH (
+  'connector' = 'fluss',
+  'catalog' = 'fluss_catalog',
+  'database' = 'benchmark',
+  'table' = 'orders',
+  'scan.startup.mode' = 'initial'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : PaimonSink_4
+-- type        : paimon
+-- ====================================================================
+
+CREATE DATABASE IF NOT EXISTS \`paimon_catalog\`.\`benchmark\`;
+CREATE TABLE IF NOT EXISTS \`paimon_catalog\`.\`benchmark\`.\`orders\` (
+  \`o_orderkey\` BIGINT,
+  \`o_custkey\` BIGINT,
+  \`o_orderstatus\` STRING,
+  \`o_totalprice\` DECIMAL(15, 2),
+  \`o_orderdate\` DATE,
+  \`o_orderpriority\` STRING,
+  \`o_clerk\` STRING,
+  \`o_shippriority\` INT,
+  \`o_comment\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  PRIMARY KEY (\`o_orderkey\`) NOT ENFORCED
+) WITH (
+  'merge-engine' = 'partial-update',
+  'changelog-producer' = 'input',
+  'bucket' = '8',
+  'bucket-key' = 'o_orderkey'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- step        : Filter_3
+-- type        : Filter
+-- input       : benchmark_orders
+-- output      : paimon_catalog
+-- rule        : o_orderstatus = 'O'
+-- ====================================================================
+
+INSERT INTO \`paimon_catalog\`.\`benchmark\`.\`orders\`
+SELECT * FROM \`benchmark_orders\` WHERE o_orderstatus = 'O';
+",
+}
+`;

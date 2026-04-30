@@ -272,6 +272,38 @@ const CONNECTOR_REGISTRY: readonly ConnectorRegistryEntry[] = [
       },
     ],
   },
+
+  // Apache Paimon Flink connector. Mirrors the Iceberg pattern: one artifact
+  // per Flink major (1.20 → paimon-flink-1.20; 2.x → paimon-flink-2.0). Pinned
+  // to Paimon 1.0.0 — the first release that ships the Flink 2.0 runtime
+  // alongside 1.20. See https://paimon.apache.org/.
+  {
+    connectorId: "paimon",
+    builtIn: false,
+    versions: [
+      {
+        minVersion: "1.20",
+        maxVersion: "1.20",
+        artifacts: [
+          {
+            groupId: "org.apache.paimon",
+            artifactId: "paimon-flink-1.20",
+            version: "1.0.0",
+          },
+        ],
+      },
+      {
+        minVersion: "2.0",
+        artifacts: [
+          {
+            groupId: "org.apache.paimon",
+            artifactId: "paimon-flink-2.0",
+            version: "1.0.0",
+          },
+        ],
+      },
+    ],
+  },
 ]
 
 // ── JDBC Dialect Sub-Registry ───────────────────────────────────────

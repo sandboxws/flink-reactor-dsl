@@ -56,6 +56,7 @@ const COMPONENT_CONNECTOR_MAP: ReadonlyMap<string, readonly string[]> = new Map(
     ["GenericSink", ["__generic"]],
     ["PostgresCdcPipelineSource", ["postgres-cdc-pipeline"]],
     ["IcebergSink", ["iceberg"]],
+    ["PaimonSink", ["paimon"]],
     // FlussSink renders on both branches: the Flink-SQL connector for the
     // SQL branch and the Pipeline Connector for the Pipeline-YAML branch.
     // Resolution selects the active artifact via `branchAffinity`.

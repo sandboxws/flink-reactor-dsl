@@ -436,11 +436,19 @@ publishes is reproducible from the same source.
   Connector):** Postgres → Flink CDC 3.6 Pipeline Connector → Iceberg. No
   Kafka hop. Parameterised on `snapshotMode`
   (`initial` / `never` / `initial_only`) and `commitMode`.
+- [`pipelines/pg-fluss-paimon/`](pipelines/pg-fluss-paimon/) — **Streaming OLAP
+  via shared Fluss storage:** Postgres → Fluss PrimaryKey table → Flink SQL →
+  Paimon. Two coupled entry points (`ingest.tsx` + `serve.tsx`) tied by a
+  shared Fluss table — one CDC ingest job, any number of serve-side fan-out
+  jobs.
 
-Both write to a Lakekeeper REST Iceberg catalog with Merge-on-Read
+The first two write to a Lakekeeper REST Iceberg catalog with Merge-on-Read
 (`upsertEnabled`, equality-field columns, `zstd` Parquet, hash distribution)
 so downstream Iceberg queries see equivalent tables regardless of which
-pipeline is running.
+pipeline is running. The `pg-fluss-paimon` template positions deliberately as
+a distinct topology — Fluss + Paimon's bucketed LSM with sub-second freshness
+fits streaming fan-out and serving-tier OLAP, while Iceberg's batch-leaning
+compaction model fits warehouse-style batch reads.
 
 <br />
 
