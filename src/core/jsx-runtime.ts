@@ -9,12 +9,10 @@ import type { ConstructNode, NodeKind } from "./types.js"
  * - `IntrinsicElements = {}` — empty interface rejects `<div>`, `<span>`, etc. at compile time
  * - `ElementChildrenAttribute` — maps JSX children to the `children` prop
  *
- * Note: In classic JSX mode ("jsx": "react"), `Element` determines the type of ALL
- * JSX expressions. This means branded sub-component types (TypedConstructNode<C>)
- * collapse to ConstructNode in JSX context, preventing compile-time children constraints
- * on components like Route. Branded types still provide value for programmatic API usage
- * and explicit type annotations. Full JSX children constraints would require migrating
- * to "jsx": "react-jsx" automatic mode (a future change).
+ * The library uses `"jsx": "react-jsx"` automatic mode with
+ * `jsxImportSource: "@flink-reactor/dsl"`, so transpilers emit
+ * `import { jsx } from "@flink-reactor/dsl/jsx-runtime"` for every JSX
+ * expression — no explicit `createElement` import in user code.
  */
 declare global {
   namespace JSX {

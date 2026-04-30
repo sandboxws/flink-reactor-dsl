@@ -961,10 +961,10 @@ exports[`pg-cdc-iceberg-f2 (Pipeline Connector) > synthesizes a stable artifact 
   hostname: pg-primary
   port: 5432
   username: flink_cdc
-  password: '\${env:PG_PRIMARY_PASSWORD}'
+  password: \${env:PG_PRIMARY_PASSWORD}
   database-name: tpch
   schema-name: public
-  table-name: 'public.orders,public.lineitem,public.customer'
+  table-name: public.orders,public.lineitem,public.customer
   decoding.plugin.name: pgoutput
   slot.name: fr_pg_cdc_iceberg_f2_slot
   publication.name: fr_pg_cdc_iceberg_f2_pub
@@ -977,7 +977,7 @@ sink:
   database: tpch
   table: orders
   catalog.properties.type: rest
-  catalog.properties.uri: 'http://lakekeeper:8181/catalog'
+  catalog.properties.uri: http://lakekeeper:8181/catalog
   table.properties.format-version: '2'
   table.properties.write.upsert.enabled: 'true'
   table.properties.equality-field-columns: o_orderkey
@@ -1077,10 +1077,10 @@ exports[`pg-cdc-iceberg-f2 (Pipeline Connector) > synthesizes a stable artifact 
   hostname: pg-primary
   port: 5432
   username: flink_cdc
-  password: '\${env:PG_PRIMARY_PASSWORD}'
+  password: \${env:PG_PRIMARY_PASSWORD}
   database-name: tpch
   schema-name: public
-  table-name: 'public.orders,public.lineitem,public.customer'
+  table-name: public.orders,public.lineitem,public.customer
   decoding.plugin.name: pgoutput
   slot.name: fr_pg_cdc_iceberg_f2_slot
   publication.name: fr_pg_cdc_iceberg_f2_pub
@@ -1093,7 +1093,7 @@ sink:
   database: tpch
   table: orders
   catalog.properties.type: rest
-  catalog.properties.uri: 'http://lakekeeper:8181/catalog'
+  catalog.properties.uri: http://lakekeeper:8181/catalog
   table.properties.format-version: '2'
   table.properties.write.upsert.enabled: 'true'
   table.properties.equality-field-columns: o_orderkey
@@ -1193,10 +1193,10 @@ exports[`pg-cdc-iceberg-f2 (Pipeline Connector) > synthesizes a stable artifact 
   hostname: pg-primary
   port: 5432
   username: flink_cdc
-  password: '\${env:PG_PRIMARY_PASSWORD}'
+  password: \${env:PG_PRIMARY_PASSWORD}
   database-name: tpch
   schema-name: public
-  table-name: 'public.orders,public.lineitem,public.customer'
+  table-name: public.orders,public.lineitem,public.customer
   decoding.plugin.name: pgoutput
   slot.name: fr_pg_cdc_iceberg_f2_slot
   publication.name: fr_pg_cdc_iceberg_f2_pub
@@ -1210,7 +1210,7 @@ sink:
   database: tpch
   table: orders
   catalog.properties.type: rest
-  catalog.properties.uri: 'http://lakekeeper:8181/catalog'
+  catalog.properties.uri: http://lakekeeper:8181/catalog
   table.properties.format-version: '2'
   table.properties.write.upsert.enabled: 'true'
   table.properties.equality-field-columns: o_orderkey
@@ -1310,10 +1310,10 @@ exports[`pg-cdc-iceberg-f2 (Pipeline Connector) > synthesizes a stable artifact 
   hostname: pg-primary
   port: 5432
   username: flink_cdc
-  password: '\${env:PG_PRIMARY_PASSWORD}'
+  password: \${env:PG_PRIMARY_PASSWORD}
   database-name: tpch
   schema-name: public
-  table-name: 'public.orders,public.lineitem,public.customer'
+  table-name: public.orders,public.lineitem,public.customer
   decoding.plugin.name: pgoutput
   slot.name: fr_pg_cdc_iceberg_f2_slot
   publication.name: fr_pg_cdc_iceberg_f2_pub
@@ -1327,7 +1327,7 @@ sink:
   database: tpch
   table: orders
   catalog.properties.type: rest
-  catalog.properties.uri: 'http://lakekeeper:8181/catalog'
+  catalog.properties.uri: http://lakekeeper:8181/catalog
   table.properties.format-version: '2'
   table.properties.write.upsert.enabled: 'true'
   table.properties.equality-field-columns: o_orderkey
@@ -1427,10 +1427,10 @@ exports[`pg-cdc-iceberg-f2 (Pipeline Connector) > synthesizes a stable artifact 
   hostname: pg-primary
   port: 5432
   username: flink_cdc
-  password: '\${env:PG_PRIMARY_PASSWORD}'
+  password: \${env:PG_PRIMARY_PASSWORD}
   database-name: tpch
   schema-name: public
-  table-name: 'public.orders,public.lineitem,public.customer'
+  table-name: public.orders,public.lineitem,public.customer
   decoding.plugin.name: pgoutput
   slot.name: fr_pg_cdc_iceberg_f2_slot
   publication.name: fr_pg_cdc_iceberg_f2_pub
@@ -1443,7 +1443,7 @@ sink:
   database: tpch
   table: orders
   catalog.properties.type: rest
-  catalog.properties.uri: 'http://lakekeeper:8181/catalog'
+  catalog.properties.uri: http://lakekeeper:8181/catalog
   table.properties.format-version: '2'
   table.properties.write.upsert.enabled: 'true'
   table.properties.equality-field-columns: o_orderkey
@@ -1543,10 +1543,10 @@ exports[`pg-cdc-iceberg-f2 (Pipeline Connector) > synthesizes a stable artifact 
   hostname: pg-primary
   port: 5432
   username: flink_cdc
-  password: '\${env:PG_PRIMARY_PASSWORD}'
+  password: \${env:PG_PRIMARY_PASSWORD}
   database-name: tpch
   schema-name: public
-  table-name: 'public.orders,public.lineitem,public.customer'
+  table-name: public.orders,public.lineitem,public.customer
   decoding.plugin.name: pgoutput
   slot.name: fr_pg_cdc_iceberg_f2_slot
   publication.name: fr_pg_cdc_iceberg_f2_pub
@@ -1559,7 +1559,7 @@ sink:
   database: tpch
   table: orders
   catalog.properties.type: rest
-  catalog.properties.uri: 'http://lakekeeper:8181/catalog'
+  catalog.properties.uri: http://lakekeeper:8181/catalog
   table.properties.format-version: '2'
   table.properties.write.upsert.enabled: 'true'
   table.properties.equality-field-columns: o_orderkey

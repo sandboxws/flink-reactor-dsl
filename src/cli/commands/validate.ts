@@ -571,7 +571,7 @@ async function runDeepValidation(
   // Synthesize SQL
   const appResult = synthesizeApp(
     { name, children: pipelineNode },
-    { flinkVersion },
+    { flinkVersion, synthesizedAt: new Date().toISOString() },
   )
 
   if (appResult.pipelines.length === 0) return diagnostics

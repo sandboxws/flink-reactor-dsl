@@ -3,7 +3,6 @@ import { KafkaSink } from "@/components/sinks"
 import { KafkaSource } from "@/components/sources"
 import { Aggregate } from "@/components/transforms"
 import { TumbleWindow } from "@/components/windows"
-import { createElement } from "@/core/jsx-runtime"
 import { Field, Schema } from "@/core/schema"
 
 const TradeSchema = Schema({

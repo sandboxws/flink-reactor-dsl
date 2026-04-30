@@ -196,6 +196,13 @@ export function synthesizeApp(
     readonly resolvedConfig?: ResolvedConfig
     readonly crdOptions?: Partial<CrdGeneratorOptions>
     readonly plugins?: readonly FlinkReactorPlugin[]
+    /**
+     * ISO-8601 timestamp recorded on `pipelineManifest.generatedAt` and
+     * `tapManifest.generatedAt`. Pass `new Date().toISOString()` from
+     * CLI/orchestration paths; omit in tests and snapshot suites so the
+     * sentinel keeps output deterministic.
+     */
+    readonly synthesizedAt?: string
   },
 ): AppSynthResult {
   const childArray =
@@ -296,10 +303,13 @@ export function synthesizeApp(
       const { manifest: tapManifest } = generateTapManifest(node, {
         flinkVersion,
         devMode: true,
+        synthesizedAt: options?.synthesizedAt,
       })
 
       // Generate pipeline manifest (sources, sinks, catalogs)
-      const pipelineManifest = generatePipelineManifest(node)
+      const pipelineManifest = generatePipelineManifest(node, {
+        synthesizedAt: options?.synthesizedAt,
+      })
 
       // Flink CDC Pipeline Connector support:
       // emit pipeline.yaml + a ConfigMap that holds it. Both are null/empty
@@ -373,6 +383,8 @@ export function synthesizeAppEffect(
       readonly level?: "error" | "warning" | "off"
       readonly categories?: readonly ValidationCategory[]
     }
+    /** See `synthesizeApp` for details. */
+    readonly synthesizedAt?: string
   },
 ): Effect.Effect<
   AppSynthResult,
@@ -488,10 +500,13 @@ export function synthesizeAppEffect(
           const { manifest: tapManifest } = generateTapManifest(node, {
             flinkVersion,
             devMode: true,
+            synthesizedAt: options?.synthesizedAt,
           })
 
           // Generate pipeline manifest (sources, sinks, catalogs)
-          const pipelineManifest = generatePipelineManifest(node)
+          const pipelineManifest = generatePipelineManifest(node, {
+            synthesizedAt: options?.synthesizedAt,
+          })
 
           const pipelineYaml = generatePipelineYaml(node)
           const secondaryResources: SecondaryResource[] =

@@ -11,3 +11,9 @@ repos:
         entry: pnpm biome format --no-errors-on-unmatched --files-ignore-unknown=true
         language: system
         types_or: [javascript, jsx, ts, tsx, json, css]
+      - id: typecheck
+        name: tsc --noEmit
+        entry: pnpm typecheck
+        language: system
+        types_or: [ts, tsx]
+        pass_filenames: false

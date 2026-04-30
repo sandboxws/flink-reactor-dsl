@@ -33,11 +33,11 @@ exports[`Full pipeline TapManifest > generates correct manifest JSON for mixed t
   \`event_time\` TIMESTAMP(3)
 ) WITH (
   'connector' = 'kafka',
-  'topic' = 'large-orders',
   'format' = 'json',
   'properties.bootstrap.servers' = 'kafka:9092',
   'properties.group.id' = 'fr-tap-ecommerce-large_orders-33e69e92',
-  'scan.startup.mode' = 'earliest-offset'
+  'scan.startup.mode' = 'earliest-offset',
+  'topic' = 'large-orders'
 );
 
 SELECT * FROM \`_tap_large_orders\`;",
@@ -75,11 +75,11 @@ SELECT * FROM \`_tap_large_orders\`;",
   \`event_time\` TIMESTAMP(3)
 ) WITH (
   'connector' = 'kafka',
-  'topic' = 'orders',
   'format' = 'json',
   'properties.bootstrap.servers' = 'kafka:9092',
   'properties.group.id' = 'fr-tap-ecommerce-orders-187baec2',
-  'scan.startup.mode' = 'latest-offset'
+  'scan.startup.mode' = 'latest-offset',
+  'topic' = 'orders'
 );
 
 SELECT * FROM \`_tap_orders\`;",
@@ -100,8 +100,8 @@ exports[`JDBC sink tap observation SQL > generates correct observation SQL with 
   \`name\` STRING
 ) WITH (
   'connector' = 'jdbc',
-  'url' = 'jdbc:postgresql://localhost:5433/db',
-  'table-name' = 'users'
+  'table-name' = 'users',
+  'url' = 'jdbc:postgresql://localhost:5433/db'
 );
 
 SELECT * FROM \`_tap_users\`;"
@@ -113,11 +113,11 @@ exports[`Kafka sink tap observation SQL > generates correct observation SQL with
   \`total\` DECIMAL(10, 2)
 ) WITH (
   'connector' = 'kafka',
-  'topic' = 'large-orders',
   'format' = 'json',
   'properties.bootstrap.servers' = 'kafka:9092',
   'properties.group.id' = 'fr-tap-test-large_orders-def56789',
-  'scan.startup.mode' = 'latest-offset'
+  'scan.startup.mode' = 'latest-offset',
+  'topic' = 'large-orders'
 );
 
 SELECT * FROM \`_tap_large_orders\`;"
@@ -130,11 +130,11 @@ exports[`Kafka source tap observation SQL > generates correct observation SQL wi
   \`amount\` DECIMAL(10, 2)
 ) WITH (
   'connector' = 'kafka',
-  'topic' = 'orders',
   'format' = 'json',
   'properties.bootstrap.servers' = 'kafka:9092',
   'properties.group.id' = 'fr-tap-test-orders-abc12345',
-  'scan.startup.mode' = 'latest-offset'
+  'scan.startup.mode' = 'latest-offset',
+  'topic' = 'orders'
 );
 
 SELECT * FROM \`_tap_orders\`;"
@@ -145,12 +145,12 @@ exports[`Kafka tap with timestamp offset mode > generates correct startup timest
   \`order_id\` BIGINT
 ) WITH (
   'connector' = 'kafka',
-  'topic' = 'orders',
   'format' = 'json',
   'properties.bootstrap.servers' = 'kafka:9092',
   'properties.group.id' = 'fr-tap-test-orders-abc12345',
   'scan.startup.mode' = 'timestamp',
-  'scan.startup.timestamp-millis' = '1705312800000'
+  'scan.startup.timestamp-millis' = '1705312800000',
+  'topic' = 'orders'
 );
 
 SELECT * FROM \`_tap_orders\`;"

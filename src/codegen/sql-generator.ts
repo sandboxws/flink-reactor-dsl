@@ -21,6 +21,10 @@ import {
   resolveNodeSchema,
   resolveTransformSchema,
 } from "./schema-introspect.js"
+// `q` is the historical alias used by the ~96 inline call sites in this
+// file. The shared helper additionally escapes embedded backticks, which
+// the previous local copy did not.
+import { quoteIdentifier as q } from "./sql-identifiers.js"
 import { verifySql } from "./sql-verifier.js"
 
 // ── Pipeline Connector detection ────────────────────────────────────
@@ -44,17 +48,43 @@ export function hasPipelineConnectorSource(node: ConstructNode): boolean {
   return false
 }
 
-// ── Module-scoped version ───────────────────────────────────────────
-// Set at the start of generateSql() and read by builders that need
-// version-aware SQL generation (e.g. QUALIFY). Since codegen is
-// synchronous, there's no reentrancy risk.
+// ── Module-scoped synthesis state ──────────────────────────────────
+// Two pieces of state are read across many helpers in this file:
+//   * `_synthVersion` — Flink version, drives version-aware SQL features
+//     (e.g. QUALIFY in 2.0+).
+//   * `_fragments`    — list of byte ranges attributed to construct nodes
+//     for dashboard hover tooltips. Set by collectSinkDml before query
+//     building, cleared afterward.
+//
+// Both are module-scoped because codegen is fully synchronous, so a
+// `Promise.all([generateSql(a), generateSql(b)])` runs the calls
+// sequentially with no interleaving. If a plugin or future async path
+// ever introduces reentrancy, `enterSynthesis()` will throw — that's a
+// tripwire, not a fix. The clean refactor is to pass a BuildContext as
+// the first argument to every helper here; that's tracked as a follow-up.
 let _synthVersion: FlinkMajorVersion = "2.0"
-
-// ── Module-scoped fragment collector ────────────────────────────────
-// Tracks which construct nodes contributed which byte ranges within
-// the current DML statement being built. Set by collectSinkDml before
-// query building, cleared afterward.
 let _fragments: SqlFragment[] | null = null
+let _synthDepth = 0
+
+/** Enter a fresh synthesis pass; throws on reentrant calls. */
+function enterSynthesis(version: FlinkMajorVersion): void {
+  if (_synthDepth > 0) {
+    throw new Error(
+      "generateSql() is not reentrant — a previous synthesis is still in flight. " +
+        "This usually means a plugin called generateSql() inside a tree transformer or hook. " +
+        "Plugins must not invoke synthesis directly.",
+    )
+  }
+  _synthDepth = 1
+  _synthVersion = version
+  _fragments = null
+}
+
+/** Tear down synthesis state. Always run in a `finally`. */
+function exitSynthesis(): void {
+  _synthDepth = 0
+  _fragments = null
+}
 
 function beginFragmentCollection(): SqlFragment[] {
   const fragments: SqlFragment[] = []
@@ -103,7 +133,17 @@ export interface GenerateSqlOptions {
   readonly noTap?: boolean
   /** Enable pipeline optimization passes (default: false) */
   readonly optimize?: boolean | OptimizeOptions
+  /**
+   * ISO-8601 timestamp stamped onto the tap manifest's `generatedAt` field.
+   * CLI/orchestration paths pass `new Date().toISOString()`; tests and
+   * snapshots leave it unset so the sentinel keeps output deterministic.
+   */
+  readonly synthesizedAt?: string
 }
+
+/** Sentinel used when no `synthesizedAt` is provided. Deliberately fake so
+ *  callers that should be passing real time (CLI commands) are easy to spot. */
+const SYNTHESIZED_AT_SENTINEL = "1970-01-01T00:00:00.000Z"
 
 /** Maps a statement index to the construct node that produced it. */
 export interface StatementOrigin {
@@ -181,7 +221,19 @@ export function generateSql(
   options: GenerateSqlOptions = {},
 ): GenerateSqlResult {
   const version = options.flinkVersion ?? "2.0"
-  _synthVersion = version
+  enterSynthesis(version)
+  try {
+    return generateSqlImpl(pipelineNode, options, version)
+  } finally {
+    exitSynthesis()
+  }
+}
+
+function generateSqlImpl(
+  pipelineNode: ConstructNode,
+  options: GenerateSqlOptions,
+  version: FlinkMajorVersion,
+): GenerateSqlResult {
   const pluginSql = options.pluginSqlGenerators
   const pluginDdl = options.pluginDdlGenerators
 
@@ -792,17 +844,11 @@ export function generateTapManifest(
   const manifest: TapManifest = {
     pipelineName,
     flinkVersion: version,
-    generatedAt: new Date().toISOString(),
+    generatedAt: options.synthesizedAt ?? SYNTHESIZED_AT_SENTINEL,
     taps,
   }
 
   return { manifest, diagnostics }
-}
-
-// ── Identifier quoting ──────────────────────────────────────────────
-
-function q(identifier: string): string {
-  return `\`${identifier}\``
 }
 
 /** Strip changelog-encoding formats to their base serialization format.

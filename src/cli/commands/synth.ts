@@ -72,6 +72,7 @@ export async function runSynth(opts: {
   console.log(pc.dim(`Synthesizing ${ctx.pipelines.length} pipeline(s)...\n`))
 
   const allArtifacts: PipelineArtifact[] = []
+  const synthesizedAt = new Date().toISOString()
 
   for (const discovered of ctx.pipelines) {
     const pipelineNode = await loadPipeline(discovered.entryPoint, projectDir)
@@ -85,6 +86,7 @@ export async function runSynth(opts: {
         env: ctx.env ?? undefined,
         config: ctx.config ?? undefined,
         resolvedConfig: ctx.resolvedConfig ?? undefined,
+        synthesizedAt,
       },
     )
 
@@ -107,9 +109,12 @@ export async function runSynth(opts: {
       const { manifest: tapManifest } = generateTapManifest(pipelineNode, {
         flinkVersion,
         devMode: true,
+        synthesizedAt,
       })
 
-      const pipelineManifest = generatePipelineManifest(pipelineNode)
+      const pipelineManifest = generatePipelineManifest(pipelineNode, {
+        synthesizedAt,
+      })
 
       const { generatePipelineYaml } = await import(
         "@/codegen/pipeline-yaml-generator.js"
@@ -282,6 +287,7 @@ export function runSynthEffect(opts: {
     )
 
     const allArtifacts: PipelineArtifact[] = []
+    const synthesizedAt = new Date().toISOString()
 
     for (const discovered of ctx.pipelines) {
       const pipelineNode = yield* Effect.tryPromise({
@@ -303,6 +309,7 @@ export function runSynthEffect(opts: {
           env: ctx.env ?? undefined,
           config: ctx.config ?? undefined,
           resolvedConfig: ctx.resolvedConfig ?? undefined,
+          synthesizedAt,
         },
       )
 
@@ -319,9 +326,12 @@ export function runSynthEffect(opts: {
         const { manifest: tapManifest } = generateTapManifest(pipelineNode, {
           flinkVersion,
           devMode: true,
+          synthesizedAt,
         })
 
-        const pipelineManifest = generatePipelineManifest(pipelineNode)
+        const pipelineManifest = generatePipelineManifest(pipelineNode, {
+          synthesizedAt,
+        })
         const { generatePipelineYaml } = yield* Effect.promise(
           () => import("@/codegen/pipeline-yaml-generator.js"),
         )

@@ -98,9 +98,10 @@ describe("generatePipelineYaml", () => {
     })
 
     const yaml = generatePipelineYaml(pipeline)
-    // toYaml quotes strings that contain YAML special characters; the
-    // resulting single-quoted literal is what Flink CDC substitutes.
-    expect(yaml).toContain("password: '${env:PG_PRIMARY_PASSWORD}'")
+    // The placeholder is the form Flink CDC substitutes at startup.
+    // YAML 1.2 plain scalars happily contain `$` `{` `}` in block context,
+    // so the value emits unquoted; Flink CDC reads either equivalently.
+    expect(yaml).toContain("password: ${env:PG_PRIMARY_PASSWORD}")
     expect(yaml).not.toContain("hunter2")
   })
 
@@ -132,7 +133,7 @@ describe("generatePipelineYaml", () => {
     })
 
     const yaml = generatePipelineYaml(pipeline)
-    expect(yaml).toContain("password: '${env:CUSTOM_VAR}'")
+    expect(yaml).toContain("password: ${env:CUSTOM_VAR}")
   })
 
   it("derives deterministic slot/publication names when not provided", () => {
@@ -240,10 +241,10 @@ describe("generatePipelineYaml", () => {
     const yaml = generatePipelineYaml(
       buildMorPipeline({ equalityFieldColumns: ["order_id", "region"] }),
     ) as string
-    // toYaml quotes values containing ','; single-quoted literal is the
-    // form Flink CDC reads.
+    // Block-context plain scalars in YAML 1.2 can contain commas; both
+    // quoted and unquoted forms parse identically for Flink CDC.
     expect(yaml).toContain(
-      "table.properties.equality-field-columns: 'order_id,region'",
+      "table.properties.equality-field-columns: order_id,region",
     )
   })
 

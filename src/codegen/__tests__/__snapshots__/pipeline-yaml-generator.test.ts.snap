@@ -6,7 +6,7 @@ exports[`generatePipelineYaml > emits source/sink/pipeline stanzas for Postgres 
   hostname: pg-primary
   port: 5432
   username: postgres
-  password: '\${env:PG_PRIMARY_PASSWORD}'
+  password: \${env:PG_PRIMARY_PASSWORD}
   database-name: shop
   schema-name: public
   table-name: public.orders
@@ -22,7 +22,7 @@ sink:
   database: shop
   table: orders
   catalog.properties.type: rest
-  catalog.properties.uri: 'http://iceberg-rest:8181'
+  catalog.properties.uri: http://iceberg-rest:8181
   table.properties.format-version: '2'
   table.properties.write.upsert.enabled: 'true'
   table.properties.equality-field-columns: order_id
@@ -40,7 +40,7 @@ exports[`generatePipelineYaml > emits the full MoR configuration snapshot 1`] = 
   hostname: pg-primary
   port: 5432
   username: postgres
-  password: '\${env:PG_PRIMARY_PASSWORD}'
+  password: \${env:PG_PRIMARY_PASSWORD}
   database-name: shop
   schema-name: public
   table-name: public.orders
@@ -55,7 +55,7 @@ sink:
   database: shop
   table: orders
   catalog.properties.type: rest
-  catalog.properties.uri: 'http://iceberg-rest:8181'
+  catalog.properties.uri: http://iceberg-rest:8181
   table.properties.format-version: '2'
   table.properties.write.upsert.enabled: 'true'
   table.properties.equality-field-columns: order_id

@@ -40,7 +40,9 @@
         "noUselessElse": "error",
         "useConsistentArrayType": "error",
         "noDefaultExport": "error",
-        "noNonNullAssertion": "warn"
+        "noNonNullAssertion": "warn",
+        "useImportType": "error",
+        "useNodejsImportProtocol": "error"
       },
       "a11y": {
         "useButtonType": "warn",
@@ -59,7 +61,8 @@
         "noShadowRestrictedNames": "warn",
         "noAssignInExpressions": "warn",
         "noArrayIndexKey": "warn",
-        "noUnsafeDeclarationMerging": "off"
+        "noUnsafeDeclarationMerging": "off",
+        "noExplicitAny": "error"
       }
     }
   },

@@ -8,7 +8,12 @@
 // force a Postgres client on every consumer. It is declared as an
 // `optionalDependencies` entry in package.json.
 
+import { mapPgTypeToFlink } from "@/codegen/connectors/postgres-types.js"
 import type { IntrospectedColumn } from "@/codegen/schema-introspect.js"
+
+// Re-export so existing CLI/test imports keep working without churn.
+// The mapping table itself lives in @/codegen/connectors/postgres-types.
+export { mapPgTypeToFlink }
 
 // ── Options / types ─────────────────────────────────────────────────
 
@@ -27,76 +32,6 @@ export type IntrospectResult = ReadonlyMap<
   string,
   readonly IntrospectedColumn[]
 >
-
-// ── Type mapping ────────────────────────────────────────────────────
-
-/**
- * Best-effort PG → Flink SQL type mapping. Unknown types fall back to
- * STRING; callers may log a warning via `unknownTypes` if that is noisy.
- */
-export function mapPgTypeToFlink(
-  dataType: string,
-  udtName?: string,
-  charMaxLength?: number | null,
-  numericPrecision?: number | null,
-  numericScale?: number | null,
-): string {
-  const t = (udtName ?? dataType).toLowerCase()
-  switch (t) {
-    case "int2":
-    case "smallint":
-      return "SMALLINT"
-    case "int4":
-    case "integer":
-      return "INT"
-    case "int8":
-    case "bigint":
-      return "BIGINT"
-    case "float4":
-    case "real":
-      return "FLOAT"
-    case "float8":
-    case "double precision":
-      return "DOUBLE"
-    case "numeric":
-    case "decimal":
-      if (numericPrecision && numericScale != null) {
-        return `DECIMAL(${numericPrecision}, ${numericScale})`
-      }
-      return "DECIMAL(38, 18)"
-    case "bool":
-    case "boolean":
-      return "BOOLEAN"
-    case "date":
-      return "DATE"
-    case "time":
-    case "timetz":
-      return "TIME"
-    case "timestamp":
-    case "timestamp without time zone":
-      return "TIMESTAMP(6)"
-    case "timestamptz":
-    case "timestamp with time zone":
-      return "TIMESTAMP_LTZ(6)"
-    case "bytea":
-      return "BYTES"
-    case "varchar":
-    case "character varying":
-      return charMaxLength ? `VARCHAR(${charMaxLength})` : "STRING"
-    case "char":
-    case "bpchar":
-    case "character":
-      return charMaxLength ? `CHAR(${charMaxLength})` : "STRING"
-    case "text":
-    case "uuid":
-    case "json":
-    case "jsonb":
-    case "xml":
-      return "STRING"
-    default:
-      return "STRING"
-  }
-}
 
 // ── Lazy pg driver loader ───────────────────────────────────────────
 

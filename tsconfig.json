@@ -8,9 +8,12 @@
     "rootDir": "src",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@flink-reactor/dsl/jsx-runtime": ["./src/jsx-runtime.ts"],
+      "@flink-reactor/dsl/jsx-dev-runtime": ["./src/jsx-dev-runtime.ts"]
     },
     "strict": true,
+    "verbatimModuleSyntax": true,
     "plugins": [{ "name": "@flink-reactor/ts-plugin" }],
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -19,9 +22,8 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "jsx": "react",
-    "jsxFactory": "createElement",
-    "jsxFragmentFactory": "Fragment",
+    "jsx": "react-jsx",
+    "jsxImportSource": "@flink-reactor/dsl",
     "types": ["node", "vitest/globals"]
   },
   "include": ["src/**/*"],

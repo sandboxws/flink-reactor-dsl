@@ -4,7 +4,6 @@ import { Route } from "@/components/route.js"
 import { SideOutput } from "@/components/side-output.js"
 import { KafkaSink } from "@/components/sinks.js"
 import { Validate } from "@/components/validate.js"
-import { createElement } from "@/core/jsx-runtime.js"
 import type { ConstructNode, TypedConstructNode } from "@/core/types.js"
 
 // ── Route JSX compiles correctly ─────────────────────────────────────

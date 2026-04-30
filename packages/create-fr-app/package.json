@@ -4,6 +4,10 @@
   "description": "CLI to create new apps with the FlinkReactor design system",
   "type": "module",
   "license": "BSL-1.1",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
   "author": "Ahmed El.Hussaini <328866+sandboxws@users.noreply.github.com>",
   "repository": {
     "type": "git",

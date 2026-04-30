@@ -8,7 +8,7 @@ metadata:
 spec:
   template:
     spec:
-      image: 'flink:2.0'
+      image: flink:2.0
       flinkVersion: v2_0
       flinkConfiguration:
         execution.runtime-mode: STREAMING
@@ -24,7 +24,7 @@ spec:
           cpu: '1'
           memory: 1024m
       job:
-        jarURI: 'local:///opt/flink/usrlib/sql-runner.jar'
+        jarURI: local:///opt/flink/usrlib/sql-runner.jar
         parallelism: 4
         upgradeMode: savepoint
 "
@@ -41,7 +41,7 @@ spec:
     className: nginx
   template:
     spec:
-      image: 'flink:2.0'
+      image: flink:2.0
       flinkVersion: v2_0
       flinkConfiguration:
         execution.runtime-mode: STREAMING
@@ -56,7 +56,7 @@ spec:
           cpu: '1'
           memory: 1024m
       job:
-        jarURI: 'local:///opt/flink/usrlib/sql-runner.jar'
+        jarURI: local:///opt/flink/usrlib/sql-runner.jar
         parallelism: 4
         upgradeMode: savepoint
 "
@@ -73,7 +73,7 @@ spec:
     blue-green.deployment.deletion.delay: 2s
   template:
     spec:
-      image: 'flink:2.0'
+      image: flink:2.0
       flinkVersion: v2_0
       flinkConfiguration:
         execution.runtime-mode: STREAMING
@@ -89,7 +89,7 @@ spec:
           cpu: '1'
           memory: 1024m
       job:
-        jarURI: 'local:///opt/flink/usrlib/sql-runner.jar'
+        jarURI: local:///opt/flink/usrlib/sql-runner.jar
         parallelism: 4
         upgradeMode: savepoint
 "
@@ -101,7 +101,7 @@ kind: FlinkDeployment
 metadata:
   name: orders
 spec:
-  image: 'flink:2.0'
+  image: flink:2.0
   flinkVersion: v2_0
   flinkConfiguration:
     execution.runtime-mode: STREAMING
@@ -117,7 +117,7 @@ spec:
       cpu: '1'
       memory: 1024m
   job:
-    jarURI: 'local:///opt/flink/usrlib/sql-runner.jar'
+    jarURI: local:///opt/flink/usrlib/sql-runner.jar
     parallelism: 4
 "
 `;

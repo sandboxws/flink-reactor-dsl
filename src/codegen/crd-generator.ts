@@ -286,8 +286,12 @@ function buildInnerSpec(
   }
 
   if (props.flinkConfig) {
-    for (const [key, value] of Object.entries(props.flinkConfig)) {
-      config[key] = value
+    // Sort by key so output bytes don't depend on the user's
+    // `{ ...defaults, ...overrides }` insertion order. Flink reads
+    // flinkConfiguration as a map — order has no runtime meaning.
+    const sortedKeys = Object.keys(props.flinkConfig).sort()
+    for (const key of sortedKeys) {
+      config[key] = props.flinkConfig[key]
     }
   }
 
@@ -581,81 +585,49 @@ function generateBlueGreenCrd(
 
 // ── YAML serialization ──────────────────────────────────────────────
 
+import { stringify as yamlStringify } from "yaml"
+
 /**
- * Simple YAML serializer for FlinkDeployment CRDs.
- * Handles objects, arrays, strings, numbers, and booleans.
- * Does not handle complex YAML features (anchors, multiline, etc.).
+ * Serialize an object to YAML for FlinkDeployment CRDs, ConfigMaps, and
+ * Flink CDC pipeline.yaml documents.
+ *
+ * Backed by eemeli/yaml. The previous hand-rolled emitter punted on
+ * multi-line strings, values with leading whitespace, and a few other
+ * special-character cases — yaml handles these correctly. Options below
+ * are pinned so the output stays stable across yaml minor updates.
+ *
+ * The legacy `indent` parameter is no longer used (yaml's recursive
+ * formatting computes nested indentation itself); it's kept on the
+ * signature for backward compatibility with any external caller.
  */
-export function toYaml(obj: unknown, indent: number = 0): string {
-  const pad = "  ".repeat(indent)
+export function toYaml(obj: unknown, _indent: number = 0): string {
+  // Strip undefined values so YAML doesn't emit `key: null` for them.
+  // The hand-rolled emitter skipped undefined entries; eemeli emits them
+  // as null. To preserve historical behavior, recursively prune them.
+  const pruned = pruneUndefined(obj)
+  return yamlStringify(pruned, {
+    indent: 2,
+    lineWidth: 0,
+    defaultStringType: "PLAIN",
+    defaultKeyType: "PLAIN",
+    singleQuote: true,
+  })
+}
 
-  if (obj === null || obj === undefined) {
-    return "null"
+function pruneUndefined(value: unknown): unknown {
+  if (value === null || value === undefined) return value
+  if (Array.isArray(value)) {
+    return value.map(pruneUndefined)
   }
-
-  if (typeof obj === "string") {
-    // Quote strings that look like numbers, booleans, or contain special chars
-    if (
-      /^[\d.]+$/.test(obj) ||
-      /^(true|false|null|yes|no)$/i.test(obj) ||
-      /[:{}[\],&*?|>!%@`#]/.test(obj) ||
-      obj === ""
-    ) {
-      return `'${obj.replace(/'/g, "''")}'`
+  if (typeof value === "object") {
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (v === undefined) continue
+      out[k] = pruneUndefined(v)
     }
-    return obj
+    return out
   }
-
-  if (typeof obj === "number" || typeof obj === "boolean") {
-    return String(obj)
-  }
-
-  if (Array.isArray(obj)) {
-    if (obj.length === 0) return "[]"
-    const lines: string[] = []
-    for (const item of obj) {
-      if (typeof item === "object" && item !== null && !Array.isArray(item)) {
-        const entries = Object.entries(item)
-        if (entries.length > 0) {
-          const [firstKey, firstVal] = entries[0]
-          lines.push(`${pad}- ${firstKey}: ${toYaml(firstVal, indent + 2)}`)
-          for (const [key, val] of entries.slice(1)) {
-            lines.push(`${pad}  ${key}: ${toYaml(val, indent + 2)}`)
-          }
-        }
-      } else {
-        lines.push(`${pad}- ${toYaml(item, indent + 1)}`)
-      }
-    }
-    return `\n${lines.join("\n")}`
-  }
-
-  if (typeof obj === "object") {
-    const entries = Object.entries(obj as Record<string, unknown>)
-    if (entries.length === 0) return "{}"
-
-    const lines: string[] = []
-    for (const [key, value] of entries) {
-      if (value === undefined) continue
-      if (typeof value === "object" && value !== null) {
-        const nested = toYaml(value, indent + 1)
-        if (nested.startsWith("\n")) {
-          lines.push(`${pad}${key}:${nested}`)
-        } else {
-          lines.push(`${pad}${key}: ${nested}`)
-        }
-      } else {
-        lines.push(`${pad}${key}: ${toYaml(value, indent + 1)}`)
-      }
-    }
-
-    if (indent === 0) {
-      return `${lines.join("\n")}\n`
-    }
-    return `\n${lines.join("\n")}`
-  }
-
-  return String(obj)
+  return value
 }
 
 // ── Effect-typed variant ─────────────────────────────────────────────

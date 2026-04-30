@@ -498,3 +498,39 @@ describe("CRD generation: Flink CDC Pipeline Connector variant", () => {
     )
   })
 })
+
+// ── YAML round-trip ─────────────────────────────────────────────────
+//
+// Anything we emit must parse back to a structurally-identical object.
+// This catches whole categories of YAML emission bugs: mis-quoted
+// special characters, dropped keys, multiline string corruption, etc.
+// Hand-rolled emitters tend to fail this; a real YAML library should
+// always pass.
+
+describe("toYaml: round-trips through parse", () => {
+  it("preserves all fields for a representative CRD", async () => {
+    const { parse } = await import("yaml")
+    const source = KafkaSource({
+      topic: "orders",
+      schema: OrderSchema,
+      bootstrapServers: "kafka:9092",
+    })
+    const sink = KafkaSink({ topic: "out", children: [source] })
+    const pipeline = Pipeline({
+      name: "round-trip",
+      flinkConfig: {
+        // Special chars that historically broke the hand-rolled emitter.
+        "key.with:colons": "value:with:colons",
+        "leading-space": " starts with space",
+        "trailing-space": "ends with space ",
+        "with-newlines": "line1\nline2",
+        "yaml-keyword": "true",
+      },
+      children: [sink],
+    })
+    const crd = generateCrd(pipeline, { flinkVersion: "2.0" })
+    const yaml = generateCrdYaml(pipeline, { flinkVersion: "2.0" })
+    const reparsed = parse(yaml)
+    expect(reparsed).toEqual(JSON.parse(JSON.stringify(crd)))
+  })
+})

@@ -3,7 +3,6 @@ import { Pipeline } from "@/components/pipeline"
 import { KafkaSink } from "@/components/sinks"
 import { KafkaSource } from "@/components/sources"
 import { Filter } from "@/components/transforms"
-import { createElement } from "@/core/jsx-runtime"
 import { Field, Schema } from "@/core/schema"
 
 const ActionSchema = Schema({

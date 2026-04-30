@@ -3,7 +3,6 @@ import { JdbcSink } from "@/components/sinks"
 import { KafkaSource } from "@/components/sources"
 import { Aggregate, Map } from "@/components/transforms"
 import { SlideWindow } from "@/components/windows"
-import { createElement } from "@/core/jsx-runtime"
 import { Field, Schema } from "@/core/schema"
 
 const SensorSchema = Schema({

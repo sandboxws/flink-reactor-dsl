@@ -1,3 +1,4 @@
+import { quoteIdentifier as q } from "@/codegen/sql-identifiers.js"
 import type { ValidationDiagnostic } from "./synth-context.js"
 import type {
   ConstructNode,
@@ -35,6 +36,40 @@ export function resolveObservationStrategy(
     default:
       return "unsupported"
   }
+}
+
+// ── Timestamp parsing ────────────────────────────────────────────────
+
+// Why explicit-TZ only: a string like "2026-04-27T00:00:00" is parsed as
+// LOCAL time by `new Date()`, so the same input produces different epoch
+// ms on a UTC CI runner and a PST developer machine — and that drift
+// leaks into emitted SQL via `scan.startup.timestamp-millis`. We require
+// either a `Z` suffix or an explicit `±HH:MM` offset.
+const ISO_8601_WITH_TZ =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/
+
+/** Result of {@link parseTapTimestamp}. */
+type TimestampParseResult =
+  | { readonly ok: true; readonly epochMs: number }
+  | { readonly ok: false; readonly reason: string }
+
+/**
+ * Parse an ISO-8601 timestamp into epoch milliseconds. Rejects strings
+ * without an explicit timezone offset to keep tap output deterministic
+ * across machines with different `TZ` environments.
+ */
+function parseTapTimestamp(value: string): TimestampParseResult {
+  if (!ISO_8601_WITH_TZ.test(value)) {
+    return {
+      ok: false,
+      reason: `must be ISO-8601 with explicit timezone offset (e.g. "2026-04-27T00:00:00Z" or "2026-04-27T00:00:00-08:00")`,
+    }
+  }
+  const ms = new Date(value).getTime()
+  if (Number.isNaN(ms)) {
+    return { ok: false, reason: "is not a valid ISO-8601 timestamp" }
+  }
+  return { ok: true, epochMs: ms }
 }
 
 // ── TapConfig normalization ──────────────────────────────────────────
@@ -91,10 +126,32 @@ export function validateTapConfig(
     })
   }
 
+  if (config.startTimestamp) {
+    const parsed = parseTapTimestamp(config.startTimestamp)
+    if (!parsed.ok) {
+      diagnostics.push({
+        severity: "error",
+        message: `startTimestamp "${config.startTimestamp}" ${parsed.reason}`,
+        nodeId,
+      })
+    }
+  }
+
+  if (config.endTimestamp) {
+    const parsed = parseTapTimestamp(config.endTimestamp)
+    if (!parsed.ok) {
+      diagnostics.push({
+        severity: "error",
+        message: `endTimestamp "${config.endTimestamp}" ${parsed.reason}`,
+        nodeId,
+      })
+    }
+  }
+
   if (config.startTimestamp && config.endTimestamp) {
-    const start = new Date(config.startTimestamp).getTime()
-    const end = new Date(config.endTimestamp).getTime()
-    if (end <= start) {
+    const start = parseTapTimestamp(config.startTimestamp)
+    const end = parseTapTimestamp(config.endTimestamp)
+    if (start.ok && end.ok && end.epochMs <= start.epochMs) {
       diagnostics.push({
         severity: "error",
         message: "endTimestamp must be after startTimestamp",
@@ -157,11 +214,6 @@ function deterministicShortHash(input: string): string {
 
 // ── Observation SQL generation ───────────────────────────────────────
 
-/** Backtick-quote an identifier */
-function q(identifier: string): string {
-  return `\`${identifier}\``
-}
-
 /**
  * Generate observation SQL for a single tapped node.
  * Returns a CREATE TEMPORARY TABLE DDL followed by a SELECT * query.
@@ -177,7 +229,9 @@ export function buildObservationSql(
   const connectorType = connectorProperties.connector ?? "unknown"
   const strategy = resolveObservationStrategy(connectorType)
 
-  // Build column definitions
+  // Column order follows the user's Schema declaration order — this is
+  // a contract, NOT a stylistic choice. Schema({ fields: { a, b, c } })
+  // becomes a CREATE TABLE in that exact order. Don't sort.
   const columns = Object.entries(schema)
     .map(([name, type]) => `  ${q(name)} ${type}`)
     .join(",\n")
@@ -190,8 +244,12 @@ export function buildObservationSql(
     strategy,
   )
 
-  const withClause = Object.entries(withProps)
-    .map(([k, v]) => `  '${k}' = '${v}'`)
+  // Sort connector properties so output is order-independent. Flink
+  // reads connector WITH clauses as a property bag — order has no
+  // runtime meaning.
+  const withClause = Object.keys(withProps)
+    .sort()
+    .map((k) => `  '${k}' = '${withProps[k]}'`)
     .join(",\n")
 
   const ddl = `CREATE TEMPORARY TABLE ${q(tableName)} (\n${columns}\n) WITH (\n${withClause}\n);`
@@ -219,9 +277,16 @@ function buildObservationWithClause(
       props["scan.startup.mode"] = mapOffsetMode(config.offsetMode)
 
       if (config.offsetMode === "timestamp" && config.startTimestamp) {
-        props["scan.startup.timestamp-millis"] = String(
-          new Date(config.startTimestamp).getTime(),
-        )
+        const parsed = parseTapTimestamp(config.startTimestamp)
+        // validateTapConfig is run before emission; an invalid timestamp
+        // here means validation was skipped or bypassed, so fail loudly
+        // rather than silently emitting NaN.
+        if (!parsed.ok) {
+          throw new Error(
+            `Tap startTimestamp "${config.startTimestamp}" ${parsed.reason}`,
+          )
+        }
+        props["scan.startup.timestamp-millis"] = String(parsed.epochMs)
       }
       break
     }

@@ -2,7 +2,6 @@ import { Pipeline } from "@/components/pipeline"
 import { JdbcSink } from "@/components/sinks"
 import { KafkaSource } from "@/components/sources"
 import { Aggregate } from "@/components/transforms"
-import { createElement } from "@/core/jsx-runtime"
 import { Field, Schema } from "@/core/schema"
 
 const TransactionSchema = Schema({

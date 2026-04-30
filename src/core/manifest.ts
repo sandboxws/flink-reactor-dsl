@@ -178,12 +178,28 @@ function extractResource(
 
 // ── Main manifest generation ─────────────────────────────────────────
 
+export interface GenerateManifestOptions {
+  /**
+   * ISO-8601 timestamp recorded in the manifest's `generatedAt` field.
+   * Pass `new Date().toISOString()` from CLI/orchestration paths.
+   * Omit (or pass a fixed value) to produce deterministic output, e.g. in
+   * tests and snapshot suites — synthesis must not implicitly read the wall
+   * clock or the same input would produce different YAML across runs.
+   */
+  readonly synthesizedAt?: string
+}
+
+/** Sentinel used when no `synthesizedAt` is provided. Deliberately fake so
+ *  callers that should be passing real time (CLI commands) are easy to spot. */
+const SYNTHESIZED_AT_SENTINEL = "1970-01-01T00:00:00.000Z"
+
 /**
  * Walk the construct tree and generate a PipelineManifest containing
  * metadata for all sources, sinks, and catalogs in the pipeline.
  */
 export function generatePipelineManifest(
   tree: ConstructNode,
+  options: GenerateManifestOptions = {},
 ): PipelineManifest {
   const pipelineName = (tree.props.name as string) ?? tree.id
   const sources: ConnectorMeta[] = []
@@ -245,6 +261,6 @@ export function generatePipelineManifest(
     sources,
     sinks,
     catalogs,
-    generatedAt: new Date().toISOString(),
+    generatedAt: options.synthesizedAt ?? SYNTHESIZED_AT_SENTINEL,
   }
 }
