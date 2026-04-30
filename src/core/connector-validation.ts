@@ -1,3 +1,4 @@
+import { findDeepestSource } from "@/codegen/schema-introspect.js"
 import type { ValidationDiagnostic } from "./synth-context.js"
 import type { ConstructNode } from "./types.js"
 
@@ -325,6 +326,25 @@ export function validateConnectorProperties(
     }
   })
 
+  // PaimonSink merge-engine validation.
+  //
+  // A retract upstream connected to a PaimonSink without `mergeEngine` would
+  // compile to a Paimon append-only table — silently wrong for CDC. Mirror
+  // change 41's Iceberg MoR guard, but trigger on upstream changelog mode
+  // rather than per-sink config.
+  walkNodes(root, (n) => {
+    if (n.component !== "PaimonSink") return
+    if (n.props.mergeEngine !== undefined) return
+    if (inferUpstreamChangelogMode(n) !== "retract") return
+    diagnostics.push({
+      severity: "error",
+      message: `PaimonSink '${n.id}' with retract upstream requires \`mergeEngine\` (one of: 'deduplicate', 'partial-update', 'aggregation', 'first-row').`,
+      nodeId: n.id,
+      component: n.component,
+      category: "connector",
+    })
+  })
+
   // Cross-node: Pipeline Connector source → compatible sink validation.
   const cdcSources: ConstructNode[] = []
   const sinks: ConstructNode[] = []
@@ -442,4 +462,39 @@ function retractRequiredSinkReason(sink: ConstructNode): string | undefined {
     return "IcebergSink with `upsertEnabled: true` requires a retract upstream"
   }
   return undefined
+}
+
+/**
+ * Static classifier for the upstream changelog mode of a sink. Mirrors the
+ * heuristics in `sql-generator.ts:resolveSourceChangelogMode` but works on
+ * the construct tree alone (no SynthContext), because connector-validation
+ * runs before synthesis.
+ */
+function inferUpstreamChangelogMode(
+  sink: ConstructNode,
+): "retract" | "append-only" {
+  const upstream = sink.children[0]
+  if (!upstream) return "append-only"
+  const source = findDeepestSource(upstream)
+  if (!source) return "append-only"
+  return classifySourceChangelog(source)
+}
+
+function classifySourceChangelog(
+  source: ConstructNode,
+): "retract" | "append-only" {
+  const declared = source.props.changelogMode as string | undefined
+  if (declared === "retract") return "retract"
+  if (source.component === "PostgresCdcPipelineSource") return "retract"
+  if (source.component === "KafkaSource") {
+    const schema = source.props.schema as
+      | { primaryKey?: { columns?: readonly string[] } }
+      | undefined
+    if ((schema?.primaryKey?.columns?.length ?? 0) > 0) return "retract"
+  }
+  if (source.component === "FlussSource") {
+    const pk = source.props.primaryKey as readonly string[] | undefined
+    if (Array.isArray(pk) && pk.length > 0) return "retract"
+  }
+  return "append-only"
 }

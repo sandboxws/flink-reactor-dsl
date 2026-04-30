@@ -1,0 +1,459 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`PaimonSink CDC tuning props (sql-generator) > renders 'first-row' merge engine 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : pg-fluss-paimon
+-- ====================================================================
+
+SET 'pipeline.name' = 'pg-fluss-paimon';
+
+-- ====================================================================
+-- CATALOG
+-- --------------------------------------------------------------------
+-- id          : FlussCatalog_0
+-- type        : fluss
+-- ====================================================================
+
+CREATE CATALOG \`fluss_cat\` WITH (
+  'type' = 'fluss',
+  'bootstrap.servers' = 'fluss-coordinator:9123'
+);
+
+-- ====================================================================
+-- CATALOG
+-- --------------------------------------------------------------------
+-- id          : PaimonCatalog_1
+-- type        : paimon
+-- warehouse   : s3://bucket/lake
+-- ====================================================================
+
+CREATE CATALOG \`lake\` WITH (
+  'type' = 'paimon',
+  'warehouse' = 's3://bucket/lake'
+);
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : shop_orders
+-- type        : fluss
+-- catalog     : fluss_cat
+-- database    : shop
+-- table       : orders
+-- startup     : initial
+-- table-type  : PrimaryKey (retract)
+-- ====================================================================
+
+CREATE TABLE \`shop_orders\` (
+  \`order_id\` BIGINT,
+  \`customer_region\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`order_ts\` TIMESTAMP(3),
+  PRIMARY KEY (\`order_id\`) NOT ENFORCED
+) WITH (
+  'connector' = 'fluss',
+  'catalog' = 'fluss_cat',
+  'database' = 'shop',
+  'table' = 'orders',
+  'scan.startup.mode' = 'initial'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : PaimonSink_3
+-- type        : paimon
+-- ====================================================================
+
+CREATE DATABASE IF NOT EXISTS \`lake\`.\`warehouse\`;
+CREATE TABLE IF NOT EXISTS \`lake\`.\`warehouse\`.\`orders_lake\` (
+  \`order_id\` BIGINT,
+  \`customer_region\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`order_ts\` TIMESTAMP(3),
+  PRIMARY KEY (\`order_id\`) NOT ENFORCED
+) WITH (
+  'merge-engine' = 'first-row'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : shop_orders
+-- output      : lake
+-- ====================================================================
+
+INSERT INTO \`lake\`.\`warehouse\`.\`orders_lake\`
+SELECT * FROM \`shop_orders\`;
+"
+`;
+
+exports[`PaimonSink CDC tuning props (sql-generator) > renders bucket option 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : pg-fluss-paimon
+-- ====================================================================
+
+SET 'pipeline.name' = 'pg-fluss-paimon';
+
+-- ====================================================================
+-- CATALOG
+-- --------------------------------------------------------------------
+-- id          : FlussCatalog_0
+-- type        : fluss
+-- ====================================================================
+
+CREATE CATALOG \`fluss_cat\` WITH (
+  'type' = 'fluss',
+  'bootstrap.servers' = 'fluss-coordinator:9123'
+);
+
+-- ====================================================================
+-- CATALOG
+-- --------------------------------------------------------------------
+-- id          : PaimonCatalog_1
+-- type        : paimon
+-- warehouse   : s3://bucket/lake
+-- ====================================================================
+
+CREATE CATALOG \`lake\` WITH (
+  'type' = 'paimon',
+  'warehouse' = 's3://bucket/lake'
+);
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : shop_orders
+-- type        : fluss
+-- catalog     : fluss_cat
+-- database    : shop
+-- table       : orders
+-- startup     : initial
+-- table-type  : PrimaryKey (retract)
+-- ====================================================================
+
+CREATE TABLE \`shop_orders\` (
+  \`order_id\` BIGINT,
+  \`customer_region\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`order_ts\` TIMESTAMP(3),
+  PRIMARY KEY (\`order_id\`) NOT ENFORCED
+) WITH (
+  'connector' = 'fluss',
+  'catalog' = 'fluss_cat',
+  'database' = 'shop',
+  'table' = 'orders',
+  'scan.startup.mode' = 'initial'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : PaimonSink_3
+-- type        : paimon
+-- ====================================================================
+
+CREATE DATABASE IF NOT EXISTS \`lake\`.\`warehouse\`;
+CREATE TABLE IF NOT EXISTS \`lake\`.\`warehouse\`.\`orders_lake\` (
+  \`order_id\` BIGINT,
+  \`customer_region\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`order_ts\` TIMESTAMP(3),
+  PRIMARY KEY (\`order_id\`) NOT ENFORCED
+) WITH (
+  'merge-engine' = 'deduplicate',
+  'bucket' = '8',
+  'bucket-key' = 'order_id'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : shop_orders
+-- output      : lake
+-- ====================================================================
+
+INSERT INTO \`lake\`.\`warehouse\`.\`orders_lake\`
+SELECT * FROM \`shop_orders\`;
+"
+`;
+
+exports[`PaimonSink CDC tuning props (sql-generator) > renders fullCompactionDeltaCommits 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : pg-fluss-paimon
+-- ====================================================================
+
+SET 'pipeline.name' = 'pg-fluss-paimon';
+
+-- ====================================================================
+-- CATALOG
+-- --------------------------------------------------------------------
+-- id          : FlussCatalog_0
+-- type        : fluss
+-- ====================================================================
+
+CREATE CATALOG \`fluss_cat\` WITH (
+  'type' = 'fluss',
+  'bootstrap.servers' = 'fluss-coordinator:9123'
+);
+
+-- ====================================================================
+-- CATALOG
+-- --------------------------------------------------------------------
+-- id          : PaimonCatalog_1
+-- type        : paimon
+-- warehouse   : s3://bucket/lake
+-- ====================================================================
+
+CREATE CATALOG \`lake\` WITH (
+  'type' = 'paimon',
+  'warehouse' = 's3://bucket/lake'
+);
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : shop_orders
+-- type        : fluss
+-- catalog     : fluss_cat
+-- database    : shop
+-- table       : orders
+-- startup     : initial
+-- table-type  : PrimaryKey (retract)
+-- ====================================================================
+
+CREATE TABLE \`shop_orders\` (
+  \`order_id\` BIGINT,
+  \`customer_region\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`order_ts\` TIMESTAMP(3),
+  PRIMARY KEY (\`order_id\`) NOT ENFORCED
+) WITH (
+  'connector' = 'fluss',
+  'catalog' = 'fluss_cat',
+  'database' = 'shop',
+  'table' = 'orders',
+  'scan.startup.mode' = 'initial'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : PaimonSink_3
+-- type        : paimon
+-- ====================================================================
+
+CREATE DATABASE IF NOT EXISTS \`lake\`.\`warehouse\`;
+CREATE TABLE IF NOT EXISTS \`lake\`.\`warehouse\`.\`orders_lake\` (
+  \`order_id\` BIGINT,
+  \`customer_region\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`order_ts\` TIMESTAMP(3),
+  PRIMARY KEY (\`order_id\`) NOT ENFORCED
+) WITH (
+  'merge-engine' = 'deduplicate',
+  'full-compaction.delta-commits' = '10'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : shop_orders
+-- output      : lake
+-- ====================================================================
+
+INSERT INTO \`lake\`.\`warehouse\`.\`orders_lake\`
+SELECT * FROM \`shop_orders\`;
+"
+`;
+
+exports[`PaimonSink CDC tuning props (sql-generator) > renders the full-coverage CDC config used by the pg-fluss-paimon template 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : pg-fluss-paimon
+-- ====================================================================
+
+SET 'pipeline.name' = 'pg-fluss-paimon';
+
+-- ====================================================================
+-- CATALOG
+-- --------------------------------------------------------------------
+-- id          : FlussCatalog_0
+-- type        : fluss
+-- ====================================================================
+
+CREATE CATALOG \`fluss_cat\` WITH (
+  'type' = 'fluss',
+  'bootstrap.servers' = 'fluss-coordinator:9123'
+);
+
+-- ====================================================================
+-- CATALOG
+-- --------------------------------------------------------------------
+-- id          : PaimonCatalog_1
+-- type        : paimon
+-- warehouse   : s3://bucket/lake
+-- ====================================================================
+
+CREATE CATALOG \`lake\` WITH (
+  'type' = 'paimon',
+  'warehouse' = 's3://bucket/lake'
+);
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : shop_orders
+-- type        : fluss
+-- catalog     : fluss_cat
+-- database    : shop
+-- table       : orders
+-- startup     : initial
+-- table-type  : PrimaryKey (retract)
+-- ====================================================================
+
+CREATE TABLE \`shop_orders\` (
+  \`order_id\` BIGINT,
+  \`customer_region\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`order_ts\` TIMESTAMP(3),
+  PRIMARY KEY (\`order_id\`) NOT ENFORCED
+) WITH (
+  'connector' = 'fluss',
+  'catalog' = 'fluss_cat',
+  'database' = 'shop',
+  'table' = 'orders',
+  'scan.startup.mode' = 'initial'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : PaimonSink_3
+-- type        : paimon
+-- ====================================================================
+
+CREATE DATABASE IF NOT EXISTS \`lake\`.\`warehouse\`;
+CREATE TABLE IF NOT EXISTS \`lake\`.\`warehouse\`.\`orders_lake\` (
+  \`order_id\` BIGINT,
+  \`customer_region\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`order_ts\` TIMESTAMP(3),
+  PRIMARY KEY (\`order_id\`) NOT ENFORCED
+) WITH (
+  'merge-engine' = 'deduplicate',
+  'changelog-producer' = 'input',
+  'bucket' = '8',
+  'bucket-key' = 'order_id',
+  'full-compaction.delta-commits' = '10'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : shop_orders
+-- output      : lake
+-- ====================================================================
+
+INSERT INTO \`lake\`.\`warehouse\`.\`orders_lake\`
+SELECT * FROM \`shop_orders\`;
+"
+`;
+
+exports[`PaimonSink CDC tuning props (sql-generator) > renders writeBufferSizeMB as bytes 1`] = `
+"-- ====================================================================
+-- PIPELINE
+-- --------------------------------------------------------------------
+-- name        : pg-fluss-paimon
+-- ====================================================================
+
+SET 'pipeline.name' = 'pg-fluss-paimon';
+
+-- ====================================================================
+-- CATALOG
+-- --------------------------------------------------------------------
+-- id          : FlussCatalog_0
+-- type        : fluss
+-- ====================================================================
+
+CREATE CATALOG \`fluss_cat\` WITH (
+  'type' = 'fluss',
+  'bootstrap.servers' = 'fluss-coordinator:9123'
+);
+
+-- ====================================================================
+-- CATALOG
+-- --------------------------------------------------------------------
+-- id          : PaimonCatalog_1
+-- type        : paimon
+-- warehouse   : s3://bucket/lake
+-- ====================================================================
+
+CREATE CATALOG \`lake\` WITH (
+  'type' = 'paimon',
+  'warehouse' = 's3://bucket/lake'
+);
+
+-- ====================================================================
+-- SOURCE TABLE
+-- --------------------------------------------------------------------
+-- id          : shop_orders
+-- type        : fluss
+-- catalog     : fluss_cat
+-- database    : shop
+-- table       : orders
+-- startup     : initial
+-- table-type  : PrimaryKey (retract)
+-- ====================================================================
+
+CREATE TABLE \`shop_orders\` (
+  \`order_id\` BIGINT,
+  \`customer_region\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`order_ts\` TIMESTAMP(3),
+  PRIMARY KEY (\`order_id\`) NOT ENFORCED
+) WITH (
+  'connector' = 'fluss',
+  'catalog' = 'fluss_cat',
+  'database' = 'shop',
+  'table' = 'orders',
+  'scan.startup.mode' = 'initial'
+);
+
+-- ====================================================================
+-- SINK TABLE
+-- --------------------------------------------------------------------
+-- id          : PaimonSink_3
+-- type        : paimon
+-- ====================================================================
+
+CREATE DATABASE IF NOT EXISTS \`lake\`.\`warehouse\`;
+CREATE TABLE IF NOT EXISTS \`lake\`.\`warehouse\`.\`orders_lake\` (
+  \`order_id\` BIGINT,
+  \`customer_region\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`order_ts\` TIMESTAMP(3),
+  PRIMARY KEY (\`order_id\`) NOT ENFORCED
+) WITH (
+  'merge-engine' = 'deduplicate',
+  'write-buffer-size' = '67108864'
+);
+
+-- ====================================================================
+-- TRANSFORMATION
+-- --------------------------------------------------------------------
+-- input       : shop_orders
+-- output      : lake
+-- ====================================================================
+
+INSERT INTO \`lake\`.\`warehouse\`.\`orders_lake\`
+SELECT * FROM \`shop_orders\`;
+"
+`;

@@ -420,6 +420,8 @@ CREATE TABLE IF NOT EXISTS \`lake\`.\`warehouse\`.\`orders_view\` (
   \`amount\` DECIMAL(10, 2),
   \`order_ts\` TIMESTAMP(3),
   PRIMARY KEY (\`order_id\`) NOT ENFORCED
+) WITH (
+  'merge-engine' = 'deduplicate'
 );
 
 -- ====================================================================
@@ -508,6 +510,8 @@ CREATE TABLE IF NOT EXISTS \`lake\`.\`warehouse\`.\`orders_view\` (
   \`amount\` DECIMAL(10, 2),
   \`order_ts\` TIMESTAMP(3),
   PRIMARY KEY (\`order_id\`) NOT ENFORCED
+) WITH (
+  'merge-engine' = 'deduplicate'
 );
 
 -- ====================================================================
@@ -596,6 +600,8 @@ CREATE TABLE IF NOT EXISTS \`lake\`.\`warehouse\`.\`orders_view\` (
   \`amount\` DECIMAL(10, 2),
   \`order_ts\` TIMESTAMP(3),
   PRIMARY KEY (\`order_id\`) NOT ENFORCED
+) WITH (
+  'merge-engine' = 'deduplicate'
 );
 
 -- ====================================================================
@@ -686,6 +692,8 @@ CREATE TABLE IF NOT EXISTS \`lake\`.\`warehouse\`.\`orders_view\` (
   \`amount\` DECIMAL(10, 2),
   \`order_ts\` TIMESTAMP(3),
   PRIMARY KEY (\`order_id\`) NOT ENFORCED
+) WITH (
+  'merge-engine' = 'deduplicate'
 );
 
 -- ====================================================================
@@ -867,6 +875,8 @@ CREATE TABLE IF NOT EXISTS \`paimon_cat\`.\`benchmark\`.\`orders\` (
   \`amount\` DECIMAL(10, 2),
   \`order_ts\` TIMESTAMP(3),
   PRIMARY KEY (\`order_id\`) NOT ENFORCED
+) WITH (
+  'merge-engine' = 'deduplicate'
 );
 
 -- ====================================================================

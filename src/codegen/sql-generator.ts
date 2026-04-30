@@ -1422,8 +1422,73 @@ function collectCatalogManagedTableProps(
   node: ConstructNode,
 ): [string, string][] {
   if (node.component === "IcebergSink") return collectIcebergTableProps(node)
+  if (node.component === "PaimonSink") return collectPaimonTableProps(node)
   if (node.component === "FlussSink") return collectFlussTableProps(node)
   return []
+}
+
+function collectPaimonTableProps(node: ConstructNode): [string, string][] {
+  if (node.component !== "PaimonSink") return []
+  const props = node.props
+  const out: [string, string][] = []
+
+  if (props.mergeEngine) {
+    out.push(["merge-engine", String(props.mergeEngine)])
+  }
+  if (props.changelogProducer) {
+    out.push(["changelog-producer", String(props.changelogProducer)])
+  }
+  if (props.sequenceField) {
+    out.push(["sequence.field", String(props.sequenceField)])
+  }
+  if (props.bucket != null) {
+    out.push(["bucket", String(props.bucket)])
+  }
+  // bucket-key:
+  //   - explicit value wins
+  //   - else fall back to primaryKey only when the user is actually tuning
+  //     bucketing (bucket prop set) — emitting bucket-key is meaningless
+  //     unless bucket is also set, and the "omitted CDC props" contract says
+  //     to leave the WITH clause empty otherwise
+  const explicitBucketKey = props.bucketKey as readonly string[] | undefined
+  const primaryKey = props.primaryKey as readonly string[] | undefined
+  const bucketKey =
+    Array.isArray(explicitBucketKey) && explicitBucketKey.length > 0
+      ? explicitBucketKey
+      : props.bucket != null &&
+          Array.isArray(primaryKey) &&
+          primaryKey.length > 0
+        ? primaryKey
+        : undefined
+  if (bucketKey) {
+    out.push(["bucket-key", bucketKey.join(",")])
+  }
+  if (props.fullCompactionDeltaCommits != null) {
+    out.push([
+      "full-compaction.delta-commits",
+      String(props.fullCompactionDeltaCommits),
+    ])
+  }
+  if (props.writeBufferSizeMB != null) {
+    out.push([
+      "write-buffer-size",
+      String(Number(props.writeBufferSizeMB) * 1048576),
+    ])
+  }
+  if (props.snapshotNumRetainedMin != null) {
+    out.push([
+      "snapshot.num-retained.min",
+      String(props.snapshotNumRetainedMin),
+    ])
+  }
+  if (props.snapshotNumRetainedMax != null) {
+    out.push([
+      "snapshot.num-retained.max",
+      String(props.snapshotNumRetainedMax),
+    ])
+  }
+
+  return out
 }
 
 function collectFlussTableProps(node: ConstructNode): [string, string][] {

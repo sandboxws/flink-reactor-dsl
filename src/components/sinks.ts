@@ -160,7 +160,11 @@ export function GenericSink(props: GenericSinkProps): ConstructNode {
 
 // ── PaimonSink ─────────────────────────────────────────────────────
 
-export type PaimonMergeEngine = "deduplicate" | "partial-update" | "aggregation"
+export type PaimonMergeEngine =
+  | "deduplicate"
+  | "partial-update"
+  | "aggregation"
+  | "first-row"
 export type PaimonChangelogProducer = "input" | "lookup" | "full-compaction"
 
 export interface PaimonSinkProps extends BaseComponentProps {
@@ -171,6 +175,34 @@ export interface PaimonSinkProps extends BaseComponentProps {
   readonly mergeEngine?: PaimonMergeEngine
   readonly changelogProducer?: PaimonChangelogProducer
   readonly sequenceField?: string
+  /**
+   * Number of buckets (Paimon `bucket` table option). The single most
+   * important throughput knob — match this to writer parallelism. The
+   * Paimon default of `-1` (dynamic) serializes writers and is rarely the
+   * right choice for production CDC.
+   */
+  readonly bucket?: number
+  /**
+   * Bucket-key columns (`bucket-key` table option). Defaults to
+   * `primaryKey` when set; provide an explicit value to bucket on a
+   * non-PK column (e.g. `customer_region` while the PK is `order_id`).
+   */
+  readonly bucketKey?: readonly string[]
+  /**
+   * Number of incremental commits between forced full compactions
+   * (`full-compaction.delta-commits`). Lower values keep query latency
+   * predictable at the cost of write amplification.
+   */
+  readonly fullCompactionDeltaCommits?: number
+  /**
+   * In-memory write buffer size, in MB (`write-buffer-size`). Pairs with
+   * `bucket` to bound the small-file rate.
+   */
+  readonly writeBufferSizeMB?: number
+  /** Snapshot retention floor (`snapshot.num-retained.min`). */
+  readonly snapshotNumRetainedMin?: number
+  /** Snapshot retention ceiling (`snapshot.num-retained.max`). */
+  readonly snapshotNumRetainedMax?: number
   /** Enable operator tailing for this sink */
   readonly tap?: boolean | TapConfig
   readonly children?: ConstructNode | ConstructNode[]
@@ -180,9 +212,27 @@ export interface PaimonSinkProps extends BaseComponentProps {
  * Paimon sink: writes to an Apache Paimon lakehouse table.
  *
  * References a PaimonCatalog handle to form catalog-qualified table names.
- * Supports merge engines for deduplication, partial updates, and aggregation.
- * `changelogProducer` controls how the table generates changelog for
- * downstream consumers.
+ *
+ * ## Merge engine selection (CDC use-cases)
+ *
+ * - `'deduplicate'` — standard upsert: latest record per primary key wins.
+ *   The default choice for typical CDC mirror tables (orders, accounts).
+ * - `'partial-update'` — sparse-column updates: incoming rows merge into
+ *   existing PK rows column-by-column, leaving unset columns untouched.
+ *   Useful for joining multiple CDC streams that update disjoint columns.
+ * - `'first-row'` — keep the first record per primary key and ignore
+ *   subsequent ones. Useful for audit logs and fraud-detection
+ *   deduplication snapshots. Requires Paimon 0.7+.
+ * - `'aggregation'` — pre-aggregated rollups via per-column aggregation
+ *   functions configured on the table side.
+ *
+ * ## CDC tuning props
+ *
+ * `bucket`, `bucketKey`, `fullCompactionDeltaCommits`, `writeBufferSizeMB`,
+ * and the `snapshotNumRetained*` bounds map directly to Paimon's
+ * upstream table-option keys; see the Paimon docs for guidance per option.
+ *
+ * @see Paimon merge engines: https://paimon.apache.org/docs/master/primary-key-table/merge-engine/
  */
 export function PaimonSink(props: PaimonSinkProps): ConstructNode {
   const { children, catalog, ...rest } = props

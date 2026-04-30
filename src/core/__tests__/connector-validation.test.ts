@@ -561,4 +561,131 @@ describe("validateConnectorProperties", () => {
     )
     expect(tapErr).toBeDefined()
   })
+
+  // ── PaimonSink merge-engine guard (change 46) ────────────────────
+
+  it("errors when PaimonSink with retract Fluss upstream has no mergeEngine", () => {
+    const src = makeNode("FlussSource", "Source", {
+      catalogName: "fluss_cat",
+      database: "shop",
+      table: "orders",
+      schema: { columns: [] },
+      primaryKey: ["order_id"],
+    })
+    const sink = makeNode(
+      "PaimonSink",
+      "Sink",
+      {
+        catalogName: "lake",
+        database: "warehouse",
+        table: "orders_lake",
+        primaryKey: ["order_id"],
+      },
+      [src],
+    )
+    const tree = makePipeline(sink)
+    const diags = validateConnectorProperties(tree)
+    const err = diags.find(
+      (d) =>
+        d.severity === "error" &&
+        d.component === "PaimonSink" &&
+        d.nodeId === sink.id &&
+        /retract upstream/i.test(d.message) &&
+        /mergeEngine/i.test(d.message),
+    )
+    expect(err).toBeDefined()
+    expect(err?.message).toContain(sink.id)
+    expect(err?.message).toContain("deduplicate")
+    expect(err?.message).toContain("partial-update")
+    expect(err?.message).toContain("aggregation")
+    expect(err?.message).toContain("first-row")
+  })
+
+  it("passes when PaimonSink with retract Fluss upstream has mergeEngine set", () => {
+    const src = makeNode("FlussSource", "Source", {
+      catalogName: "fluss_cat",
+      database: "shop",
+      table: "orders",
+      schema: { columns: [] },
+      primaryKey: ["order_id"],
+    })
+    const sink = makeNode(
+      "PaimonSink",
+      "Sink",
+      {
+        catalogName: "lake",
+        database: "warehouse",
+        table: "orders_lake",
+        primaryKey: ["order_id"],
+        mergeEngine: "deduplicate",
+      },
+      [src],
+    )
+    const tree = makePipeline(sink)
+    const diags = validateConnectorProperties(tree)
+    const err = diags.find(
+      (d) =>
+        d.severity === "error" &&
+        d.component === "PaimonSink" &&
+        /mergeEngine/i.test(d.message),
+    )
+    expect(err).toBeUndefined()
+  })
+
+  it("does not fire the merge-engine guard for an append-only Kafka upstream", () => {
+    const src = makeNode("KafkaSource", "Source", {
+      topic: "events",
+      schema: { columns: [] },
+      bootstrapServers: "kafka:9092",
+      format: "json",
+    })
+    const sink = makeNode(
+      "PaimonSink",
+      "Sink",
+      {
+        catalogName: "lake",
+        database: "warehouse",
+        table: "events_lake",
+      },
+      [src],
+    )
+    const tree = makePipeline(sink)
+    const diags = validateConnectorProperties(tree)
+    const err = diags.find(
+      (d) =>
+        d.severity === "error" &&
+        d.component === "PaimonSink" &&
+        /retract upstream requires `mergeEngine`/i.test(d.message),
+    )
+    expect(err).toBeUndefined()
+  })
+
+  it("fires the merge-engine guard when KafkaSource has a schema PK (upsert-kafka)", () => {
+    const src = makeNode("KafkaSource", "Source", {
+      topic: "orders",
+      schema: { primaryKey: { columns: ["order_id"] }, columns: [] },
+      bootstrapServers: "kafka:9092",
+      format: "json",
+    })
+    const sink = makeNode(
+      "PaimonSink",
+      "Sink",
+      {
+        catalogName: "lake",
+        database: "warehouse",
+        table: "orders_lake",
+        primaryKey: ["order_id"],
+      },
+      [src],
+    )
+    const tree = makePipeline(sink)
+    const diags = validateConnectorProperties(tree)
+    const err = diags.find(
+      (d) =>
+        d.severity === "error" &&
+        d.component === "PaimonSink" &&
+        /retract upstream requires `mergeEngine`/i.test(d.message),
+    )
+    expect(err).toBeDefined()
+  })
 })

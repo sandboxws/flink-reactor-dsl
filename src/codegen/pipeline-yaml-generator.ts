@@ -231,6 +231,43 @@ function buildPaimonSinkStanza(
   if (p.changelogProducer) {
     stanza["table.properties.changelog-producer"] = p.changelogProducer
   }
+  if (p.sequenceField) {
+    stanza["table.properties.sequence.field"] = p.sequenceField
+  }
+  if (p.bucket != null) {
+    stanza["table.properties.bucket"] = String(p.bucket)
+  }
+  const explicitBucketKey = p.bucketKey as readonly string[] | undefined
+  const pk = p.primaryKey as readonly string[] | undefined
+  const bucketKey =
+    Array.isArray(explicitBucketKey) && explicitBucketKey.length > 0
+      ? explicitBucketKey
+      : p.bucket != null && Array.isArray(pk) && pk.length > 0
+        ? pk
+        : undefined
+  if (bucketKey) {
+    stanza["table.properties.bucket-key"] = bucketKey.join(",")
+  }
+  if (p.fullCompactionDeltaCommits != null) {
+    stanza["table.properties.full-compaction.delta-commits"] = String(
+      p.fullCompactionDeltaCommits,
+    )
+  }
+  if (p.writeBufferSizeMB != null) {
+    stanza["table.properties.write-buffer-size"] = String(
+      Number(p.writeBufferSizeMB) * 1048576,
+    )
+  }
+  if (p.snapshotNumRetainedMin != null) {
+    stanza["table.properties.snapshot.num-retained.min"] = String(
+      p.snapshotNumRetainedMin,
+    )
+  }
+  if (p.snapshotNumRetainedMax != null) {
+    stanza["table.properties.snapshot.num-retained.max"] = String(
+      p.snapshotNumRetainedMax,
+    )
+  }
   return stanza
 }
 
