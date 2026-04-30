@@ -3,7 +3,6 @@ import {
   pipelineReadme,
   sharedFiles,
   templatePipelineTestStub,
-  templateReadme,
 } from "./shared.js"
 
 export function getPgFlussPaimonTemplates(
@@ -23,8 +22,33 @@ export default defineConfig({
   flink: { version: '2.2' },
 
   environments: {
+    // \`pnpm fr sim up\` provisions Fluss + Paimon catalogs and the
+    // \`benchmark\` database in each, zero-config. The same \`sim.init\`
+    // block also drives the docker-compose lane via
+    // \`pnpm fr cluster up --runtime=docker\`.
+    test: {
+      runtime: 'minikube',
+      sim: {
+        init: {
+          fluss: { databases: ['benchmark'] },
+          paimon: { databases: ['benchmark'] },
+        },
+      },
+      pipelines: {
+        '*': {
+          parallelism: 4,
+          checkpoint: { interval: '30s', mode: 'exactly-once' },
+        },
+      },
+    },
     development: {
       cluster: { url: 'http://localhost:8081' },
+      sim: {
+        init: {
+          fluss: { databases: ['benchmark'] },
+          paimon: { databases: ['benchmark'] },
+        },
+      },
       pipelines: {
         '*': {
           parallelism: 4,
@@ -304,34 +328,59 @@ pnpm test`,
     }),
 
     // ── Project-root README ─────────────────────────────────────────────────
-    templateReadme({
-      templateName: "pg-fluss-paimon",
-      tagline:
-        "Postgres → Apache Fluss → Flink SQL → Apache Paimon. A shared streaming-storage topology: one ingest job materializes the upsert state into a Fluss PrimaryKey table; any number of serve-side jobs fan out from it without re-running CDC against the source database.",
-      pipelines: [
-        {
-          name: "ingest",
-          pitch:
-            "Postgres CDC (Flink CDC 3.6 Pipeline Connector) → Fluss PrimaryKey table (shared upsert state).",
-        },
-        {
-          name: "serve",
-          pitch:
-            "Fluss → Filter (open orders) → Paimon `deduplicate` merge engine for sub-second OLAP fan-out.",
-        },
-      ],
-      prerequisites: [
-        "Postgres with `wal_level=logical`, a `flink_cdc` user with `REPLICATION` and read on the published tables, and a Kubernetes Secret (or `.env` entry) supplying `PG_PRIMARY_PASSWORD`.",
-        "Apache Fluss cluster reachable at the configured `bootstrapServers` (default `localhost:9123` — override via your environment).",
-        "MinIO (or any S3-compatible store) hosting the Paimon warehouse at `PAIMON_WAREHOUSE` (default `s3a://benchmark/paimon`). `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` are forwarded to the Paimon catalog by the platform-level config.",
-      ],
-      gettingStarted: [
-        "cp .env.example .env   # then fill in PG_PRIMARY_PASSWORD and the MinIO creds",
-        "pnpm install",
-        "pnpm synth             # Preview generated SQL + Pipeline YAML",
-        "pnpm test              # Run the snapshot suite",
-      ],
-    }),
+    //
+    // Hand-written rather than `templateReadme()` because pg-fluss-paimon is
+    // the only template that ships zero-config sim provisioning, so it has
+    // a custom Quickstart + "What `fr sim up` provisions" section the
+    // generic helper doesn't model.
+    {
+      path: "README.md",
+      content: `# Pg Fluss Paimon
+
+Postgres → Apache Fluss → Flink SQL → Apache Paimon. A shared streaming-storage topology: one ingest job materializes the upsert state into a Fluss PrimaryKey table; any number of serve-side jobs fan out from it without re-running CDC against the source database.
+
+## Pipelines
+
+- **ingest** — Postgres CDC (Flink CDC 3.6 Pipeline Connector) → Fluss PrimaryKey table (shared upsert state).
+- **serve** — Fluss → Filter (open orders) → Paimon \`deduplicate\` merge engine for sub-second OLAP fan-out.
+
+## Quickstart
+
+Three commands take you from a fresh checkout to a running pipeline:
+
+\`\`\`bash
+pnpm install
+pnpm fr sim up
+pnpm fr deploy ingest && pnpm fr deploy serve
+\`\`\`
+
+\`pnpm fr sim up\` provisions the entire runtime against minikube — Fluss, Paimon, Postgres, and the catalogs the pipelines write into. Prefer docker-compose? Run \`pnpm fr cluster up --runtime=docker\` instead; the same \`sim.init\` block in \`flink-reactor.config.ts\` provisions the equivalent resources via the Docker-lane SQL gateway.
+
+### What \`fr sim up\` provisions
+
+- **Fluss catalog** \`fluss_catalog\` with the \`benchmark\` database — the upsert-state target for the ingest pipeline.
+- **Paimon catalog** \`paimon_catalog\` with the \`benchmark\` database — the OLAP serving sink for the serve pipeline.
+- **Postgres** \`tpch\` database seeded with TPC-H SF=0.1 data (orders, lineitem, customer).
+- **Postgres** \`flink_cdc\` user with \`REPLICATION\` + \`LOGIN\` and the \`flink_cdc_pub\` publication on the TPC-H tables — everything the CDC pipeline source needs.
+
+No manual \`CREATE CATALOG\` / \`CREATE DATABASE\` SQL is required before \`pnpm fr deploy\` succeeds.
+
+## Prerequisites
+
+- Postgres with \`wal_level=logical\`, a \`flink_cdc\` user with \`REPLICATION\` and read on the published tables, and a Kubernetes Secret (or \`.env\` entry) supplying \`PG_PRIMARY_PASSWORD\`.
+- Apache Fluss cluster reachable at the configured \`bootstrapServers\` (default \`localhost:9123\` — override via your environment).
+- MinIO (or any S3-compatible store) hosting the Paimon warehouse at \`PAIMON_WAREHOUSE\` (default \`s3a://benchmark/paimon\`). \`MINIO_ACCESS_KEY\` / \`MINIO_SECRET_KEY\` are forwarded to the Paimon catalog by the platform-level config.
+
+## Getting Started
+
+\`\`\`bash
+cp .env.example .env   # then fill in PG_PRIMARY_PASSWORD and the MinIO creds
+pnpm install
+pnpm synth             # Preview generated SQL + Pipeline YAML
+pnpm test              # Run the snapshot suite
+\`\`\`
+`,
+    },
 
     // ── Environment scaffolding (.env.example) ─────────────────────────────
     //
