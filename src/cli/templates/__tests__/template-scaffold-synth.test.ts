@@ -38,10 +38,6 @@ describe("scaffold → synth", () => {
         expect(artifacts.map((a) => a.name).sort()).toEqual([...pipelines])
 
         for (const artifact of artifacts) {
-          expect(artifact.sql.sql).toMatch(/CREATE TABLE/i)
-          expect(artifact.sql.sql).toMatch(/INSERT INTO/i)
-          expect(artifact.sql.statements.length).toBeGreaterThan(0)
-
           const projectDir = join(tempRoot, "app")
           for (const file of [
             "pipeline.sql",
@@ -53,11 +49,23 @@ describe("scaffold → synth", () => {
             ).toBe(true)
           }
 
-          const diskSql = readFileSync(
-            join(projectDir, "dist", artifact.name, "pipeline.sql"),
-            "utf-8",
-          )
-          expect(diskSql).toContain("CREATE TABLE")
+          // Flink CDC Pipeline Connector jobs (e.g. PostgresCdcPipelineSource)
+          // emit pipeline.yaml as the runtime spec; the .sql artifact is a
+          // human-readable stub. Other pipelines compile to Flink SQL.
+          if (artifact.pipelineYaml !== null) {
+            expect(artifact.pipelineYaml).toMatch(/source:/)
+            expect(artifact.pipelineYaml).toMatch(/sink:/)
+          } else {
+            expect(artifact.sql.sql).toMatch(/CREATE TABLE/i)
+            expect(artifact.sql.sql).toMatch(/INSERT INTO/i)
+            expect(artifact.sql.statements.length).toBeGreaterThan(0)
+
+            const diskSql = readFileSync(
+              join(projectDir, "dist", artifact.name, "pipeline.sql"),
+              "utf-8",
+            )
+            expect(diskSql).toContain("CREATE TABLE")
+          }
         }
 
         // If codegen succeeded, `fr dev`'s validator must also pass — otherwise

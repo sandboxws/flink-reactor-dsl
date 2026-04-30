@@ -16,6 +16,7 @@ import { getLakehouseAnalyticsTemplates } from "@/cli/templates/lakehouse-analyt
 import { getLakehouseIngestionTemplates } from "@/cli/templates/lakehouse-ingestion.js"
 import { getMinimalTemplates } from "@/cli/templates/minimal.js"
 import { getMonorepoTemplates } from "@/cli/templates/monorepo.js"
+import { getPgFlussPaimonTemplates } from "@/cli/templates/pg-fluss-paimon.js"
 import { getRealtimeAnalyticsTemplates } from "@/cli/templates/realtime-analytics.js"
 import { getRideSharingTemplates } from "@/cli/templates/ride-sharing.js"
 import { getStarterTemplates } from "@/cli/templates/starter.js"
@@ -38,6 +39,7 @@ export type TemplateName =
   | "iot-factory"
   | "lakehouse-ingestion"
   | "lakehouse-analytics"
+  | "pg-fluss-paimon"
   | "stock-basics"
   | "stock-ds-easy"
   | "stock-ds-moderate"
@@ -82,6 +84,7 @@ const TEMPLATE_FACTORIES: Record<TemplateName, TemplateFactory> = {
   "iot-factory": getIotFactoryTemplates,
   "lakehouse-ingestion": getLakehouseIngestionTemplates,
   "lakehouse-analytics": getLakehouseAnalyticsTemplates,
+  "pg-fluss-paimon": getPgFlussPaimonTemplates,
   "stock-basics": getStockBasicsTemplates,
   "stock-ds-easy": getStockDsEasyTemplates,
   "stock-ds-moderate": getStockDsModerateTemplates,
@@ -104,6 +107,8 @@ const TEMPLATE_DESCRIPTIONS: Record<TemplateName, string> = {
     "Multi-topic Kafka → Iceberg raw landing (3 tables + pump)",
   "lakehouse-analytics":
     "Medallion architecture: bronze → silver → gold with Iceberg (3 pipelines + pump)",
+  "pg-fluss-paimon":
+    "Postgres → Fluss → Flink SQL → Paimon — shared streaming storage with sub-second OLAP fan-out",
   "stock-basics":
     "Apache Flink basics: WordCount, GettingStarted, Stream-SQL Union, Stream-Window SQL (4 pipelines)",
   "stock-ds-easy":
@@ -363,6 +368,11 @@ async function promptTemplate(): Promise<TemplateName | symbol> {
         hint: TEMPLATE_DESCRIPTIONS["iot-factory"],
       },
       {
+        value: "pg-fluss-paimon",
+        label: "Postgres → Fluss → Paimon",
+        hint: TEMPLATE_DESCRIPTIONS["pg-fluss-paimon"],
+      },
+      {
         value: "stock-basics",
         label: "Stock examples — basics",
         hint: TEMPLATE_DESCRIPTIONS["stock-basics"],
@@ -437,6 +447,7 @@ function validateTemplate(value: string | undefined): TemplateName | null {
     "iot-factory",
     "lakehouse-ingestion",
     "lakehouse-analytics",
+    "pg-fluss-paimon",
     "stock-basics",
     "stock-ds-easy",
     "stock-ds-moderate",
