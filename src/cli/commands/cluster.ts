@@ -742,10 +742,17 @@ async function initFlinkCatalogs(_flinkPort: number): Promise<void> {
       initConfig?.iceberg?.databases ?? [],
     )
 
+    const { flussInitStatements } = await import("@/cli/cluster/fluss-init.js")
+    const flussDdl = flussInitStatements(
+      initConfig?.fluss?.databases ?? [],
+      initConfig?.fluss?.bootstrapServers ?? "fluss-coordinator:9123",
+    )
+
     if (
       result.ddl.length === 0 &&
       result.seeding.length === 0 &&
-      icebergDdl.length === 0
+      icebergDdl.length === 0 &&
+      flussDdl.length === 0
     ) {
       spinner.stop(pc.dim("No catalogs to register."))
       return
@@ -766,6 +773,7 @@ async function initFlinkCatalogs(_flinkPort: number): Promise<void> {
     let catalogCount = 0
     let tableCount = 0
     let icebergDbCount = 0
+    let flussDbCount = 0
 
     const runDdl = async (stmt: string): Promise<void> => {
       const opHandle = await client.submitStatement(sessionHandle, stmt)
@@ -787,6 +795,13 @@ async function initFlinkCatalogs(_flinkPort: number): Promise<void> {
       await runDdl(stmt)
       if (stmt.includes("CREATE CATALOG")) catalogCount++
       if (stmt.includes("CREATE DATABASE")) icebergDbCount++
+    }
+
+    // Fluss catalog + databases — same ordering rationale as Iceberg.
+    for (const stmt of flussDdl) {
+      await runDdl(stmt)
+      if (stmt.includes("CREATE CATALOG")) catalogCount++
+      if (stmt.includes("CREATE DATABASE")) flussDbCount++
     }
 
     // Submit DDL statements (CREATE CATALOG, CREATE TABLE)
@@ -812,6 +827,7 @@ async function initFlinkCatalogs(_flinkPort: number): Promise<void> {
     if (catalogCount > 0) parts.push(`${catalogCount} catalogs`)
     if (tableCount > 0) parts.push(`${tableCount} tables`)
     if (icebergDbCount > 0) parts.push(`${icebergDbCount} Iceberg databases`)
+    if (flussDbCount > 0) parts.push(`${flussDbCount} Fluss databases`)
     if (seedingCount > 0) parts.push(`${seedingCount} DataGen jobs`)
 
     spinner.stop(pc.green(`Registered ${parts.join(", ")}.`))

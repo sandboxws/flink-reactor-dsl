@@ -212,6 +212,126 @@ services:
       - "aws --endpoint-url http://seaweedfs:8333 s3 mb s3://flink-state 2>/dev/null || true"
     restart: "no"
 
+  # ── Apache Fluss (ZK + CoordinatorServer + 3× TabletServer) ──────────
+  # Mirrors `src/cli/sim/manifests/{10-zookeeper-fluss,11-fluss}.yaml` so
+  # `pg-fluss-paimon` pipelines run unmodified across both lanes. The
+  # `fluss-config/server.yaml` mount is a symlink to the canonical
+  # `src/cli/sim/fluss-config/server.yaml` — single source of truth.
+  zookeeper-fluss:
+    image: zookeeper:3.9
+    environment:
+      ZOO_MY_ID: 1
+      ZOO_SERVERS: server.1=zookeeper-fluss:2888:3888;2181
+      ALLOW_ANONYMOUS_LOGIN: "yes"
+    volumes:
+      - zk-fluss-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "echo ruok | nc -w 2 localhost 2181 | grep -q imok"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  fluss-coordinator:
+    image: fluss/fluss:0.9.0-incubating
+    depends_on:
+      zookeeper-fluss:
+        condition: service_healthy
+    ports:
+      - "${FLUSS_COORDINATOR_PORT:-9123}:9123"
+    # Single-node ZK in Docker; the shared server.yaml's
+    # zookeeper.address (3-entry list, sized for minikube) is overridden
+    # here via env so the same file works for both lanes.
+    environment:
+      FLUSS_HOME: /opt/fluss
+      FLUSS_PROPERTIES: |
+        zookeeper.address: zookeeper-fluss:2181
+    command: ["/opt/fluss/bin/coordinator-server.sh", "start-foreground"]
+    volumes:
+      - ./fluss-config/server.yaml:/opt/fluss/conf/server.yaml:ro
+      - fluss-coordinator-data:/tmp/fluss-data
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 9123"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  fluss-tabletserver-1:
+    image: fluss/fluss:0.9.0-incubating
+    depends_on:
+      fluss-coordinator:
+        condition: service_healthy
+    environment:
+      FLUSS_HOME: /opt/fluss
+      FLUSS_PROPERTIES: |
+        zookeeper.address: zookeeper-fluss:2181
+    # Per-tablet id/host injected as `-D` overrides; the shared server.yaml
+    # leaves these blank because they're pod/container-specific.
+    command:
+      - sh
+      - -c
+      - |
+        exec /opt/fluss/bin/tablet-server.sh start-foreground \
+          -D tablet-server.id=1 \
+          -D tablet-server.host=fluss-tabletserver-1
+    volumes:
+      - ./fluss-config/server.yaml:/opt/fluss/conf/server.yaml:ro
+      - fluss-tablet-1-data:/tmp/fluss-data
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 9124"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  fluss-tabletserver-2:
+    image: fluss/fluss:0.9.0-incubating
+    depends_on:
+      fluss-coordinator:
+        condition: service_healthy
+    environment:
+      FLUSS_HOME: /opt/fluss
+      FLUSS_PROPERTIES: |
+        zookeeper.address: zookeeper-fluss:2181
+    command:
+      - sh
+      - -c
+      - |
+        exec /opt/fluss/bin/tablet-server.sh start-foreground \
+          -D tablet-server.id=2 \
+          -D tablet-server.host=fluss-tabletserver-2
+    volumes:
+      - ./fluss-config/server.yaml:/opt/fluss/conf/server.yaml:ro
+      - fluss-tablet-2-data:/tmp/fluss-data
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 9124"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  fluss-tabletserver-3:
+    image: fluss/fluss:0.9.0-incubating
+    depends_on:
+      fluss-coordinator:
+        condition: service_healthy
+    environment:
+      FLUSS_HOME: /opt/fluss
+      FLUSS_PROPERTIES: |
+        zookeeper.address: zookeeper-fluss:2181
+    command:
+      - sh
+      - -c
+      - |
+        exec /opt/fluss/bin/tablet-server.sh start-foreground \
+          -D tablet-server.id=3 \
+          -D tablet-server.host=fluss-tabletserver-3
+    volumes:
+      - ./fluss-config/server.yaml:/opt/fluss/conf/server.yaml:ro
+      - fluss-tablet-3-data:/tmp/fluss-data
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 9124"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   # Creates the `lakekeeper` Postgres database before Lakekeeper boots.
   # Idempotent — uses pg_database lookup before issuing CREATE.
   lakekeeper-pg-init:
@@ -321,3 +441,8 @@ volumes:
   flink-data:
   postgres-data:
   seaweedfs-data:
+  zk-fluss-data:
+  fluss-coordinator-data:
+  fluss-tablet-1-data:
+  fluss-tablet-2-data:
+  fluss-tablet-3-data:

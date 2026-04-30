@@ -20,6 +20,14 @@ RUN wget -q -P /opt/flink/lib/ \
   && wget -q -P /opt/flink/lib/ \
   https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-aws-bundle/1.10.1/iceberg-aws-bundle-1.10.1.jar
 
+# Apache Fluss 0.9.0-incubating Flink connector — same coordinate as the
+# minikube bench image (`src/cli/sim/Dockerfile.flink-bench`). Incubating
+# artifacts may not be on Maven Central yet; fall back to
+# https://repository.apache.org/content/repositories/releases/ if the wget
+# below 404s.
+RUN wget -q -P /opt/flink/lib/ \
+  https://repo1.maven.org/maven2/org/apache/fluss/fluss-connector-flink/0.9.0-incubating/fluss-connector-flink-0.9.0-incubating.jar
+
 # Hadoop client (api + runtime) — required by Iceberg FlinkCatalogFactory's
 # clusterHadoopConf() even when using a REST catalog with S3FileIO. These two
 # shaded artifacts replace the legacy 1GB Hadoop tarball install.

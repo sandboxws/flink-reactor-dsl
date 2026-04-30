@@ -31,6 +31,8 @@
     "src/cli/cluster/docker-compose.yml",
     "src/cli/cluster/Dockerfile.flink",
     "src/cli/cluster/data",
+    "src/cli/cluster/fluss-config",
+    "src/cli/sim/fluss-config",
     "src/cli/cluster/init/00-init-databases.sh",
     "src/cli/cluster/pipelines"
   ],

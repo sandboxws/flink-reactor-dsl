@@ -45,6 +45,7 @@ export async function runDoctorCommand(cwd?: string): Promise<CheckResult[]> {
   results.push(checkProjectConfig(projectDir))
   results.push(discoverPipelines(projectDir))
   results.push(...checkPostgresCdcReadiness())
+  results.push(...(await checkFlussReachability(projectDir)))
 
   printResults(results)
   return results
@@ -315,6 +316,55 @@ export function checkPostgresCdcReadiness(): CheckResult[] {
   )
 
   return results
+}
+
+/**
+ * Probes the Docker-lane Fluss CoordinatorServer on `localhost:9123` when
+ * the project's resolved runtime is `docker` and `sim.init.fluss` is set.
+ *
+ * Wired up by OpenSpec change 52-add-fluss-docker-compose-services. The
+ * minikube-lane probe is a separate path (kubectl-based) handled
+ * elsewhere in the doctor structure; this check returns an empty array
+ * for non-docker runtimes so the two probes don't double-report.
+ */
+export async function checkFlussReachability(
+  projectDir: string,
+): Promise<CheckResult[]> {
+  const { loadConfig } = await import("@/cli/discovery.js")
+  const config = await loadConfig(projectDir).catch(() => null)
+  if (!config?.environments) return []
+
+  // Find the first env with sim.init.fluss declared. Mirrors cluster.ts's
+  // `development > docker > minikube > first` ordering — the resolved env
+  // for the docker lane is the one whose runtime is (or defaults to) docker.
+  const envs = Object.entries(config.environments)
+  const flussEnv =
+    envs.find(([_, e]) => e.runtime === "docker" && e.sim?.init?.fluss) ??
+    envs.find(
+      ([n, e]) => (n === "development" || !e.runtime) && e.sim?.init?.fluss,
+    )
+
+  if (!flussEnv) return []
+
+  const port = 9123
+  const ok = runShellCommand(`nc -z localhost ${port}`) !== null
+  if (ok) {
+    return [
+      {
+        name: "Fluss coordinator",
+        status: "pass",
+        message: `reachable on localhost:${port}`,
+      },
+    ]
+  }
+  return [
+    {
+      name: "Fluss coordinator",
+      status: "warn",
+      message: `Fluss coordinator unreachable on localhost:${port} — run \`fr cluster up\``,
+      hint: "Run `fr cluster up` to start the Docker-lane Fluss services",
+    },
+  ]
 }
 
 function countPipelines(pipelinesDir: string): number {
