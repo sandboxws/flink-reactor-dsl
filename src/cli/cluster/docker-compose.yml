@@ -136,7 +136,10 @@ services:
   postgres:
     image: timescale/timescaledb:latest-pg17
     container_name: flink-reactor-postgres
-    command: postgres -c shared_preload_libraries=timescaledb
+    # wal_level=logical + matching senders/slots are required for the
+    # Postgres CDC Pipeline Connector consumed by the pg-fluss-paimon
+    # template. See OpenSpec change 53-prepare-postgres-for-cdc.
+    command: postgres -c shared_preload_libraries=timescaledb -c wal_level=logical -c max_wal_senders=10 -c max_replication_slots=10
     profiles:
       - timescaledb
     ports:
@@ -156,6 +159,8 @@ services:
   postgres-plain:
     image: postgres:17-alpine
     container_name: flink-reactor-postgres
+    # See `postgres` service above for rationale on wal_level=logical etc.
+    command: postgres -c wal_level=logical -c max_wal_senders=10 -c max_replication_slots=10
     profiles:
       - postgres-plain
     ports:

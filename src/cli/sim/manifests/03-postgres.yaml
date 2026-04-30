@@ -42,6 +42,19 @@ spec:
       containers:
         - name: postgres
           image: timescale/timescaledb:latest-pg17
+          # wal_level=logical + matching senders/slots are required for
+          # the Postgres CDC Pipeline Connector consumed by the
+          # pg-fluss-paimon template. See OpenSpec change 53.
+          # `args` replaces the image's CMD entirely, so `postgres`
+          # must lead the list (not the `-c` flags alone).
+          args:
+            - postgres
+            - -c
+            - wal_level=logical
+            - -c
+            - max_wal_senders=10
+            - -c
+            - max_replication_slots=10
           ports:
             - name: postgres
               containerPort: 5432

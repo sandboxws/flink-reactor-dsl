@@ -44,6 +44,7 @@ export async function runDoctorCommand(cwd?: string): Promise<CheckResult[]> {
   results.push(checkKubectl())
   results.push(checkProjectConfig(projectDir))
   results.push(discoverPipelines(projectDir))
+  results.push(...checkPostgresCdcReadiness())
 
   printResults(results)
   return results
@@ -207,6 +208,113 @@ export function discoverPipelines(projectDir: string): CheckResult {
     status: "pass",
     message: `${count} pipeline${count !== 1 ? "s" : ""} discovered`,
   }
+}
+
+/**
+ * Probes a locally-reachable Postgres for CDC readiness:
+ *   - wal_level=logical
+ *   - flink_cdc role with REPLICATION + LOGIN
+ *   - flink_cdc_pub publication
+ *
+ * Returns an empty array when `psql` is not on PATH (the developer can't
+ * have a Postgres without it, and we'd rather skip silently than report a
+ * fail for an unrelated reason). When postgres itself is unreachable on
+ * the default localhost:5433, returns three "warn" results pointing at
+ * `fr cluster up` — the canonical setup path.
+ *
+ * Wired up by OpenSpec change 53-prepare-postgres-for-cdc.
+ */
+export function checkPostgresCdcReadiness(): CheckResult[] {
+  const psqlAvailable = runShellCommand("psql --version") !== null
+  if (!psqlAvailable) return []
+
+  const baseEnv =
+    "PGHOST=${PGHOST:-localhost} PGPORT=${PGPORT:-5433} PGUSER=${PGUSER:-reactor} PGPASSWORD=${PGPASSWORD:-reactor}"
+  const probe = (db: string, sql: string): string | null =>
+    runShellCommand(
+      `${baseEnv} psql -d ${db} -tAc "${sql.replace(/"/g, '\\"')}" 2>/dev/null`,
+    )
+
+  const reachable = probe("postgres", "SELECT 1") === "1"
+  if (!reachable) {
+    const hint = "Postgres unreachable on localhost:5433 — run `fr cluster up`"
+    return [
+      { name: "Postgres wal_level", status: "warn", message: "Skipped", hint },
+      {
+        name: "Postgres flink_cdc role",
+        status: "warn",
+        message: "Skipped",
+        hint,
+      },
+      {
+        name: "Postgres flink_cdc_pub",
+        status: "warn",
+        message: "Skipped",
+        hint,
+      },
+    ]
+  }
+
+  const results: CheckResult[] = []
+
+  // 1. wal_level
+  const wal = probe("postgres", "SHOW wal_level")
+  results.push(
+    wal === "logical"
+      ? {
+          name: "Postgres wal_level",
+          status: "pass",
+          message: "logical",
+        }
+      : {
+          name: "Postgres wal_level",
+          status: "warn",
+          message: `${wal ?? "unknown"} (CDC requires 'logical')`,
+          hint: "Restart postgres with -c wal_level=logical (or re-run `fr cluster up`)",
+        },
+  )
+
+  // 2. flink_cdc role with REPLICATION + LOGIN
+  const role = probe(
+    "postgres",
+    "SELECT 1 FROM pg_roles WHERE rolname='flink_cdc' AND rolcanlogin AND rolreplication",
+  )
+  results.push(
+    role === "1"
+      ? {
+          name: "Postgres flink_cdc role",
+          status: "pass",
+          message: "exists with REPLICATION + LOGIN",
+        }
+      : {
+          name: "Postgres flink_cdc role",
+          status: "warn",
+          message: "missing or lacks REPLICATION/LOGIN",
+          hint: "Re-run `fr cluster up` to apply pg-cdc-bootstrap.sql",
+        },
+  )
+
+  // 3. flink_cdc_pub publication on tpch
+  const pub = probe(
+    "tpch",
+    "SELECT 1 FROM pg_publication WHERE pubname='flink_cdc_pub'",
+  )
+  results.push(
+    pub === "1"
+      ? {
+          name: "Postgres flink_cdc_pub",
+          status: "pass",
+          message: "publication present on tpch",
+        }
+      : {
+          name: "Postgres flink_cdc_pub",
+          status: "warn",
+          message: "publication missing on tpch",
+          hint: "Re-run `fr cluster up` to apply pg-cdc-bootstrap.sql",
+        },
+  )
+
+  return results
 }
 
 function countPipelines(pipelinesDir: string): number {

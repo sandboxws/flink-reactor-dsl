@@ -68,6 +68,7 @@
     "local:publish:status": "tsx scripts/local-publish.ts verdaccio status",
     "local:publish:logs": "tsx scripts/local-publish.ts verdaccio logs",
     "rewrite-imports": "node scripts/rewrite-imports.mjs",
+    "tpch:gen": "tsx scripts/generate-tpch.ts",
     "prepublishOnly": "pnpm build"
   },
   "keywords": [

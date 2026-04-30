@@ -8,6 +8,11 @@
 FROM timescale/timescaledb:latest-pg17
 
 COPY pagila.sql chinook.sql employees.sql /data/
+# tpch.sql ships gzipped (SF=0.1 ≈ 100MB uncompressed). The wildcard
+# tolerates either tpch.sql or tpch.sql.gz being present at build time
+# so an unzipped dev copy still works.
+COPY tpch.sql* /data/
+COPY pg-cdc-bootstrap.sql /data/
 COPY pg-seed.sh /scripts/seed.sh
 RUN chmod +x /scripts/seed.sh
 
