@@ -247,21 +247,26 @@ const CONNECTOR_REGISTRY: readonly ConnectorRegistryEntry[] = [
     ],
   },
 
-  // Apache Fluss Flink connector. Single artifact spans the Flink 2.x range;
-  // 1.20 is unsupported by Fluss 0.6.0. SQL-branch only — the Pipeline-YAML
-  // branch uses `fluss-cdc-pipeline` instead.
+  // Apache Fluss Flink connector. Single artifact spans the full Flink
+  // 1.20 → 2.2 range under the Apache Fluss 0.9.0-incubating release.
+  // SQL-branch only — the Pipeline-YAML branch uses `fluss-cdc-pipeline`
+  // instead.
+  //
+  // Apache groupId migration: Fluss became an Apache Incubator project in
+  // June 2025 and the canonical artifact moved from `com.alibaba.fluss` to
+  // `org.apache.fluss`. See https://fluss.apache.org/ for upstream context.
   {
     connectorId: "fluss",
     builtIn: false,
     branchAffinity: "sql",
     versions: [
       {
-        minVersion: "2.0",
+        minVersion: "1.20",
         artifacts: [
           {
-            groupId: "com.alibaba.fluss",
+            groupId: "org.apache.fluss",
             artifactId: "fluss-connector-flink",
-            version: "0.6.0",
+            version: "0.9.0-incubating",
           },
         ],
       },

@@ -616,6 +616,6 @@ describe("FlussSource connector registry self-check", () => {
     const seen = jars
       .map((j) => `${j.artifact.groupId}:${j.artifact.artifactId}`)
       .sort()
-    expect(seen).toEqual(["com.alibaba.fluss:fluss-connector-flink"])
+    expect(seen).toEqual(["org.apache.fluss:fluss-connector-flink"])
   })
 })

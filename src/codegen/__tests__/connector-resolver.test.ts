@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest"
+import { resolveConnectorArtifacts } from "@/codegen/connector-registry.js"
 import { resolveConnectors } from "@/codegen/connector-resolver.js"
 import { FlussCatalog } from "@/components/catalogs.js"
 import { UDF } from "@/components/escape-hatches.js"
@@ -577,5 +578,38 @@ describe("FlussSink branch-aware artifact resolution", () => {
     const artifactIds = result.jars.map((j) => j.artifact.artifactId)
     expect(artifactIds).toContain("fluss-connector-flink")
     expect(artifactIds).not.toContain("flink-cdc-pipeline-connector-fluss")
+  })
+})
+
+// ── Apache Fluss 0.9.0-incubating GAV (change 45) ────────────────────
+
+describe("Fluss connector registry GAV", () => {
+  const APACHE_FLUSS = {
+    groupId: "org.apache.fluss",
+    artifactId: "fluss-connector-flink",
+    version: "0.9.0-incubating",
+  }
+
+  it.each([
+    "1.20",
+    "2.0",
+    "2.1",
+    "2.2",
+  ] as const)("resolves the Apache GAV at Flink %s", (flinkVersion) => {
+    const artifacts = resolveConnectorArtifacts("fluss", flinkVersion)
+    expect(artifacts).toContainEqual(APACHE_FLUSS)
+  })
+
+  it("does not resolve the deprecated Alibaba 0.6.0 coordinate", () => {
+    for (const v of ["1.20", "2.0", "2.1", "2.2"] as const) {
+      const artifacts = resolveConnectorArtifacts("fluss", v)
+      const hasOldGav = artifacts.some(
+        (a) =>
+          a.groupId === "com.alibaba.fluss" &&
+          a.artifactId === "fluss-connector-flink" &&
+          a.version === "0.6.0",
+      )
+      expect(hasOldGav).toBe(false)
+    }
   })
 })

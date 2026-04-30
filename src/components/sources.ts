@@ -458,9 +458,11 @@ export interface FlussSourceProps<
  *
  * Tapping is not supported; pass-through `tap: true` raises a diagnostic.
  *
- * See https://alibaba.github.io/fluss-docs/ for the underlying connector and
- * the FlinkReactor docs Fluss-source operator page (forthcoming) for the
- * worked Stage-B serve-side pattern this component is built around.
+ * See https://fluss.apache.org/ for the underlying Apache Fluss connector
+ * (project moved out of Alibaba into Apache Incubator in June 2025; the
+ * canonical Maven coordinate is `org.apache.fluss:fluss-connector-flink`)
+ * and the FlinkReactor docs Fluss-source operator page (forthcoming) for
+ * the worked Stage-B serve-side pattern this component is built around.
  */
 export function FlussSource<T extends Record<string, FlinkType>>(
   props: FlussSourceProps<T>,
