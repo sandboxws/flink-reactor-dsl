@@ -169,6 +169,12 @@ export interface SimInitConfig {
     /** Bootstrap servers for the Fluss catalog (defaults to `fluss-coordinator:9123`) */
     readonly bootstrapServers?: string
   }
+  readonly paimon?: {
+    /** Paimon databases to create under `paimon_catalog` during sim init */
+    readonly databases?: readonly string[]
+    /** Warehouse path for the Paimon catalog (defaults to `s3a://flink-state/paimon`) */
+    readonly warehouse?: string
+  }
 }
 
 export interface SimConfig {

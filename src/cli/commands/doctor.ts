@@ -46,6 +46,7 @@ export async function runDoctorCommand(cwd?: string): Promise<CheckResult[]> {
   results.push(discoverPipelines(projectDir))
   results.push(...checkPostgresCdcReadiness())
   results.push(...(await checkFlussReachability(projectDir)))
+  results.push(...(await checkPaimonCatalog(projectDir)))
 
   printResults(results)
   return results
@@ -365,6 +366,85 @@ export async function checkFlussReachability(
       hint: "Run `fr cluster up` to start the Docker-lane Fluss services",
     },
   ]
+}
+
+/**
+ * Probes the SQL Gateway for the Paimon catalog when project config
+ * declares `sim.init.paimon`. Submits `SHOW CATALOGS` and asserts that
+ * `paimon_catalog` is present.
+ *
+ * Wired up by OpenSpec change 51-add-paimon-sim-init.
+ */
+export async function checkPaimonCatalog(
+  projectDir: string,
+): Promise<CheckResult[]> {
+  const { loadConfig } = await import("@/cli/discovery.js")
+  const config = await loadConfig(projectDir).catch(() => null)
+  if (!config?.environments) return []
+
+  // Run when any env declares sim.init.paimon. Whether the SQL Gateway is
+  // actually reachable on localhost:8083 is a runtime concern — we surface
+  // unreachable as a yellow warn so the user knows to start the cluster.
+  const declares = Object.values(config.environments).some(
+    (e) => (e.sim?.init?.paimon?.databases?.length ?? 0) > 0,
+  )
+  if (!declares) return []
+
+  const missingHint =
+    "Paimon catalog not registered — run `fr sim up` to bootstrap"
+
+  try {
+    const { SqlGatewayClient } = await import(
+      "@/cli/cluster/sql-gateway-client.js"
+    )
+    const client = new SqlGatewayClient("http://localhost:8083")
+    const session = await client.openSession()
+    try {
+      const op = await client.submitStatement(session, "SHOW CATALOGS")
+      for (let i = 0; i < 20; i++) {
+        const status = await client.getOperationStatus(session, op)
+        if (
+          status !== "RUNNING" &&
+          status !== "INITIALIZED" &&
+          status !== "PENDING"
+        )
+          break
+        await new Promise((r) => setTimeout(r, 250))
+      }
+      const page = await client.fetchResults(session, op, 0)
+      const found = page.rows.some((row) =>
+        Object.values(row).some((v) => v === "paimon_catalog"),
+      )
+      if (found) {
+        return [
+          {
+            name: "Paimon catalog",
+            status: "pass",
+            message: "registered in SQL Gateway",
+          },
+        ]
+      }
+      return [
+        {
+          name: "Paimon catalog",
+          status: "warn",
+          message: missingHint,
+          hint: "Run `fr sim up` (or `fr cluster up`) to register the Paimon catalog",
+        },
+      ]
+    } finally {
+      await client.closeSession(session).catch(() => undefined)
+    }
+  } catch {
+    return [
+      {
+        name: "Paimon catalog",
+        status: "warn",
+        message: missingHint,
+        hint: "SQL Gateway unreachable on localhost:8083 — run `fr cluster up`",
+      },
+    ]
+  }
 }
 
 function countPipelines(pipelinesDir: string): number {

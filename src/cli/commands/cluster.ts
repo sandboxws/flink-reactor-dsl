@@ -748,11 +748,20 @@ async function initFlinkCatalogs(_flinkPort: number): Promise<void> {
       initConfig?.fluss?.bootstrapServers ?? "fluss-coordinator:9123",
     )
 
+    const { paimonInitStatements } = await import(
+      "@/cli/cluster/paimon-init.js"
+    )
+    const paimonDdl = paimonInitStatements(
+      initConfig?.paimon?.databases ?? [],
+      initConfig?.paimon?.warehouse,
+    )
+
     if (
       result.ddl.length === 0 &&
       result.seeding.length === 0 &&
       icebergDdl.length === 0 &&
-      flussDdl.length === 0
+      flussDdl.length === 0 &&
+      paimonDdl.length === 0
     ) {
       spinner.stop(pc.dim("No catalogs to register."))
       return
@@ -774,6 +783,7 @@ async function initFlinkCatalogs(_flinkPort: number): Promise<void> {
     let tableCount = 0
     let icebergDbCount = 0
     let flussDbCount = 0
+    let paimonDbCount = 0
 
     const runDdl = async (stmt: string): Promise<void> => {
       const opHandle = await client.submitStatement(sessionHandle, stmt)
@@ -804,6 +814,13 @@ async function initFlinkCatalogs(_flinkPort: number): Promise<void> {
       if (stmt.includes("CREATE DATABASE")) flussDbCount++
     }
 
+    // Paimon catalog + databases — same ordering rationale as Iceberg.
+    for (const stmt of paimonDdl) {
+      await runDdl(stmt)
+      if (stmt.includes("CREATE CATALOG")) catalogCount++
+      if (stmt.includes("CREATE DATABASE")) paimonDbCount++
+    }
+
     // Submit DDL statements (CREATE CATALOG, CREATE TABLE)
     for (const stmt of result.ddl) {
       await runDdl(stmt)
@@ -828,6 +845,7 @@ async function initFlinkCatalogs(_flinkPort: number): Promise<void> {
     if (tableCount > 0) parts.push(`${tableCount} tables`)
     if (icebergDbCount > 0) parts.push(`${icebergDbCount} Iceberg databases`)
     if (flussDbCount > 0) parts.push(`${flussDbCount} Fluss databases`)
+    if (paimonDbCount > 0) parts.push(`${paimonDbCount} Paimon databases`)
     if (seedingCount > 0) parts.push(`${seedingCount} DataGen jobs`)
 
     spinner.stop(pc.green(`Registered ${parts.join(", ")}.`))

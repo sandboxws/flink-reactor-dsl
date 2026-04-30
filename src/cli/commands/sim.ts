@@ -642,13 +642,16 @@ async function runInit(init: SimInitConfig, namespace: string): Promise<void> {
   const flussDatabases = init.fluss?.databases ?? []
   const flussBootstrap =
     init.fluss?.bootstrapServers ?? "fluss-coordinator:9123"
+  const paimonDatabases = init.paimon?.databases ?? []
+  const paimonWarehouse = init.paimon?.warehouse
 
   if (
     databases.length === 0 &&
     topics.length === 0 &&
     kafkaCatalogs.length === 0 &&
     jdbcCatalogs.length === 0 &&
-    flussDatabases.length === 0
+    flussDatabases.length === 0 &&
+    paimonDatabases.length === 0
   )
     return
 
@@ -723,6 +726,26 @@ async function runInit(init: SimInitConfig, namespace: string): Promise<void> {
       )
     } catch {
       spinner.stop(pc.yellow("Fluss database creation failed."))
+    }
+  }
+
+  // ── Create Paimon databases ──────────────────────────────────────
+  if (paimonDatabases.length > 0) {
+    const { paimonInitStatements } = await import(
+      "@/cli/cluster/paimon-init.js"
+    )
+    const stmts = paimonInitStatements(paimonDatabases, paimonWarehouse)
+
+    const spinner = clack.spinner()
+    spinner.start(`Creating ${paimonDatabases.length} Paimon database(s)...`)
+
+    try {
+      execSqlViaGateway(stmts.join("; "), namespace)
+      spinner.stop(
+        pc.green(`Paimon databases: ${paimonDatabases.length} created`),
+      )
+    } catch {
+      spinner.stop(pc.yellow("Paimon database creation failed."))
     }
   }
 

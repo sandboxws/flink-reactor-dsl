@@ -21,3 +21,9 @@ FROM flink-reactor-s3:2.0.1
 # or a staging URL named in the 0.9 release announcement.
 RUN wget -q -P /opt/flink/lib/ \
   https://repo1.maven.org/maven2/org/apache/fluss/fluss-connector-flink/0.9.0-incubating/fluss-connector-flink-0.9.0-incubating.jar
+
+# Apache Paimon 1.0.0 Flink connector (Flink 2.x line). Keep this version
+# in lock-step with `src/cli/cluster/Dockerfile.flink` and the registry pin
+# in `src/codegen/connector-registry.ts` to prevent runtime/sim drift.
+RUN wget -q -P /opt/flink/lib/ \
+  https://repo1.maven.org/maven2/org/apache/paimon/paimon-flink-2.0/1.0.0/paimon-flink-2.0-1.0.0.jar

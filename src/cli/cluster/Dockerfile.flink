@@ -28,6 +28,13 @@ RUN wget -q -P /opt/flink/lib/ \
 RUN wget -q -P /opt/flink/lib/ \
   https://repo1.maven.org/maven2/org/apache/fluss/fluss-connector-flink/0.9.0-incubating/fluss-connector-flink-0.9.0-incubating.jar
 
+# Apache Paimon 1.0.0 Flink connector (Flink 2.x line). The registry-pinned
+# coordinate (`src/codegen/connector-registry.ts`) is the source of truth
+# for this version — keep both in lock-step. Identical version pin in
+# `src/cli/sim/Dockerfile.flink-bench` to prevent runtime/sim drift.
+RUN wget -q -P /opt/flink/lib/ \
+  https://repo1.maven.org/maven2/org/apache/paimon/paimon-flink-2.0/1.0.0/paimon-flink-2.0-1.0.0.jar
+
 # Hadoop client (api + runtime) — required by Iceberg FlinkCatalogFactory's
 # clusterHadoopConf() even when using a REST catalog with S3FileIO. These two
 # shaded artifacts replace the legacy 1GB Hadoop tarball install.

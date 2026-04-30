@@ -1,0 +1,19 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`paimonInitStatements > emits CREATE CATALOG + USE CATALOG + CREATE DATABASE for a single db 1`] = `
+[
+  "CREATE CATALOG IF NOT EXISTS paimon_catalog WITH ('type' = 'paimon', 'warehouse' = 's3a://flink-state/paimon', 's3.endpoint' = 'http://seaweedfs.flink-demo.svc:8333', 's3.path-style-access' = 'true', 's3.access-key' = 'admin', 's3.secret-key' = 'admin')",
+  "USE CATALOG paimon_catalog",
+  "CREATE DATABASE IF NOT EXISTS \`benchmark\`",
+]
+`;
+
+exports[`paimonInitStatements > emits one CREATE DATABASE per name in input order 1`] = `
+[
+  "CREATE CATALOG IF NOT EXISTS paimon_catalog WITH ('type' = 'paimon', 'warehouse' = 's3a://flink-state/paimon', 's3.endpoint' = 'http://seaweedfs.flink-demo.svc:8333', 's3.path-style-access' = 'true', 's3.access-key' = 'admin', 's3.secret-key' = 'admin')",
+  "USE CATALOG paimon_catalog",
+  "CREATE DATABASE IF NOT EXISTS \`orders\`",
+  "CREATE DATABASE IF NOT EXISTS \`analytics\`",
+  "CREATE DATABASE IF NOT EXISTS \`lineage\`",
+]
+`;
