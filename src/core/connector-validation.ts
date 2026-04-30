@@ -162,10 +162,21 @@ function isPipelineConnectorCompatibleSink(sink: ConstructNode): {
       }
       return { ok: true }
     }
+    case "FlussSink": {
+      const pk = sink.props.primaryKey as readonly string[] | undefined
+      if (!Array.isArray(pk) || pk.length === 0) {
+        return {
+          ok: false,
+          reason:
+            "Fluss Log table (no primaryKey) cannot sink CDC retracts; set primaryKey to declare a PrimaryKey table",
+        }
+      }
+      return { ok: true }
+    }
     default:
       return {
         ok: false,
-        reason: `${sink.component} is not a Flink CDC 3.6 Pipeline Connector sink. Supported sinks: IcebergSink (formatVersion 2 + upsertEnabled), PaimonSink (primaryKey). See ${FLINK_CDC_DOCS_URL}`,
+        reason: `${sink.component} is not a Flink CDC 3.6 Pipeline Connector sink. Supported sinks: IcebergSink (formatVersion 2 + upsertEnabled), PaimonSink (primaryKey), FlussSink (primaryKey). See ${FLINK_CDC_DOCS_URL}`,
       }
   }
 }

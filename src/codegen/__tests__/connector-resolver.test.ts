@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest"
 import { resolveConnectors } from "@/codegen/connector-resolver.js"
+import { FlussCatalog } from "@/components/catalogs.js"
 import { UDF } from "@/components/escape-hatches.js"
 import { Pipeline } from "@/components/pipeline.js"
-import { FileSystemSink, KafkaSink } from "@/components/sinks.js"
+import { FileSystemSink, FlussSink, KafkaSink } from "@/components/sinks.js"
 import {
   JdbcSource,
   KafkaSource,
@@ -438,5 +439,143 @@ describe("PostgresCdcPipelineSource connector resolution", () => {
       (j) => j.artifact.artifactId === "flink-cdc-pipeline-connector-postgres",
     )
     expect(cdcJar?.provenance).toContain(source.id)
+  })
+})
+
+// ── Fluss CDC Pipeline Connector / branch isolation ─────────────────
+
+describe("FlussSink branch-aware artifact resolution", () => {
+  it("resolves the Pipeline Connector Fluss artifact at Flink 1.20", () => {
+    const catalog = FlussCatalog({
+      name: "fluss",
+      bootstrapServers: "fluss:9123",
+    })
+    const source = PostgresCdcPipelineSource({
+      hostname: "pg-primary",
+      database: "shop",
+      username: "postgres",
+      password: secretRef("pg-primary-password"),
+      schemaList: ["public"],
+      tableList: ["public.orders"],
+    })
+    const sink = FlussSink({
+      catalog: catalog.handle,
+      database: "shop",
+      table: "orders",
+      primaryKey: ["order_id"],
+      children: [source],
+    })
+    const pipeline = Pipeline({
+      name: "pg-fluss",
+      children: [catalog.node, sink],
+    })
+
+    const result = resolveConnectors(pipeline, { flinkVersion: "1.20" })
+    const flussJar = result.jars.find(
+      (j) => j.artifact.artifactId === "flink-cdc-pipeline-connector-fluss",
+    )
+    expect(flussJar).toBeDefined()
+    expect(flussJar?.artifact.version).toBe("3.6.0")
+    expect(flussJar?.artifact.groupId).toBe("org.apache.flink")
+  })
+
+  it("resolves both postgres and fluss Pipeline Connector artifacts together", () => {
+    const catalog = FlussCatalog({
+      name: "fluss",
+      bootstrapServers: "fluss:9123",
+    })
+    const source = PostgresCdcPipelineSource({
+      hostname: "pg-primary",
+      database: "shop",
+      username: "postgres",
+      password: secretRef("pg-primary-password"),
+      schemaList: ["public"],
+      tableList: ["public.orders"],
+    })
+    const sink = FlussSink({
+      catalog: catalog.handle,
+      database: "shop",
+      table: "orders",
+      primaryKey: ["order_id"],
+      children: [source],
+    })
+    const pipeline = Pipeline({
+      name: "pg-fluss",
+      children: [catalog.node, sink],
+    })
+
+    const result = resolveConnectors(pipeline, { flinkVersion: "2.0" })
+    const artifactIds = result.jars.map((j) => j.artifact.artifactId)
+    expect(artifactIds).toContain("flink-cdc-pipeline-connector-postgres")
+    expect(artifactIds).toContain("flink-cdc-pipeline-connector-fluss")
+    // Critical: the SQL-branch Fluss connector must NOT leak into a
+    // Pipeline-YAML pipeline — that would produce a classpath collision.
+    expect(artifactIds).not.toContain("fluss-connector-flink")
+    expect(result.conflicts).toHaveLength(0)
+  })
+
+  it("Pipeline-YAML branch does NOT pull the Flink-SQL Fluss connector", () => {
+    const catalog = FlussCatalog({
+      name: "fluss",
+      bootstrapServers: "fluss:9123",
+    })
+    const source = PostgresCdcPipelineSource({
+      hostname: "pg-primary",
+      database: "shop",
+      username: "postgres",
+      password: secretRef("pg-primary-password"),
+      schemaList: ["public"],
+      tableList: ["public.orders"],
+    })
+    const sink = FlussSink({
+      catalog: catalog.handle,
+      database: "shop",
+      table: "orders",
+      primaryKey: ["order_id"],
+      children: [source],
+    })
+    const pipeline = Pipeline({
+      name: "pg-fluss",
+      children: [catalog.node, sink],
+    })
+
+    const result = resolveConnectors(pipeline, { flinkVersion: "2.0" })
+    const sqlFluss = result.jars.find(
+      (j) => j.artifact.artifactId === "fluss-connector-flink",
+    )
+    expect(sqlFluss).toBeUndefined()
+  })
+
+  it("SQL-branch FlussSink resolves the SQL connector and NOT the Pipeline Connector", () => {
+    const OrderSchema = Schema({
+      fields: {
+        order_id: Field.BIGINT(),
+      },
+    })
+    const catalog = FlussCatalog({
+      name: "fluss",
+      bootstrapServers: "fluss:9123",
+    })
+    const source = KafkaSource({
+      topic: "orders",
+      format: "json",
+      schema: OrderSchema,
+    })
+    const sink = FlussSink({
+      catalog: catalog.handle,
+      database: "shop",
+      table: "orders",
+      primaryKey: ["order_id"],
+      children: [source],
+    })
+    const pipeline = Pipeline({
+      name: "kafka-fluss",
+      children: [catalog.node, sink],
+    })
+
+    const result = resolveConnectors(pipeline, { flinkVersion: "2.0" })
+    const artifactIds = result.jars.map((j) => j.artifact.artifactId)
+    expect(artifactIds).toContain("fluss-connector-flink")
+    expect(artifactIds).not.toContain("flink-cdc-pipeline-connector-fluss")
   })
 })

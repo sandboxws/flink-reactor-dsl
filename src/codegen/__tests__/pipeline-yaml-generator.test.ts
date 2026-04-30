@@ -1,8 +1,17 @@
 import { beforeEach, describe, expect, it } from "vitest"
 import { generatePipelineYaml } from "@/codegen/pipeline-yaml-generator.js"
-import { IcebergCatalog, PaimonCatalog } from "@/components/catalogs.js"
+import {
+  FlussCatalog,
+  IcebergCatalog,
+  PaimonCatalog,
+} from "@/components/catalogs.js"
 import { Pipeline } from "@/components/pipeline.js"
-import { IcebergSink, KafkaSink, PaimonSink } from "@/components/sinks.js"
+import {
+  FlussSink,
+  IcebergSink,
+  KafkaSink,
+  PaimonSink,
+} from "@/components/sinks.js"
 import { KafkaSource, PostgresCdcPipelineSource } from "@/components/sources.js"
 import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
 import { Field, Schema } from "@/core/schema.js"
@@ -375,5 +384,159 @@ describe("generatePipelineYaml", () => {
     expect(() => generatePipelineYaml(pipeline)).toThrow(
       /Pipeline Connector cannot emit a sink stanza for component 'KafkaSink'/,
     )
+  })
+
+  // ── FlussSink stanza ─────────────────────────────────────────────
+
+  it("emits a fluss sink stanza for PostgresCdcPipelineSource → FlussSink", () => {
+    const catalog = FlussCatalog({
+      name: "fluss",
+      bootstrapServers: "fluss-coordinator:9123",
+    })
+    const source = PostgresCdcPipelineSource({
+      hostname: "pg-primary",
+      database: "shop",
+      username: "postgres",
+      password: secretRef("pg-primary-password"),
+      schemaList: ["public"],
+      tableList: ["public.orders"],
+    })
+    const sink = FlussSink({
+      catalog: catalog.handle,
+      database: "shop",
+      table: "orders",
+      primaryKey: ["order_id"],
+      buckets: 8,
+      children: [source],
+    })
+    const pipeline = Pipeline({
+      name: "shop-orders-cdc",
+      parallelism: 4,
+      children: [catalog.node, sink],
+    })
+
+    const yaml = generatePipelineYaml(pipeline) as string
+    expect(yaml).toContain("type: fluss")
+    expect(yaml).toContain("bootstrap.servers: fluss-coordinator:9123")
+    expect(yaml).toContain("table.properties.bucket.num: '8'")
+    expect(yaml).toContain("table.properties.bucket.key: order_id")
+    expect(yaml).toContain("schema.evolution.behavior: lenient")
+    expect(yaml).toMatchSnapshot()
+  })
+
+  it("forwards SASL credentials from FlussCatalog to the sink stanza", () => {
+    const catalog = FlussCatalog({
+      name: "fluss",
+      bootstrapServers: "fluss-coordinator:9123",
+      securityProtocol: "SASL_PLAINTEXT",
+      saslMechanism: "PLAIN",
+      saslUsername: "fr-writer",
+      saslPassword: secretRef("fluss-sasl-password"),
+    })
+    const source = PostgresCdcPipelineSource({
+      hostname: "pg-primary",
+      database: "shop",
+      username: "postgres",
+      password: secretRef("pg-primary-password"),
+      schemaList: ["public"],
+      tableList: ["public.orders"],
+    })
+    const sink = FlussSink({
+      catalog: catalog.handle,
+      database: "shop",
+      table: "orders",
+      primaryKey: ["order_id"],
+      children: [source],
+    })
+    const pipeline = Pipeline({
+      name: "shop-orders-cdc",
+      children: [catalog.node, sink],
+    })
+
+    const yaml = generatePipelineYaml(pipeline) as string
+    expect(yaml).toContain(
+      "properties.client.security.protocol: SASL_PLAINTEXT",
+    )
+    expect(yaml).toContain("properties.client.security.sasl.mechanism: PLAIN")
+    expect(yaml).toContain(
+      "properties.client.security.sasl.username: fr-writer",
+    )
+    expect(yaml).toContain(
+      "properties.client.security.sasl.password: ${env:FLUSS_SASL_PASSWORD}",
+    )
+    expect(yaml).toMatchSnapshot()
+  })
+
+  it("schema.evolution.behavior defaults to lenient and is overridable", () => {
+    const buildPipeline = (
+      schemaEvolution?: "lenient" | "strict",
+    ): ReturnType<typeof Pipeline> => {
+      resetNodeIdCounter()
+      const catalog = FlussCatalog({
+        name: "fluss",
+        bootstrapServers: "fluss:9123",
+      })
+      const source = PostgresCdcPipelineSource({
+        hostname: "pg-primary",
+        database: "shop",
+        username: "postgres",
+        password: secretRef("pg-primary-password"),
+        schemaList: ["public"],
+        tableList: ["public.orders"],
+      })
+      const sinkProps = {
+        catalog: catalog.handle,
+        database: "shop",
+        table: "orders",
+        primaryKey: ["order_id"],
+        ...(schemaEvolution !== undefined ? { schemaEvolution } : {}),
+        children: [source],
+      } as Parameters<typeof FlussSink>[0]
+      const sink = FlussSink(sinkProps)
+      return Pipeline({
+        name: "shop",
+        children: [catalog.node, sink],
+      })
+    }
+
+    const defaultYaml = generatePipelineYaml(buildPipeline()) as string
+    expect(defaultYaml).toContain("schema.evolution.behavior: lenient")
+
+    const strictYaml = generatePipelineYaml(buildPipeline("strict")) as string
+    expect(strictYaml).toContain("schema.evolution.behavior: strict")
+  })
+
+  it("omits bucket.key when primaryKey is empty (Log table fallthrough)", () => {
+    // The cross-node validator rejects FlussSink without primaryKey downstream
+    // of PostgresCdcPipelineSource, but the YAML emitter's contract is "omit
+    // the key when primaryKey is empty" so Fluss falls back to round-robin
+    // bucketing — we cover the emitter shape independently from validation.
+    const catalog = FlussCatalog({
+      name: "fluss",
+      bootstrapServers: "fluss:9123",
+    })
+    const cdcSource = PostgresCdcPipelineSource({
+      hostname: "pg-primary",
+      database: "shop",
+      username: "postgres",
+      password: secretRef("pg-primary-password"),
+      schemaList: ["public"],
+      tableList: ["public.orders"],
+    })
+    const sink = FlussSink({
+      catalog: catalog.handle,
+      database: "shop",
+      table: "orders",
+      buckets: 4,
+      children: [cdcSource],
+    })
+    const pipeline = Pipeline({
+      name: "shop",
+      children: [catalog.node, sink],
+    })
+
+    const yaml = generatePipelineYaml(pipeline) as string
+    expect(yaml).not.toContain("bucket.key")
+    expect(yaml).toContain("table.properties.bucket.num: '4'")
   })
 })

@@ -2,11 +2,13 @@ import type { ConstructNode, FlinkMajorVersion } from "@/core/types.js"
 import {
   artifactToJarName,
   artifactToMavenUrl,
+  lookupConnector,
   type MavenArtifact,
   resolveConnectorArtifacts,
   resolveFormatArtifacts,
   resolveJdbcDialectArtifacts,
 } from "./connector-registry.js"
+import { hasPipelineConnectorSource } from "./sql-generator.js"
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -37,43 +39,71 @@ interface ConnectorUsage {
 }
 
 // ── Component → Connector mapping ───────────────────────────────────
+//
+// Components that participate on a single synthesis branch map to a single
+// connector ID. Components that exist on both branches (today only
+// `FlussSink`) list both connector IDs; the resolver filters by the active
+// branch using `branchAffinity` from the registry.
 
-const COMPONENT_CONNECTOR_MAP: ReadonlyMap<string, string> = new Map([
-  ["KafkaSource", "kafka"],
-  ["KafkaSink", "kafka"],
-  ["JdbcSource", "jdbc"],
-  ["JdbcSink", "jdbc"],
-  ["FileSystemSink", "filesystem"],
-  ["GenericSource", "__generic"],
-  ["GenericSink", "__generic"],
-  ["PostgresCdcPipelineSource", "postgres-cdc-pipeline"],
-  ["IcebergSink", "iceberg"],
-  ["FlussSink", "fluss"],
-  ["FlussSource", "fluss"],
-])
+const COMPONENT_CONNECTOR_MAP: ReadonlyMap<string, readonly string[]> = new Map(
+  [
+    ["KafkaSource", ["kafka"]],
+    ["KafkaSink", ["kafka"]],
+    ["JdbcSource", ["jdbc"]],
+    ["JdbcSink", ["jdbc"]],
+    ["FileSystemSink", ["filesystem"]],
+    ["GenericSource", ["__generic"]],
+    ["GenericSink", ["__generic"]],
+    ["PostgresCdcPipelineSource", ["postgres-cdc-pipeline"]],
+    ["IcebergSink", ["iceberg"]],
+    // FlussSink renders on both branches: the Flink-SQL connector for the
+    // SQL branch and the Pipeline Connector for the Pipeline-YAML branch.
+    // Resolution selects the active artifact via `branchAffinity`.
+    ["FlussSink", ["fluss", "fluss-cdc-pipeline"]],
+    ["FlussSource", ["fluss"]],
+  ],
+)
 
 // ── Tree walking ────────────────────────────────────────────────────
 
-function collectUsages(node: ConstructNode): ConnectorUsage[] {
+function collectUsages(
+  node: ConstructNode,
+  isPipelineYamlBranch: boolean,
+): ConnectorUsage[] {
   const usages: ConnectorUsage[] = []
+  const activeBranch: "sql" | "pipeline-yaml" = isPipelineYamlBranch
+    ? "pipeline-yaml"
+    : "sql"
+
+  function pushIfBranchMatches(
+    connectorId: string,
+    format: string | undefined,
+    jdbcUrl: string | undefined,
+    sourceNodeId: string,
+  ): void {
+    const entry = lookupConnector(connectorId)
+    if (entry?.branchAffinity && entry.branchAffinity !== activeBranch) {
+      return
+    }
+    usages.push({ connectorId, format, jdbcUrl, sourceNodeId })
+  }
 
   function walk(n: ConstructNode): void {
-    const connectorId = COMPONENT_CONNECTOR_MAP.get(n.component)
+    const connectorIds = COMPONENT_CONNECTOR_MAP.get(n.component)
 
-    if (connectorId && connectorId !== "__generic") {
+    if (connectorIds) {
       const format = (n.props.format as string | undefined) ?? undefined
       const jdbcUrl = (n.props.url as string | undefined) ?? undefined
-      usages.push({ connectorId, format, jdbcUrl, sourceNodeId: n.id })
-    } else if (connectorId === "__generic") {
-      // GenericSource/GenericSink: connector is specified in props
-      const customConnector = n.props.connector as string | undefined
-      if (customConnector) {
-        const format = (n.props.format as string | undefined) ?? undefined
-        usages.push({
-          connectorId: customConnector,
-          format,
-          sourceNodeId: n.id,
-        })
+      for (const connectorId of connectorIds) {
+        if (connectorId === "__generic") {
+          // GenericSource/GenericSink: connector is specified in props
+          const customConnector = n.props.connector as string | undefined
+          if (customConnector) {
+            pushIfBranchMatches(customConnector, format, undefined, n.id)
+          }
+        } else {
+          pushIfBranchMatches(connectorId, format, jdbcUrl, n.id)
+        }
       }
     }
 
@@ -189,8 +219,12 @@ export function resolveConnectors(
   const { flinkVersion, mavenMirror, customArtifacts } = options
   const mavenBase = mavenMirror ?? "https://repo1.maven.org/maven2"
 
-  // 1. Collect all connector usages from the tree
-  const usages = collectUsages(pipelineNode)
+  // 1. Collect all connector usages from the tree. The synthesis branch is
+  //    determined by whether the tree contains a Pipeline Connector source —
+  //    when it does, only `pipeline-yaml` and unscoped connectors resolve;
+  //    otherwise, only `sql` and unscoped connectors resolve.
+  const isPipelineYamlBranch = hasPipelineConnectorSource(pipelineNode)
+  const usages = collectUsages(pipelineNode, isPipelineYamlBranch)
 
   // 2. De-duplicate by (connectorId, format, dialect)
   const deduped = new Map<

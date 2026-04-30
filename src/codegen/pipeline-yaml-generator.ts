@@ -234,6 +234,69 @@ function buildPaimonSinkStanza(
   return stanza
 }
 
+function buildFlussSinkStanza(
+  sinkNode: ConstructNode,
+  root: ConstructNode,
+): Record<string, unknown> {
+  const p = sinkNode.props
+  const catalogName = p.catalogName as string
+  const catalogNode = findCatalogNode(root, catalogName)
+  const pipelineName =
+    (root.props.name as string | undefined) ?? "fluss-pipeline"
+
+  const stanza: Record<string, unknown> = {
+    type: "fluss",
+    name: `${pipelineName}-fluss-sink`,
+  }
+
+  if (catalogNode?.props.bootstrapServers) {
+    stanza["bootstrap.servers"] = catalogNode.props.bootstrapServers
+  }
+
+  if (p.buckets !== undefined) {
+    stanza["table.properties.bucket.num"] = String(p.buckets)
+  }
+
+  // bucket.key is only meaningful for PrimaryKey tables. When primaryKey is
+  // omitted the sink writes a Log table — we deliberately omit the key so
+  // Fluss falls back to round-robin bucketing instead of misleading the
+  // operator into thinking a partition strategy exists.
+  if (Array.isArray(p.primaryKey) && p.primaryKey.length > 0) {
+    stanza["table.properties.bucket.key"] = (
+      p.primaryKey as readonly string[]
+    ).join(",")
+  }
+
+  // Forward SASL credentials when the catalog declares them. The password
+  // is rendered through the same `${env:VAR}` placeholder path Postgres
+  // uses, so the same secretRef ergonomics apply on both sides of the YAML.
+  if (catalogNode) {
+    const cp = catalogNode.props
+    if (cp.securityProtocol) {
+      stanza["properties.client.security.protocol"] = cp.securityProtocol
+    }
+    if (cp.saslMechanism) {
+      stanza["properties.client.security.sasl.mechanism"] = cp.saslMechanism
+    }
+    if (cp.saslUsername) {
+      stanza["properties.client.security.sasl.username"] = cp.saslUsername
+    }
+    if (cp.saslPassword !== undefined) {
+      stanza["properties.client.security.sasl.password"] = renderValue(
+        cp.saslPassword,
+      )
+    }
+  }
+
+  // Schema evolution defaults to lenient — Flink CDC 3.6's strict mode
+  // crashes on column additions, which is the dominant evolution case for
+  // OLTP CDC. Override via `FlussSink.schemaEvolution`.
+  stanza["schema.evolution.behavior"] =
+    (p.schemaEvolution as string | undefined) ?? "lenient"
+
+  return stanza
+}
+
 function buildSinkStanza(
   sinkNode: ConstructNode,
   root: ConstructNode,
@@ -243,10 +306,12 @@ function buildSinkStanza(
       return buildIcebergSinkStanza(sinkNode, root)
     case "PaimonSink":
       return buildPaimonSinkStanza(sinkNode, root)
+    case "FlussSink":
+      return buildFlussSinkStanza(sinkNode, root)
     default:
       throw new Error(
         `Pipeline Connector cannot emit a sink stanza for component '${sinkNode.component}'. ` +
-          `Supported sinks: IcebergSink, PaimonSink. Connect to a supported sink or fall back to the Kafka-hop topology.`,
+          `Supported sinks: IcebergSink, PaimonSink, FlussSink. Connect to a supported sink or fall back to the Kafka-hop topology.`,
       )
   }
 }

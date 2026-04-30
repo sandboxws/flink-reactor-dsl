@@ -1,5 +1,34 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`generatePipelineYaml > emits a fluss sink stanza for PostgresCdcPipelineSource → FlussSink 1`] = `
+"source:
+  type: postgres
+  hostname: pg-primary
+  port: 5432
+  username: postgres
+  password: \${env:PG_PRIMARY_PASSWORD}
+  database-name: shop
+  schema-name: public
+  table-name: public.orders
+  decoding.plugin.name: pgoutput
+  slot.name: fr_shop_orders_cdc_slot
+  publication.name: fr_shop_orders_cdc_pub
+  scan.startup.mode: initial
+  scan.snapshot.enabled: true
+sink:
+  type: fluss
+  name: shop-orders-cdc-fluss-sink
+  bootstrap.servers: fluss-coordinator:9123
+  table.properties.bucket.num: '8'
+  table.properties.bucket.key: order_id
+  schema.evolution.behavior: lenient
+pipeline:
+  name: shop-orders-cdc
+  parallelism: 4
+  schema.change.behavior: evolve
+"
+`;
+
 exports[`generatePipelineYaml > emits source/sink/pipeline stanzas for Postgres → Iceberg 1`] = `
 "source:
   type: postgres
@@ -64,6 +93,37 @@ sink:
   table.properties.write.distribution-mode: hash
   table.properties.write.target-file-size-bytes: '268435456'
   table.properties.write.parquet.compression-codec: zstd
+pipeline:
+  name: shop-orders-cdc
+  schema.change.behavior: evolve
+"
+`;
+
+exports[`generatePipelineYaml > forwards SASL credentials from FlussCatalog to the sink stanza 1`] = `
+"source:
+  type: postgres
+  hostname: pg-primary
+  port: 5432
+  username: postgres
+  password: \${env:PG_PRIMARY_PASSWORD}
+  database-name: shop
+  schema-name: public
+  table-name: public.orders
+  decoding.plugin.name: pgoutput
+  slot.name: fr_shop_orders_cdc_slot
+  publication.name: fr_shop_orders_cdc_pub
+  scan.startup.mode: initial
+  scan.snapshot.enabled: true
+sink:
+  type: fluss
+  name: shop-orders-cdc-fluss-sink
+  bootstrap.servers: fluss-coordinator:9123
+  table.properties.bucket.key: order_id
+  properties.client.security.protocol: SASL_PLAINTEXT
+  properties.client.security.sasl.mechanism: PLAIN
+  properties.client.security.sasl.username: fr-writer
+  properties.client.security.sasl.password: \${env:FLUSS_SASL_PASSWORD}
+  schema.evolution.behavior: lenient
 pipeline:
   name: shop-orders-cdc
   schema.change.behavior: evolve

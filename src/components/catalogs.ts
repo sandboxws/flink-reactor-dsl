@@ -1,4 +1,5 @@
 import { createElement } from "@/core/jsx-runtime.js"
+import type { SecretRef } from "@/core/secret-ref.js"
 import type { BaseComponentProps, ConstructNode } from "@/core/types.js"
 
 // ── Catalog handle ──────────────────────────────────────────────────
@@ -138,6 +139,16 @@ export interface FlussCatalogProps extends BaseComponentProps {
   readonly name: string
   /** Fluss coordinator/server bootstrap addresses, e.g. `host:9123,host2:9123`. */
   readonly bootstrapServers: string
+  /**
+   * Optional SASL credentials. When set, the synthesis engine forwards these
+   * onto the connector configuration as `client.security.*` properties. The
+   * password may be supplied as a `SecretRef` to render an `${env:VAR}`
+   * placeholder in YAML and a matching `secretKeyRef` env entry in the CRD.
+   */
+  readonly securityProtocol?: string
+  readonly saslMechanism?: string
+  readonly saslUsername?: string
+  readonly saslPassword?: string | SecretRef
   readonly children?: ConstructNode | ConstructNode[]
 }
 

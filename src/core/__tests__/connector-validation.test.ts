@@ -382,6 +382,61 @@ describe("validateConnectorProperties", () => {
     expect(diags.some((d) => d.message.includes("primaryKey"))).toBe(true)
   })
 
+  // ── FlussSink downstream of PostgresCdcPipelineSource ────────────
+
+  it("errors when FlussSink has no primaryKey downstream of a CDC source", () => {
+    const src = makeCdcSource()
+    const sink = makeNode(
+      "FlussSink",
+      "Sink",
+      {
+        catalogName: "fluss",
+        catalogNodeId: "FlussCatalog-1",
+        database: "shop",
+        table: "orders",
+      },
+      [src],
+    )
+    const tree = makePipeline(sink)
+    const diags = validateConnectorProperties(tree)
+    const err = diags.find(
+      (d) =>
+        d.severity === "error" &&
+        d.message.includes("PostgresCdcPipelineSource") &&
+        d.message.includes("FlussSink") &&
+        /primaryKey/i.test(d.message),
+    )
+    expect(err).toBeDefined()
+    expect(err?.message).toContain("Fluss Log table")
+    expect(err?.details?.sourceNodeId).toBe(src.id)
+    expect(err?.details?.sinkNodeId).toBe(sink.id)
+  })
+
+  it("passes when FlussSink has a primaryKey downstream of a CDC source", () => {
+    const src = makeCdcSource()
+    const sink = makeNode(
+      "FlussSink",
+      "Sink",
+      {
+        catalogName: "fluss",
+        catalogNodeId: "FlussCatalog-1",
+        database: "shop",
+        table: "orders",
+        primaryKey: ["order_id"],
+      },
+      [src],
+    )
+    const tree = makePipeline(sink)
+    const diags = validateConnectorProperties(tree)
+    const compat = diags.find(
+      (d) =>
+        d.message.includes("PostgresCdcPipelineSource") &&
+        d.message.includes("→") &&
+        d.message.includes("FlussSink"),
+    )
+    expect(compat).toBeUndefined()
+  })
+
   // ── IcebergSink MoR misconfiguration ─────────────────────────────
 
   it("errors when IcebergSink has upsertEnabled but neither equalityFieldColumns nor primaryKey", () => {

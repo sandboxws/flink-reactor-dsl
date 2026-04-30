@@ -24,6 +24,14 @@ export interface ConnectorRegistryEntry {
   /** If true, no JARs are needed (e.g., FileSystem) */
   readonly builtIn: boolean
   readonly versions: readonly VersionedArtifacts[]
+  /**
+   * Synthesis-branch affinity. When set, the connector is only resolved on
+   * the matching branch:
+   *   • `"sql"` — Flink-SQL connectors (e.g. `fluss-connector-flink`).
+   *   • `"pipeline-yaml"` — Flink CDC 3.6 Pipeline Connectors.
+   * When undefined the connector applies on either branch.
+   */
+  readonly branchAffinity?: "sql" | "pipeline-yaml"
 }
 
 /** JDBC dialect entry mapping database type to dialect module + driver JAR */
@@ -169,6 +177,7 @@ const CONNECTOR_REGISTRY: readonly ConnectorRegistryEntry[] = [
   {
     connectorId: "postgres-cdc-pipeline",
     builtIn: false,
+    branchAffinity: "pipeline-yaml",
     versions: [
       {
         minVersion: "1.20",
@@ -176,6 +185,29 @@ const CONNECTOR_REGISTRY: readonly ConnectorRegistryEntry[] = [
           {
             groupId: "org.apache.flink",
             artifactId: "flink-cdc-pipeline-connector-postgres",
+            version: "3.6.0",
+          },
+        ],
+      },
+    ],
+  },
+
+  // Fluss CDC Pipeline Connector (Flink CDC 3.6). Distinct from the Flink-SQL
+  // Fluss connector below — Pipeline Connectors and SQL connectors are
+  // separate artifacts under upstream Flink CDC's release model. Single
+  // version range covers both Flink 1.20 and Flink 2.x because the Pipeline
+  // Connector versions independently of Flink core.
+  {
+    connectorId: "fluss-cdc-pipeline",
+    builtIn: false,
+    branchAffinity: "pipeline-yaml",
+    versions: [
+      {
+        minVersion: "1.20",
+        artifacts: [
+          {
+            groupId: "org.apache.flink",
+            artifactId: "flink-cdc-pipeline-connector-fluss",
             version: "3.6.0",
           },
         ],
@@ -216,10 +248,12 @@ const CONNECTOR_REGISTRY: readonly ConnectorRegistryEntry[] = [
   },
 
   // Apache Fluss Flink connector. Single artifact spans the Flink 2.x range;
-  // 1.20 is unsupported by Fluss 0.6.0.
+  // 1.20 is unsupported by Fluss 0.6.0. SQL-branch only — the Pipeline-YAML
+  // branch uses `fluss-cdc-pipeline` instead.
   {
     connectorId: "fluss",
     builtIn: false,
+    branchAffinity: "sql",
     versions: [
       {
         minVersion: "2.0",

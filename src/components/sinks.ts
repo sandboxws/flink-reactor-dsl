@@ -217,6 +217,13 @@ export interface FlussSinkProps extends BaseComponentProps {
    * inside Fluss; defaults to the cluster-level Fluss default when omitted.
    */
   readonly buckets?: number
+  /**
+   * Schema-evolution behavior on the Pipeline-YAML branch. Defaults to
+   * `'lenient'` because Flink CDC 3.6's strict mode crashes on column
+   * additions, which is the dominant evolution case for OLTP CDC. Ignored on
+   * the Flink-SQL branch.
+   */
+  readonly schemaEvolution?: "lenient" | "strict"
   /** Enable operator tailing for this sink */
   readonly tap?: boolean | TapConfig
   readonly children?: ConstructNode | ConstructNode[]
@@ -225,10 +232,19 @@ export interface FlussSinkProps extends BaseComponentProps {
 /**
  * Fluss sink: writes to an Apache Fluss table.
  *
+ * Dual-mode synthesis: when used in a regular Flink-SQL pipeline the sink
+ * compiles to a `CREATE TABLE … 'connector'='fluss'` DDL block plus an
+ * `INSERT INTO` statement. When used downstream of a Pipeline Connector
+ * source (`PostgresCdcPipelineSource` and friends) the sink instead emits a
+ * `pipeline.yaml` `sink:` stanza with `type: fluss`. The synthesis engine
+ * picks the branch from the upstream source type — the user does not choose.
+ *
  * References a `FlussCatalog` handle to form catalog-qualified table names.
  * When `primaryKey` is set, the sink targets a Fluss PrimaryKey table and
  * accepts upsert/retract input streams. Without `primaryKey`, the target is
- * a Fluss Log table and the sink only accepts append-only input.
+ * a Fluss Log table and the sink only accepts append-only input. On the
+ * Pipeline-YAML branch a primary key is required because the upstream CDC
+ * stream is a retract changelog.
  */
 export function FlussSink(props: FlussSinkProps): ConstructNode {
   const { children, catalog, ...rest } = props
