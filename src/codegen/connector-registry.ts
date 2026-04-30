@@ -214,6 +214,25 @@ const CONNECTOR_REGISTRY: readonly ConnectorRegistryEntry[] = [
       },
     ],
   },
+
+  // Apache Fluss Flink connector. Single artifact spans the Flink 2.x range;
+  // 1.20 is unsupported by Fluss 0.6.0.
+  {
+    connectorId: "fluss",
+    builtIn: false,
+    versions: [
+      {
+        minVersion: "2.0",
+        artifacts: [
+          {
+            groupId: "com.alibaba.fluss",
+            artifactId: "fluss-connector-flink",
+            version: "0.6.0",
+          },
+        ],
+      },
+    ],
+  },
 ]
 
 // ── JDBC Dialect Sub-Registry ───────────────────────────────────────

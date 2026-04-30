@@ -573,6 +573,9 @@ function connectorTypeFor(component: string): string {
       return "iceberg"
     case "PaimonSink":
       return "paimon"
+    case "FlussSink":
+    case "FlussSource":
+      return "fluss"
     default:
       return component.toLowerCase().replace(/source$|sink$/i, "")
   }
@@ -610,6 +613,8 @@ function catalogTypeForComponent(component: string): string {
       return "jdbc"
     case "GenericCatalog":
       return "generic"
+    case "FlussCatalog":
+      return "fluss"
     default:
       return component
   }
@@ -643,6 +648,25 @@ function buildSourceDetails(
     case "JdbcSource":
       details.push({ key: "table", value: (props.table as string) ?? "" })
       details.push({ key: "url", value: (props.url as string) ?? "" })
+      break
+    case "FlussSource":
+      if (props.catalogName)
+        details.push({ key: "catalog", value: String(props.catalogName) })
+      details.push({ key: "database", value: (props.database as string) ?? "" })
+      details.push({ key: "table", value: (props.table as string) ?? "" })
+      details.push({
+        key: "startup",
+        value: (props.scanStartupMode as string) ?? "initial",
+      })
+      if (props.scanStartupTimestampMs != null)
+        details.push({
+          key: "ts-ms",
+          value: String(props.scanStartupTimestampMs),
+        })
+      details.push({
+        key: "table-type",
+        value: props.primaryKey ? "PrimaryKey (retract)" : "Log (append-only)",
+      })
       break
     default: {
       const connector = (props.connector as string) ?? node.component
@@ -719,6 +743,24 @@ function buildSinkDetails(
       }
       break
     }
+    case "FlussSink":
+      if (props.catalogName)
+        details.push({ key: "catalog", value: String(props.catalogName) })
+      details.push({ key: "database", value: (props.database as string) ?? "" })
+      details.push({ key: "table", value: (props.table as string) ?? "" })
+      if (props.buckets != null)
+        details.push({ key: "buckets", value: String(props.buckets) })
+      if (props.primaryKey)
+        details.push({
+          key: "table-type",
+          value: "PrimaryKey (upsert)",
+        })
+      else
+        details.push({
+          key: "table-type",
+          value: "Log (append-only)",
+        })
+      break
     default:
       break
   }
@@ -1028,6 +1070,10 @@ function generateCatalogDdl(node: ConstructNode): string {
         Object.assign(withProps, props.options as Record<string, string>)
       }
       break
+    case "FlussCatalog":
+      withProps.type = "fluss"
+      withProps["bootstrap.servers"] = props.bootstrapServers as string
+      break
   }
 
   const withClause = Object.entries(withProps)
@@ -1183,6 +1229,27 @@ function generateSourceWithClause(node: ConstructNode): string {
         Object.assign(withProps, props.options as Record<string, string>)
       }
       break
+    case "FlussSource": {
+      withProps.connector = "fluss"
+      // The catalog handle stores `catalogName` on the source — surface it
+      // verbatim so the runtime can route the connector to the right Fluss
+      // server when the catalog DDL has already registered bootstrap.servers
+      // there.
+      withProps.catalog = String(props.catalogName)
+      withProps.database = props.database as string
+      withProps.table = props.table as string
+      withProps["scan.startup.mode"] =
+        (props.scanStartupMode as string) ?? "initial"
+      if (
+        props.scanStartupMode === "timestamp" &&
+        props.scanStartupTimestampMs != null
+      ) {
+        withProps["scan.startup.timestamp"] = String(
+          props.scanStartupTimestampMs,
+        )
+      }
+      break
+    }
   }
 
   return Object.entries(withProps)
@@ -1338,7 +1405,7 @@ function generateCatalogManagedSinkDdl(
     inner.push(`  PRIMARY KEY (${pk.map(q).join(", ")}) NOT ENFORCED`)
   }
 
-  const tableProps = collectIcebergTableProps(node)
+  const tableProps = collectCatalogManagedTableProps(node)
   const withClause =
     tableProps.length > 0
       ? ` WITH (\n${tableProps.map(([k, v]) => `  '${k}' = '${v}'`).join(",\n")}\n)`
@@ -1349,6 +1416,23 @@ function generateCatalogManagedSinkDdl(
   )
 
   return stmts.join("\n")
+}
+
+function collectCatalogManagedTableProps(
+  node: ConstructNode,
+): [string, string][] {
+  if (node.component === "IcebergSink") return collectIcebergTableProps(node)
+  if (node.component === "FlussSink") return collectFlussTableProps(node)
+  return []
+}
+
+function collectFlussTableProps(node: ConstructNode): [string, string][] {
+  const props = node.props
+  const out: [string, string][] = []
+  if (props.buckets != null) {
+    out.push(["bucket.num", String(props.buckets)])
+  }
+  return out
 }
 
 function collectIcebergTableProps(node: ConstructNode): [string, string][] {
@@ -1557,7 +1641,13 @@ function resolveSinkMetadata(
     const schema = source.props.schema as
       | { primaryKey?: { columns: readonly string[] } }
       | undefined
-    return schema?.primaryKey?.columns
+    if (schema?.primaryKey?.columns) return schema.primaryKey.columns
+    // Sources whose schema doesn't carry a PK but whose component-level prop
+    // does (e.g. FlussSource on a Fluss PrimaryKey table) — surface the prop
+    // PK so downstream sinks can see the upstream key.
+    const propPk = source.props.primaryKey as readonly string[] | undefined
+    if (Array.isArray(propPk) && propPk.length > 0) return propPk
+    return undefined
   }
 
   /**
@@ -2558,6 +2648,7 @@ function buildQuery(
     case "JdbcSource":
     case "GenericSource":
     case "DataGenSource":
+    case "FlussSource":
       if (node.children.length > 0) {
         // Source wraps child transforms (e.g. <KafkaSource><Map/></KafkaSource>)
         // Build query by chaining children on top of the source reference.

@@ -91,6 +91,33 @@ const CONNECTOR_REGISTRY: ReadonlyMap<string, readonly PropertyRule[]> =
         { kind: "required", prop: "tableList" },
       ],
     ],
+    [
+      "FlussSource",
+      [
+        // The CatalogHandle prop is destructured into `catalogName`+
+        // `catalogNodeId` by the factory, so validate against the post-
+        // construction shape rather than the input prop name.
+        { kind: "required", prop: "catalogName" },
+        { kind: "required", prop: "database" },
+        { kind: "required", prop: "table" },
+        { kind: "required", prop: "schema" },
+        {
+          kind: "conditional",
+          prop: "scanStartupTimestampMs",
+          when: (props) => props.scanStartupMode === "timestamp",
+          description:
+            "required when `scanStartupMode === 'timestamp'`; supplies the millisecond offset Fluss seeks to before streaming",
+        },
+      ],
+    ],
+    [
+      "FlussSink",
+      [
+        { kind: "required", prop: "catalogName" },
+        { kind: "required", prop: "database" },
+        { kind: "required", prop: "table" },
+      ],
+    ],
   ])
 
 // ── Pipeline Connector sink compatibility ───────────────────────────
@@ -331,5 +358,77 @@ export function validateConnectorProperties(
     }
   }
 
+  // Cross-node: FlussSource → retract-requiring sink validation.
+  //
+  // A FlussSource reading a Log table (no `primaryKey`) emits an append-only
+  // changelog. Sinks that materialize an upsert/retract changelog (PaimonSink
+  // with `mergeEngine`, IcebergSink with `upsertEnabled`) cannot accept it —
+  // surface this at synth time rather than at planner time inside Flink.
+  //
+  // FlussSource with `tap: true` is rejected unconditionally — PrimaryKey
+  // table reads are stateful so tapping requires materialization the runtime
+  // does not yet support.
+  const flussSources: ConstructNode[] = []
+  walkNodes(root, (n) => {
+    if (n.component === "FlussSource") flussSources.push(n)
+  })
+
+  for (const src of flussSources) {
+    if (src.props.tap !== undefined && src.props.tap !== false) {
+      diagnostics.push({
+        severity: "error",
+        message: `FlussSource '${src.id}' has \`tap\` set, but tapping is not supported on FlussSource — PrimaryKey table reads are stateful and tapping requires materialization. Remove the tap prop.`,
+        nodeId: src.id,
+        component: src.component,
+        category: "connector",
+      })
+    }
+
+    if (
+      src.props.scanStartupTimestampMs !== undefined &&
+      src.props.scanStartupMode !== "timestamp"
+    ) {
+      diagnostics.push({
+        severity: "error",
+        message: `FlussSource '${src.id}': \`scanStartupTimestampMs\` is only valid when \`scanStartupMode === 'timestamp'\` (got \`scanStartupMode = ${JSON.stringify(src.props.scanStartupMode ?? "initial")}\`).`,
+        nodeId: src.id,
+        component: src.component,
+        category: "connector",
+      })
+    }
+
+    const pk = src.props.primaryKey as readonly string[] | undefined
+    const hasPk = Array.isArray(pk) && pk.length > 0
+    if (hasPk) continue
+
+    for (const sink of sinks) {
+      const reason = retractRequiredSinkReason(sink)
+      if (!reason) continue
+      diagnostics.push({
+        severity: "error",
+        message: `FlussSource '${src.id}' → ${sink.component} '${sink.id}': ${reason} — set \`primaryKey\` on FlussSource to read the upstream Fluss PrimaryKey table as a retract changelog.`,
+        nodeId: sink.id,
+        component: sink.component,
+        category: "connector",
+        details: { sourceNodeId: src.id, sinkNodeId: sink.id },
+      })
+    }
+  }
+
   return diagnostics
+}
+
+/**
+ * Sinks that materialize an upsert/retract changelog and therefore reject
+ * append-only upstream streams. Returns the human-readable reason when the
+ * sink requires retract, or undefined when it accepts append-only.
+ */
+function retractRequiredSinkReason(sink: ConstructNode): string | undefined {
+  if (sink.component === "PaimonSink" && sink.props.mergeEngine) {
+    return `PaimonSink with \`mergeEngine: '${String(sink.props.mergeEngine)}'\` requires a retract upstream`
+  }
+  if (sink.component === "IcebergSink" && sink.props.upsertEnabled === true) {
+    return "IcebergSink with `upsertEnabled: true` requires a retract upstream"
+  }
+  return undefined
 }

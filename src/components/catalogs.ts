@@ -132,6 +132,40 @@ export function JdbcCatalog(props: JdbcCatalogProps): CatalogResult {
   return { node, handle }
 }
 
+// ── FlussCatalog ────────────────────────────────────────────────────
+
+export interface FlussCatalogProps extends BaseComponentProps {
+  readonly name: string
+  /** Fluss coordinator/server bootstrap addresses, e.g. `host:9123,host2:9123`. */
+  readonly bootstrapServers: string
+  readonly children?: ConstructNode | ConstructNode[]
+}
+
+/**
+ * Fluss catalog: registers an Apache Fluss catalog reachable via the Fluss
+ * coordinator/server `bootstrap.servers` endpoint.
+ *
+ * Fluss tables come in two flavors:
+ *
+ *   • **Log table** — append-only, no `primaryKey`; reads produce an
+ *     `'append-only'` changelog stream.
+ *   • **PrimaryKey table** — declared with `primaryKey`; reads produce a
+ *     `'retract'`/upsert changelog stream and writes are upsert by key.
+ *
+ * The `bootstrapServers` value is also threaded into `FlussSource` /
+ * `FlussSink` via the catalog handle so downstream connector DDL inherits a
+ * consistent connection target.
+ */
+export function FlussCatalog(props: FlussCatalogProps): CatalogResult {
+  const { children, ...rest } = props
+  const childArray =
+    children == null ? [] : Array.isArray(children) ? children : [children]
+
+  const node = createElement("FlussCatalog", { ...rest }, ...childArray)
+  const handle = createCatalogHandle(props.name, node.id)
+  return { node, handle }
+}
+
 // ── GenericCatalog ──────────────────────────────────────────────────
 
 export interface GenericCatalogProps extends BaseComponentProps {

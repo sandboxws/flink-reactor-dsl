@@ -12,6 +12,7 @@ import type {
   FlinkType,
   TapConfig,
 } from "@/core/types.js"
+import type { CatalogHandle } from "./catalogs.js"
 
 // ── CDC format → ChangelogMode inference ────────────────────────────
 
@@ -378,6 +379,119 @@ export function DataGenSource<T extends Record<string, FlinkType>>(
   return createElement(
     "DataGenSource",
     { ...rest, connector: "datagen", options, _nameHint },
+    ...childArray,
+  )
+}
+
+// ── FlussSource ─────────────────────────────────────────────────────
+
+/**
+ * Streaming-startup offset for `FlussSource`.
+ *
+ * - `'initial'`   — read the table snapshot then continue from the captured
+ *                   log offset (default; matches Fluss CLI default).
+ * - `'earliest'`  — start from the earliest log offset, skipping snapshot.
+ * - `'latest'`    — start from the latest log offset, ignoring history.
+ * - `'timestamp'` — seek to a specific Fluss log timestamp; requires
+ *                   `scanStartupTimestampMs`.
+ */
+export type FlussScanStartupMode =
+  | "initial"
+  | "earliest"
+  | "latest"
+  | "timestamp"
+
+export interface FlussSourceProps<
+  T extends Record<string, FlinkType> = Record<string, FlinkType>,
+> extends BaseComponentProps {
+  /** Optional SQL-identifier name. Defaults to `<database>_<table>` when omitted. */
+  readonly name?: string
+  /** Handle to a `FlussCatalog` declared earlier in the construct tree. */
+  readonly catalog: CatalogHandle
+  readonly database: string
+  readonly table: string
+  readonly schema: SchemaDefinition<T>
+  readonly watermark?: WatermarkDeclaration
+  /** Defaults to `'initial'`. */
+  readonly scanStartupMode?: FlussScanStartupMode
+  /**
+   * Required when `scanStartupMode === 'timestamp'`. Forbidden in any other
+   * mode — a synth-time diagnostic rejects a stale value carried over from a
+   * previous configuration.
+   */
+  readonly scanStartupTimestampMs?: number
+  /**
+   * When set, identifies the upstream Fluss table as a PrimaryKey table and
+   * the resulting stream carries ChangelogMode `'retract'`. Omitting it reads
+   * a Log table (append-only). Setting `primaryKey` against an upstream Log
+   * table fails at planner time inside Flink — the choice must match the
+   * way the upstream table was originally created.
+   */
+  readonly primaryKey?: readonly string[]
+  readonly parallelism?: number
+  /** Not supported — passing `tap: true` raises a synthesis-time diagnostic. */
+  readonly tap?: boolean | TapConfig
+  readonly children?: ConstructNode | ConstructNode[]
+}
+
+/**
+ * Apache Fluss streaming source.
+ *
+ * Reads a Fluss table over the Fluss Flink connector. Pair with a
+ * `FlussCatalog` for connection wiring. Two table flavors:
+ *
+ *   • **PrimaryKey table** — set `primaryKey`. The source emits a CDC-style
+ *     retract/upsert stream and downstream upsert sinks (e.g. `PaimonSink`
+ *     with `mergeEngine`, `IcebergSink` with `upsertEnabled`) accept it.
+ *   • **Log table** — omit `primaryKey`. The source emits an append-only
+ *     stream; retract-requiring sinks reject it at synth time.
+ *
+ * Set `primaryKey` only when the upstream table was created as a PrimaryKey
+ * table — wrong choice on a Log table fails at planner time inside Flink.
+ *
+ * `scanStartupMode` controls the offset Fluss seeks to before streaming:
+ *
+ *   • `'initial'`   — snapshot then log (default).
+ *   • `'earliest'`  — entire log from the first available offset.
+ *   • `'latest'`    — log only, starting at the current tip.
+ *   • `'timestamp'` — seek to `scanStartupTimestampMs` (required in this mode).
+ *
+ * Tapping is not supported; pass-through `tap: true` raises a diagnostic.
+ *
+ * See https://alibaba.github.io/fluss-docs/ for the underlying connector and
+ * the FlinkReactor docs Fluss-source operator page (forthcoming) for the
+ * worked Stage-B serve-side pattern this component is built around.
+ */
+export function FlussSource<T extends Record<string, FlinkType>>(
+  props: FlussSourceProps<T>,
+): ConstructNode {
+  requireProps("FlussSource", props, ["catalog", "database", "table", "schema"])
+  if (
+    props.scanStartupMode === "timestamp" &&
+    props.scanStartupTimestampMs == null
+  ) {
+    throw new Error(
+      "FlussSource: `scanStartupTimestampMs` is required when `scanStartupMode === 'timestamp'`",
+    )
+  }
+
+  const { children, name, catalog, ...rest } = props
+  const childArray =
+    children == null ? [] : Array.isArray(children) ? children : [children]
+
+  const hasPk = Array.isArray(props.primaryKey) && props.primaryKey.length > 0
+  const changelogMode: ChangelogMode = hasPk ? "retract" : "append-only"
+  const _nameHint = name ?? toSqlIdentifier(`${props.database}_${props.table}`)
+
+  return createElement(
+    "FlussSource",
+    {
+      ...rest,
+      catalogName: catalog.catalogName,
+      catalogNodeId: catalog.nodeId,
+      changelogMode,
+      _nameHint,
+    },
     ...childArray,
   )
 }

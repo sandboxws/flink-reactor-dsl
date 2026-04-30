@@ -200,6 +200,52 @@ export function PaimonSink(props: PaimonSinkProps): ConstructNode {
   )
 }
 
+// ── FlussSink ──────────────────────────────────────────────────────
+
+export interface FlussSinkProps extends BaseComponentProps {
+  readonly catalog: CatalogHandle
+  readonly database: string
+  readonly table: string
+  /**
+   * Set this to declare the sink target as a Fluss PrimaryKey table — Fluss
+   * stores upsert state keyed on these columns and reads produce a retract
+   * stream. Omit to write a Log (append-only) table.
+   */
+  readonly primaryKey?: readonly string[]
+  /**
+   * Number of buckets for the Fluss table. Tunes the partitioning fan-out
+   * inside Fluss; defaults to the cluster-level Fluss default when omitted.
+   */
+  readonly buckets?: number
+  /** Enable operator tailing for this sink */
+  readonly tap?: boolean | TapConfig
+  readonly children?: ConstructNode | ConstructNode[]
+}
+
+/**
+ * Fluss sink: writes to an Apache Fluss table.
+ *
+ * References a `FlussCatalog` handle to form catalog-qualified table names.
+ * When `primaryKey` is set, the sink targets a Fluss PrimaryKey table and
+ * accepts upsert/retract input streams. Without `primaryKey`, the target is
+ * a Fluss Log table and the sink only accepts append-only input.
+ */
+export function FlussSink(props: FlussSinkProps): ConstructNode {
+  const { children, catalog, ...rest } = props
+  const childArray =
+    children == null ? [] : Array.isArray(children) ? children : [children]
+
+  return createElement(
+    "FlussSink",
+    {
+      ...rest,
+      catalogName: catalog.catalogName,
+      catalogNodeId: catalog.nodeId,
+    },
+    ...childArray,
+  )
+}
+
 // ── IcebergSink ────────────────────────────────────────────────────
 
 export type IcebergWriteDistributionMode = "none" | "hash" | "range"

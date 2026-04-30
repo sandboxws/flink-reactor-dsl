@@ -18,6 +18,7 @@ export { CatalogSource } from "./components/catalog-source.js"
 export type {
   CatalogHandle,
   CatalogResult,
+  FlussCatalogProps,
   GenericCatalogProps,
   HiveCatalogProps,
   IcebergCatalogProps,
@@ -27,6 +28,7 @@ export type {
 } from "./components/catalogs.js"
 // Components: catalogs
 export {
+  FlussCatalog,
   GenericCatalog,
   HiveCatalog,
   IcebergCatalog,
@@ -118,6 +120,7 @@ export { SideOutput } from "./components/side-output.js"
 export type {
   FileFormat,
   FileSystemSinkProps,
+  FlussSinkProps,
   GenericSinkProps,
   IcebergParquetCompression,
   IcebergSinkProps,
@@ -133,6 +136,7 @@ export type {
 // Components: sinks
 export {
   FileSystemSink,
+  FlussSink,
   GenericSink,
   IcebergSink,
   JdbcSink,
@@ -141,6 +145,8 @@ export {
 } from "./components/sinks.js"
 export type {
   DataGenSourceProps,
+  FlussScanStartupMode,
+  FlussSourceProps,
   GenericSourceProps,
   JdbcSourceProps,
   KafkaFormat,
@@ -153,6 +159,7 @@ export type {
 // Components: sources
 export {
   DataGenSource,
+  FlussSource,
   GenericSource,
   JdbcSource,
   KafkaSource,
