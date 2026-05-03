@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: sql-gateway
-          image: flink-reactor:2.0.1
+          image: flink-reactor:2.2.0
           command: ["/opt/flink/bin/sql-gateway.sh"]
           args:
             - "start-foreground"

@@ -35,6 +35,7 @@ import {
   invokeHookEither,
   resolvePlugins,
 } from "./plugin-registry.js"
+import { validateServicesAgainstPipelines } from "./services-validator.js"
 import { SynthContext, type ValidationCategory } from "./synth-context.js"
 import { rekindTree } from "./tree-utils.js"
 import type {
@@ -219,7 +220,7 @@ export function synthesizeApp(
     options?.flinkVersion ??
     options?.resolvedConfig?.flink.version ??
     options?.config?.flink?.version ??
-    "2.0"
+    "2.2"
 
   // Prefer infra from resolvedConfig, then props, then legacy config
   const infra =
@@ -254,6 +255,24 @@ export function synthesizeApp(
       for (const hook of chain.beforeSynth) {
         hook?.(hookCtx)
       }
+    }
+
+    // ── Services × pipelines coherence check ───────────────────────────
+    // Runs before per-pipeline work so a missing service fails fast and
+    // the user doesn't get a half-synthesized output. Only applies when
+    // a `services` block has been declared on the resolved config; legacy
+    // projects without `services` skip the check (back-fill in the
+    // resolver populates `services.kafka` from the deprecated field, so
+    // the only "skip" path is a project that explicitly opted out via an
+    // empty environment with no services declarations).
+    if (options?.resolvedConfig?.services) {
+      validateServicesAgainstPipelines(
+        pipelineNodes.map((node) => ({
+          name: node.props.name as string,
+          node,
+        })),
+        options.resolvedConfig.services as Readonly<Record<string, unknown>>,
+      )
     }
 
     // ── Per-pipeline synthesis ──────────────────────────────────────────
@@ -422,7 +441,7 @@ export function synthesizeAppEffect(
           options?.flinkVersion ??
           options?.resolvedConfig?.flink.version ??
           options?.config?.flink?.version ??
-          "2.0"
+          "2.2"
 
         const infra =
           props.infra ??
@@ -445,6 +464,19 @@ export function synthesizeAppEffect(
               )
             }
           }
+        }
+
+        // Services × pipelines coherence check (matches imperative path).
+        if (options?.resolvedConfig?.services) {
+          validateServicesAgainstPipelines(
+            pipelineNodes.map((node) => ({
+              name: node.props.name as string,
+              node,
+            })),
+            options.resolvedConfig.services as Readonly<
+              Record<string, unknown>
+            >,
+          )
         }
 
         // Per-pipeline synthesis with Either-returning codegen

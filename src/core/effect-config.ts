@@ -3,10 +3,16 @@
 // use the ProcessEnv service instead of direct process.env access.
 
 import { Effect } from "effect"
-import type { FlinkReactorConfig, Runtime } from "./config.js"
+import type { FlinkReactorConfig, Runtime, ServicesConfig } from "./config.js"
 import { SUPPORTED_RUNTIMES } from "./config.js"
-import type { ResolvedConfig } from "./config-resolver.js"
-import { defaultRuntimeForEnv } from "./config-resolver.js"
+import type {
+  ResolvedConfig,
+  ResolvedServicesConfig,
+} from "./config-resolver.js"
+import {
+  defaultRuntimeForEnv,
+  __warnOnceForResolvers as warnOnce,
+} from "./config-resolver.js"
 import type { EnvVarRef } from "./env-var.js"
 import { isEnvVarRef } from "./env-var.js"
 import { ConfigError } from "./errors.js"
@@ -127,6 +133,7 @@ export function resolveConfigEffect(
       dashboard: config.dashboard ?? {},
       console: config.console ?? {},
       pipelines: {},
+      services: config.services ?? undefined,
     }
 
     let merged = common
@@ -157,6 +164,7 @@ export function resolveConfigEffect(
       if (envEntry.kubectl) envOverrides.kubectl = envEntry.kubectl
       if (envEntry.sqlGateway) envOverrides.sqlGateway = envEntry.sqlGateway
       if (envEntry.flinkHome) envOverrides.flinkHome = envEntry.flinkHome
+      if (envEntry.services) envOverrides.services = envEntry.services
 
       merged = deepMerge(common, envOverrides)
     }
@@ -214,11 +222,37 @@ export function resolveConfigEffect(
 
     const defaultContext = runtime === "minikube" ? "minikube" : undefined
 
+    // Mirrors the services resolution + legacy back-fill in resolveConfig().
+    // See that function for case-by-case rationale.
+    const declaredServices = r.services as ServicesConfig | undefined
+    const legacyKafkaBootstrap = kafka?.bootstrapServers as string | undefined
+    let services: ResolvedServicesConfig
+    if (declaredServices !== undefined) {
+      if (legacyKafkaBootstrap !== undefined) {
+        warnOnce(
+          "kafka.bootstrapServers-with-services",
+          "`kafka.bootstrapServers` is set alongside `services` — the legacy " +
+            "field is ignored. Move the value into `services.kafka.bootstrapServers`.",
+        )
+      }
+      services = declaredServices as ResolvedServicesConfig
+    } else if (legacyKafkaBootstrap !== undefined) {
+      warnOnce(
+        "kafka.bootstrapServers-deprecated",
+        "`kafka.bootstrapServers` is deprecated. Move it under " +
+          "`services.kafka.bootstrapServers` in flink-reactor.config.ts. " +
+          "Auto-migrating for now.",
+      )
+      services = { kafka: { bootstrapServers: legacyKafkaBootstrap } }
+    } else {
+      services = {}
+    }
+
     return {
       flink: {
         version: ((flink?.version as string) ??
           config.flink?.version ??
-          "2.0") as ResolvedConfig["flink"]["version"],
+          "2.2") as ResolvedConfig["flink"]["version"],
       },
       cluster: {
         url: cluster?.url as string | undefined,
@@ -229,8 +263,12 @@ export function resolveConfigEffect(
         image: kubernetes?.image as string | undefined,
       },
       kafka: {
-        bootstrapServers: kafka?.bootstrapServers as string | undefined,
+        bootstrapServers:
+          (services.kafka
+            ? (services.kafka.bootstrapServers as string | undefined)
+            : undefined) ?? (kafka?.bootstrapServers as string | undefined),
       },
+      services,
       connectors: r.connectors as ResolvedConfig["connectors"],
       dashboard: {
         port: (dashboard?.port as number) ?? undefined,

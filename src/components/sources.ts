@@ -460,9 +460,14 @@ export interface FlussSourceProps<
  *
  * See https://fluss.apache.org/ for the underlying Apache Fluss connector
  * (project moved out of Alibaba into Apache Incubator in June 2025; the
- * canonical Maven coordinate is `org.apache.fluss:fluss-connector-flink`)
- * and the FlinkReactor docs Fluss-source operator page (forthcoming) for
+ * canonical Maven coordinate is `org.apache.fluss:fluss-flink-<flink-major>`,
+ * e.g. `fluss-flink-1.20` or `fluss-flink-2.2`) and the FlinkReactor docs
+ * Fluss-source operator page (forthcoming) for
  * the worked Stage-B serve-side pattern this component is built around.
+ *
+ * @see https://flink-reactor.dev/docs/templates/pg-fluss-paimon/serve — worked
+ *      walkthrough of `FlussSource` reading a PrimaryKey table inside the
+ *      `pg-fluss-paimon` template's serve pipeline.
  */
 export function FlussSource<T extends Record<string, FlinkType>>(
   props: FlussSourceProps<T>,

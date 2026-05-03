@@ -18,6 +18,9 @@ export function getRealtimeAnalyticsTemplates(
 export default defineConfig({
   flink: { version: '${opts.flinkVersion}' },
 
+  // Kafka for the source stream, Postgres for the JDBC sinks.
+  services: { kafka: {}, postgres: {} },
+
   environments: {
     minikube: {
       cluster: { url: 'http://localhost:8081' },

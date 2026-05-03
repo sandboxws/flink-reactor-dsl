@@ -4,9 +4,9 @@ metadata:
   name: flink-demo
   namespace: flink-demo
 spec:
-  image: flink-reactor:2.0.1
+  image: flink-reactor:2.2.0
   imagePullPolicy: Never
-  flinkVersion: v2_0
+  flinkVersion: v2_2
   flinkConfiguration:
     taskmanager.numberOfTaskSlots: "4"
     taskmanager.memory.managed.fraction: "0.1"

@@ -1,10 +1,10 @@
-FROM flink:2.0.1
+FROM flink:2.2.0
 
-# Download Kafka SQL connector (includes upsert-kafka) for Flink 2.0
+# Download Kafka SQL connector (includes upsert-kafka) for Flink 2.x (binary-compat across 2.0/2.1/2.2)
 RUN wget -q -P /opt/flink/lib/ \
   https://repo1.maven.org/maven2/org/apache/flink/flink-sql-connector-kafka/4.0.1-2.0/flink-sql-connector-kafka-4.0.1-2.0.jar
 
-# Download JDBC connector (core + PostgreSQL dialect) for Flink 2.0
+# Download JDBC connector (core + PostgreSQL dialect) for Flink 2.x (binary-compat across 2.0/2.1/2.2)
 RUN wget -q -P /opt/flink/lib/ \
   https://repo1.maven.org/maven2/org/apache/flink/flink-connector-jdbc-core/4.0.0-2.0/flink-connector-jdbc-core-4.0.0-2.0.jar \
   && wget -q -P /opt/flink/lib/ \
@@ -13,27 +13,31 @@ RUN wget -q -P /opt/flink/lib/ \
   https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.4/postgresql-42.7.4.jar
 
 # Download Iceberg Flink runtime + AWS bundle for S3FileIO.
-# Iceberg 1.10+ ships an iceberg-flink-runtime-2.0 artifact compatible with Flink 2.x;
-# the older iceberg-flink-runtime-1.20 silently fails to register the SPI factory on Flink 2.0.
+# Iceberg 1.10+ ships an iceberg-flink-runtime-2.0 artifact compatible with Flink 2.x
+# (forward-compatible to 2.2); the older iceberg-flink-runtime-1.20 silently fails to
+# register the SPI factory on Flink 2.x.
 RUN wget -q -P /opt/flink/lib/ \
   https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-flink-runtime-2.0/1.10.1/iceberg-flink-runtime-2.0-1.10.1.jar \
   && wget -q -P /opt/flink/lib/ \
   https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-aws-bundle/1.10.1/iceberg-aws-bundle-1.10.1.jar
 
 # Apache Fluss 0.9.0-incubating Flink connector — same coordinate as the
-# minikube bench image (`src/cli/sim/Dockerfile.flink-bench`). Incubating
-# artifacts may not be on Maven Central yet; fall back to
+# minikube bench image (`src/cli/sim/Dockerfile.flink-bench`). Apache Fluss
+# 0.9.0 publishes per-Flink-major artifacts (no `fluss-flink-2.0`); the
+# `fluss-flink-2.2` connector matches the `flink:2.2.0` base above.
+# Incubating artifacts publish to Maven Central — fall back to
 # https://repository.apache.org/content/repositories/releases/ if the wget
 # below 404s.
 RUN wget -q -P /opt/flink/lib/ \
-  https://repo1.maven.org/maven2/org/apache/fluss/fluss-connector-flink/0.9.0-incubating/fluss-connector-flink-0.9.0-incubating.jar
+  https://repo1.maven.org/maven2/org/apache/fluss/fluss-flink-2.2/0.9.0-incubating/fluss-flink-2.2-0.9.0-incubating.jar
 
-# Apache Paimon 1.0.0 Flink connector (Flink 2.x line). The registry-pinned
-# coordinate (`src/codegen/connector-registry.ts`) is the source of truth
-# for this version — keep both in lock-step. Identical version pin in
-# `src/cli/sim/Dockerfile.flink-bench` to prevent runtime/sim drift.
+# Apache Paimon 1.4.1 Flink connector (matches the flink:2.2 base). The
+# registry-pinned coordinate (`src/codegen/connector-registry.ts`) is the
+# source of truth for this version — keep both in lock-step. Identical
+# version pin in `src/cli/sim/Dockerfile.flink-bench` to prevent
+# runtime/sim drift.
 RUN wget -q -P /opt/flink/lib/ \
-  https://repo1.maven.org/maven2/org/apache/paimon/paimon-flink-2.0/1.0.0/paimon-flink-2.0-1.0.0.jar
+  https://repo1.maven.org/maven2/org/apache/paimon/paimon-flink-2.2/1.4.1/paimon-flink-2.2-1.4.1.jar
 
 # Hadoop client (api + runtime) — required by Iceberg FlinkCatalogFactory's
 # clusterHadoopConf() even when using a REST catalog with S3FileIO. These two
@@ -46,5 +50,5 @@ RUN wget -q -P /opt/flink/lib/ \
 # Flink S3 filesystem plugin (Hadoop flavor) — required for s3:// checkpoint/savepoint dirs.
 # Mounted as a Flink plugin so it doesn't leak into user classpath.
 RUN mkdir -p /opt/flink/plugins/s3-fs-hadoop \
-  && wget -q -O /opt/flink/plugins/s3-fs-hadoop/flink-s3-fs-hadoop-2.0.1.jar \
-  https://repo1.maven.org/maven2/org/apache/flink/flink-s3-fs-hadoop/2.0.1/flink-s3-fs-hadoop-2.0.1.jar
+  && wget -q -O /opt/flink/plugins/s3-fs-hadoop/flink-s3-fs-hadoop-2.2.0.jar \
+  https://repo1.maven.org/maven2/org/apache/flink/flink-s3-fs-hadoop/2.2.0/flink-s3-fs-hadoop-2.2.0.jar

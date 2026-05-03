@@ -210,6 +210,20 @@ export interface ResolverResult {
 }
 
 /**
+ * Walk a pipeline tree and return the de-duplicated set of connector IDs
+ * actually in use (after branch filtering). Lighter than `resolveConnectors`
+ * because it skips Maven resolution — meant for synth-time validators
+ * that only need to know "which connectors does this pipeline reference?"
+ */
+export function collectConnectorIds(pipelineNode: ConstructNode): Set<string> {
+  const isPipelineYamlBranch = hasPipelineConnectorSource(pipelineNode)
+  const usages = collectUsages(pipelineNode, isPipelineYamlBranch)
+  const ids = new Set<string>()
+  for (const u of usages) ids.add(u.connectorId)
+  return ids
+}
+
+/**
  * Walk the construct tree rooted at `pipelineNode`, collect all connector
  * and format usages, de-duplicate, and resolve to Maven JAR coordinates.
  */

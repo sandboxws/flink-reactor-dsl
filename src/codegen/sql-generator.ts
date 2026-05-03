@@ -62,7 +62,7 @@ export function hasPipelineConnectorSource(node: ConstructNode): boolean {
 // ever introduces reentrancy, `enterSynthesis()` will throw — that's a
 // tripwire, not a fix. The clean refactor is to pass a BuildContext as
 // the first argument to every helper here; that's tracked as a follow-up.
-let _synthVersion: FlinkMajorVersion = "2.0"
+let _synthVersion: FlinkMajorVersion = "2.2"
 let _fragments: SqlFragment[] | null = null
 let _synthDepth = 0
 
@@ -220,7 +220,7 @@ export function generateSql(
   pipelineNode: ConstructNode,
   options: GenerateSqlOptions = {},
 ): GenerateSqlResult {
-  const version = options.flinkVersion ?? "2.0"
+  const version = options.flinkVersion ?? "2.2"
   enterSynthesis(version)
   try {
     return generateSqlImpl(pipelineNode, options, version)
@@ -868,7 +868,7 @@ export function generateTapManifest(
     return { manifest: null, diagnostics: [] }
   }
 
-  const version = options.flinkVersion ?? "2.0"
+  const version = options.flinkVersion ?? "2.2"
   const devMode = options.devMode ?? false
   const pipelineName = (pipelineNode.props.name as string) ?? "unnamed"
 

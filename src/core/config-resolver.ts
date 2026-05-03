@@ -9,11 +9,14 @@ import type {
   InfraConfig,
   PipelineOverrides,
   Runtime,
+  ServicesConfig,
 } from "./config.js"
 import { SUPPORTED_RUNTIMES } from "./config.js"
 import type { Resolved } from "./env-var.js"
 import { resolveEnvVars } from "./env-var.js"
 import type { FlinkMajorVersion } from "./types.js"
+
+export type ResolvedServicesConfig = Resolved<ServicesConfig>
 
 // ── ResolvedConfig ──────────────────────────────────────────────────
 
@@ -33,6 +36,12 @@ export interface ResolvedConfig {
   readonly kafka: {
     readonly bootstrapServers?: string
   }
+  /**
+   * Resolved infrastructure services for this environment. Empty object
+   * `{}` means "always-on services only"; absent entries are not started.
+   * `cluster up` reads this directly to pick Compose profiles.
+   */
+  readonly services: ResolvedServicesConfig
   readonly connectors?: ConnectorConfig
   readonly dashboard: Resolved<DashboardSection>
   readonly console: {
@@ -44,6 +53,12 @@ export interface ResolvedConfig {
   readonly runtime: Runtime
   /** Runtimes reachable via `--runtime=<name>` override for this env. */
   readonly supportedRuntimes: readonly Runtime[]
+  /**
+   * Container engine pin for the docker lane. `undefined` means auto-detect
+   * at call time. The `--container-engine` flag and `FR_CONTAINER_ENGINE`
+   * env var still override this at the call site.
+   */
+  readonly containerEngine?: "auto" | "docker" | "podman"
   readonly kubectl: {
     readonly context?: string
   }
@@ -79,6 +94,33 @@ function defaultKubectlContextForRuntime(runtime: Runtime): string | undefined {
   // For `kubernetes` runtime, no sensible default exists — the adapter
   // errors at deploy time with a pointer to config if a context isn't set.
   return undefined
+}
+
+// ── One-shot warnings ───────────────────────────────────────────────
+// Deprecation warnings should fire once per process, not per
+// resolveConfig() call. The CLI calls resolveConfig multiple times
+// across the same project (status, up, deploy) so we de-dupe by key.
+
+const emittedWarnings = new Set<string>()
+
+function warnOnce(key: string, message: string): void {
+  if (emittedWarnings.has(key)) return
+  emittedWarnings.add(key)
+  // Direct console use: we deliberately bypass any logger here so the
+  // warning surfaces even in code paths that haven't wired logging yet.
+  // biome-ignore lint/suspicious/noConsole: deprecation warnings need to surface
+  console.warn(`[flink-reactor] ${message}`)
+}
+
+/**
+ * @internal Shared between the imperative and Effect-based resolvers so
+ * the same warning never fires twice across both paths in one process.
+ */
+export const __warnOnceForResolvers = warnOnce
+
+/** @internal Test-only hook to reset the warning de-dup set. */
+export function __resetDeprecationWarningsForTesting(): void {
+  emittedWarnings.clear()
 }
 
 // ── Deep merge utility ──────────────────────────────────────────────
@@ -135,6 +177,11 @@ export function resolveConfig(
     dashboard: config.dashboard ?? {},
     console: config.console ?? {},
     pipelines: {},
+    // Tracking presence vs `{}` separately matters for legacy back-fill:
+    // a project with no `services` block at all may still have a legacy
+    // `kafka.bootstrapServers` we want to honor, but a project that
+    // explicitly declared `services: {}` opted out and should be left alone.
+    services: config.services ?? undefined,
   }
 
   // Merge environment overrides if specified
@@ -162,6 +209,9 @@ export function resolveConfig(
     if (envEntry.kubectl) envOverrides.kubectl = envEntry.kubectl
     if (envEntry.sqlGateway) envOverrides.sqlGateway = envEntry.sqlGateway
     if (envEntry.flinkHome) envOverrides.flinkHome = envEntry.flinkHome
+    if (envEntry.containerEngine)
+      envOverrides.containerEngine = envEntry.containerEngine
+    if (envEntry.services) envOverrides.services = envEntry.services
 
     merged = deepMerge(common, envOverrides)
   }
@@ -207,11 +257,43 @@ export function resolveConfig(
     )
   }
 
+  // ── Services resolution + legacy back-fill ────────────────────────
+  // Three cases for `services`:
+  //   1. User declared a `services` block (possibly `{}`) → use it as-is.
+  //      The legacy `kafka.bootstrapServers` is ignored; warn if both set
+  //      since the legacy field will silently lose to the new one.
+  //   2. `services` is absent AND legacy `kafka.bootstrapServers` is set
+  //      → synthesize `services.kafka` from it; emit deprecation warning.
+  //   3. Both absent → `services: {}` (no infra services this project).
+  const declaredServices = resolved.services as ServicesConfig | undefined
+  const legacyKafkaBootstrap = kafka?.bootstrapServers as string | undefined
+  let services: ResolvedServicesConfig
+  if (declaredServices !== undefined) {
+    if (legacyKafkaBootstrap !== undefined) {
+      warnOnce(
+        "kafka.bootstrapServers-with-services",
+        "`kafka.bootstrapServers` is set alongside `services` — the legacy " +
+          "field is ignored. Move the value into `services.kafka.bootstrapServers`.",
+      )
+    }
+    services = declaredServices as ResolvedServicesConfig
+  } else if (legacyKafkaBootstrap !== undefined) {
+    warnOnce(
+      "kafka.bootstrapServers-deprecated",
+      "`kafka.bootstrapServers` is deprecated. Move it under " +
+        "`services.kafka.bootstrapServers` in flink-reactor.config.ts. " +
+        "Auto-migrating for now.",
+    )
+    services = { kafka: { bootstrapServers: legacyKafkaBootstrap } }
+  } else {
+    services = {}
+  }
+
   return {
     flink: {
       version: ((flink?.version as string) ??
         config.flink?.version ??
-        "2.0") as FlinkMajorVersion,
+        "2.2") as FlinkMajorVersion,
     },
     cluster: {
       url: cluster?.url as string | undefined,
@@ -222,8 +304,16 @@ export function resolveConfig(
       image: kubernetes?.image as string | undefined,
     },
     kafka: {
-      bootstrapServers: kafka?.bootstrapServers as string | undefined,
+      bootstrapServers:
+        // Prefer the resolved services entry; fall back to legacy. This
+        // keeps `resolved.kafka.bootstrapServers` accurate for callers
+        // that haven't migrated to reading `resolved.services` yet.
+        // Truthy check rejects both `undefined` (absent) and `false` (disabled).
+        (services.kafka
+          ? (services.kafka.bootstrapServers as string | undefined)
+          : undefined) ?? (kafka?.bootstrapServers as string | undefined),
     },
+    services,
     connectors: resolved.connectors as ConnectorConfig | undefined,
     dashboard: {
       port: (dashboard?.port as number) ?? undefined,
@@ -252,6 +342,11 @@ export function resolveConfig(
       url: sqlGateway?.url as string | undefined,
     },
     flinkHome: resolved.flinkHome as string | undefined,
+    containerEngine: resolved.containerEngine as
+      | "auto"
+      | "docker"
+      | "podman"
+      | undefined,
   }
 }
 

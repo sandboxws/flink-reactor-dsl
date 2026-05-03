@@ -1,4 +1,4 @@
-import { execSync, fork } from "node:child_process"
+import { execFileSync, execSync, fork } from "node:child_process"
 import {
   existsSync,
   readdirSync,
@@ -20,6 +20,20 @@ import {
   SAMPLE_DATABASES,
 } from "@/cli/cluster/pg-samples.js"
 import { runCommand } from "@/cli/effect-runner.js"
+import {
+  type ContainerEngineChoice,
+  ContainerEngineNotFoundError,
+  detectContainerEngine,
+  PodmanVersionTooOldError,
+  type ResolvedEngine,
+} from "@/cli/runtime/container-engine.js"
+import {
+  ALL_PROFILES,
+  buildComposeEnv,
+  type ComposeProfile,
+  profilesFromConfig,
+} from "@/cli/runtime/service-selection.js"
+import type { ResolvedConfig } from "@/core/config-resolver.js"
 import { CliError } from "@/core/errors.js"
 
 function pipelinesDir(): string {
@@ -39,6 +53,11 @@ export function registerClusterCommand(program: Command): void {
       "Docker-runtime shortcut (alias of `fr up --runtime=docker`). Provides Docker-specific extras: seed, submit, status.",
     )
 
+  const engineOption = new Option(
+    "--container-engine <name>",
+    "Container engine override (auto | docker | podman)",
+  ).choices(["auto", "docker", "podman"])
+
   cluster
     .command("up")
     .description(
@@ -52,12 +71,14 @@ export function registerClusterCommand(program: Command): void {
         .default("all"),
     )
     .option("--no-timescaledb", "Use plain PostgreSQL instead of TimescaleDB")
+    .addOption(engineOption)
     .action(
       async (opts: {
         port: string
         seed?: boolean
         domain: string
         timescaledb: boolean
+        containerEngine?: ContainerEngineChoice
       }) => {
         await runCommand(
           Effect.tryPromise({
@@ -67,6 +88,7 @@ export function registerClusterCommand(program: Command): void {
                 seed: opts.seed ?? false,
                 domain: opts.domain as CdcDomain,
                 timescaledb: opts.timescaledb,
+                containerEngine: opts.containerEngine,
               }),
             catch: (err) =>
               new CliError({
@@ -82,18 +104,28 @@ export function registerClusterCommand(program: Command): void {
     .command("down")
     .description("Stop local Flink cluster")
     .option("--volumes", "Remove Docker volumes (checkpoint and state data)")
-    .action(async (opts: { volumes?: boolean }) => {
-      await runCommand(
-        Effect.tryPromise({
-          try: () => runClusterDown({ volumes: opts.volumes ?? false }),
-          catch: (err) =>
-            new CliError({
-              reason: "invalid_args",
-              message: (err as Error).message,
-            }),
-        }),
-      )
-    })
+    .addOption(engineOption)
+    .action(
+      async (opts: {
+        volumes?: boolean
+        containerEngine?: ContainerEngineChoice
+      }) => {
+        await runCommand(
+          Effect.tryPromise({
+            try: () =>
+              runClusterDown({
+                volumes: opts.volumes ?? false,
+                containerEngine: opts.containerEngine,
+              }),
+            catch: (err) =>
+              new CliError({
+                reason: "invalid_args",
+                message: (err as Error).message,
+              }),
+          }),
+        )
+      },
+    )
 
   cluster
     .command("seed")
@@ -111,22 +143,30 @@ export function registerClusterCommand(program: Command): void {
         .choices(["ecommerce", "iot", "all"])
         .default("all"),
     )
-    .action(async (opts: { only?: string; domain: string }) => {
-      await runCommand(
-        Effect.tryPromise({
-          try: () =>
-            runClusterSeed({
-              only: opts.only as SeedCategory | undefined,
-              domain: opts.domain as CdcDomain,
-            }),
-          catch: (err) =>
-            new CliError({
-              reason: "invalid_args",
-              message: (err as Error).message,
-            }),
-        }),
-      )
-    })
+    .addOption(engineOption)
+    .action(
+      async (opts: {
+        only?: string
+        domain: string
+        containerEngine?: ContainerEngineChoice
+      }) => {
+        await runCommand(
+          Effect.tryPromise({
+            try: () =>
+              runClusterSeed({
+                only: opts.only as SeedCategory | undefined,
+                domain: opts.domain as CdcDomain,
+                containerEngine: opts.containerEngine,
+              }),
+            catch: (err) =>
+              new CliError({
+                reason: "invalid_args",
+                message: (err as Error).message,
+              }),
+          }),
+        )
+      },
+    )
 
   cluster
     .command("status")
@@ -163,89 +203,236 @@ export function registerClusterCommand(program: Command): void {
     })
 }
 
-// ── Postgres profile resolution ──────────────────────────────────────
+// ── Engine + config resolution ───────────────────────────────────────
 
-function resolvePostgresProfile(timescaledbFlag: boolean): string {
-  // CLI flag takes precedence; if flag is true (default), check env var
-  if (!timescaledbFlag) return "postgres-plain"
-  const envVal = process.env.TIMESCALEDB_ENABLED?.toLowerCase()
-  if (envVal === "false" || envVal === "0" || envVal === "no")
-    return "postgres-plain"
-  return "timescaledb"
+/**
+ * Resolve the container engine *and* the project's resolved config in a
+ * single pass. `cluster up` consumes both — the engine to run compose,
+ * the resolved config to decide which compose profiles to activate
+ * (driven by `services:` in flink-reactor.config.ts) and which init
+ * helpers to run.
+ *
+ * Engine resolution honors all four inputs: --container-engine flag →
+ * FR_CONTAINER_ENGINE env → config (`containerEngine` on the auto-
+ * selected environment) → auto-detect (docker, then podman ≥ 4.7).
+ *
+ * `resolved` is `undefined` when no flink-reactor.config.ts is found or
+ * the config is unparseable — callers treat that as "no services
+ * declared" and fall back to no-op defaults.
+ */
+async function resolveClusterContext(opts: {
+  containerEngine?: ContainerEngineChoice
+}): Promise<{ engine: ResolvedEngine; resolved: ResolvedConfig | undefined }> {
+  let resolved: ResolvedConfig | undefined
+  try {
+    const { loadConfig } = await import("@/cli/discovery.js")
+    const { resolveConfig } = await import("@/core/config-resolver.js")
+    const config = await loadConfig(process.cwd())
+    if (config?.environments && Object.keys(config.environments).length > 0) {
+      const envName = config.environments.development
+        ? "development"
+        : config.environments.docker
+          ? "docker"
+          : Object.keys(config.environments).sort()[0]
+      if (envName) {
+        resolved = resolveConfig(config, envName)
+      }
+    }
+  } catch {
+    // Config absent or unparseable — fall through.
+  }
+  const engine = await detectContainerEngine({
+    flag: opts.containerEngine,
+    configValue: resolved?.containerEngine,
+  })
+  return { engine, resolved }
+}
+
+function reportEngineError(err: unknown): void {
+  if (
+    err instanceof ContainerEngineNotFoundError ||
+    err instanceof PodmanVersionTooOldError
+  ) {
+    console.error(pc.red(err.message))
+    process.exitCode = 1
+    return
+  }
+  throw err
 }
 
 // ── cluster up ───────────────────────────────────────────────────────
+
+/**
+ * Apply the `--no-timescaledb` flag (deprecated) on top of the
+ * services-driven profile list. The flag wins over config because it's
+ * an explicit user override; we emit a one-time warning so users migrate
+ * to `services: { postgres: { flavor: 'plain' } }`.
+ */
+function applyTimescaledbFlag(
+  profiles: ComposeProfile[],
+  timescaledbFlag: boolean,
+): ComposeProfile[] {
+  if (timescaledbFlag) return profiles
+  console.log(
+    pc.yellow(
+      "  Warning: --no-timescaledb is deprecated. " +
+        "Set `services: { postgres: { flavor: 'plain' } }` in flink-reactor.config.ts.",
+    ),
+  )
+  const out = profiles.filter((p) => p !== "timescaledb")
+  if (!out.includes("postgres-plain")) out.push("postgres-plain")
+  return out
+}
 
 export async function runClusterUp(opts: {
   port: string
   seed: boolean
   domain?: CdcDomain
   timescaledb?: boolean
+  containerEngine?: ContainerEngineChoice
 }): Promise<void> {
   clack.intro(pc.bgCyan(pc.black(" flink-reactor cluster up ")))
 
-  // Pre-flight: Docker available?
-  if (!dockerAvailable()) {
-    console.error(pc.red("Docker is not installed or not running."))
-    console.error(pc.dim("Install Docker: https://docs.docker.com/get-docker/"))
-    process.exitCode = 1
+  // Pre-flight: resolve the container engine and project config in one pass.
+  let engine: ResolvedEngine
+  let resolved: ResolvedConfig | undefined
+  try {
+    ;({ engine, resolved } = await resolveClusterContext({
+      containerEngine: opts.containerEngine,
+    }))
+  } catch (err) {
+    reportEngineError(err)
     return
   }
+  const engineSourceLabel =
+    engine.source === "auto" ? "auto-detected" : `from ${engine.source}`
+  const dockerHost = engine.composeEnv().DOCKER_HOST
+  console.log(
+    pc.dim(
+      `  Container engine: ${engine.name} (${engineSourceLabel})${
+        dockerHost ? ` · ${dockerHost}` : ""
+      }`,
+    ),
+  )
 
   const compose = bundledComposePath()
   const dataDir = join(clusterDir(), "data")
-  const pgProfile = resolvePostgresProfile(opts.timescaledb ?? true)
 
-  // Copy sample data to a Docker-accessible volume path
+  // Profiles come from `services:` in flink-reactor.config.ts. Empty
+  // when no config or no services declared — only always-on services
+  // (Flink core, SeaweedFS, SQL Gateway) start.
+  let profiles: ComposeProfile[] = resolved ? profilesFromConfig(resolved) : []
+  profiles = applyTimescaledbFlag(profiles, opts.timescaledb ?? true)
+
+  const composeEnv = buildComposeEnv(resolved?.services)
+  const profileArgs = profiles.flatMap((p) => ["--profile", p])
+  const profileSummary =
+    profiles.length > 0
+      ? `profiles: ${profiles.join(", ")}`
+      : "always-on services only"
+
   const spinner = clack.spinner()
   spinner.start(
-    `Building Flink image and starting services (PostgreSQL: ${pgProfile === "timescaledb" ? "TimescaleDB" : "plain"})...`,
+    `Building Flink image and starting services (${profileSummary})...`,
   )
 
   try {
-    execSync(
-      `docker compose -f "${compose}" --profile ${pgProfile} up --build -d`,
+    execFileSync(
+      engine.bin,
+      [
+        ...engine.composeArgv([
+          "-f",
+          compose,
+          ...profileArgs,
+          "up",
+          "--build",
+          "-d",
+        ]),
+      ],
       {
         cwd: clusterDir(),
         stdio: "pipe",
-        env: { ...process.env, FLINK_PORT: opts.port },
+        env: {
+          ...process.env,
+          ...engine.composeEnv(),
+          ...composeEnv,
+          FLINK_PORT: opts.port,
+          FR_CONTAINER_ENGINE: engine.name,
+        },
       },
     )
 
     // Copy sample CSV into the flink-data volume via the jobmanager container
     try {
-      execSync(
-        `docker compose -f "${compose}" exec -T jobmanager mkdir -p /opt/flink/data`,
-        { cwd: clusterDir(), stdio: "pipe" },
+      const composeChildEnv = { ...process.env, ...engine.composeEnv() }
+      execFileSync(
+        engine.bin,
+        [
+          ...engine.composeArgv([
+            "-f",
+            compose,
+            "exec",
+            "-T",
+            "jobmanager",
+            "mkdir",
+            "-p",
+            "/opt/flink/data",
+          ]),
+        ],
+        { cwd: clusterDir(), stdio: "pipe", env: composeChildEnv },
       )
-      execSync(
-        `docker compose -f "${compose}" cp "${join(dataDir, "sample-transactions.csv")}" jobmanager:/opt/flink/data/sample-transactions.csv`,
-        { cwd: clusterDir(), stdio: "pipe" },
+      execFileSync(
+        engine.bin,
+        [
+          ...engine.composeArgv([
+            "-f",
+            compose,
+            "cp",
+            join(dataDir, "sample-transactions.csv"),
+            "jobmanager:/opt/flink/data/sample-transactions.csv",
+          ]),
+        ],
+        { cwd: clusterDir(), stdio: "pipe", env: composeChildEnv },
       )
     } catch {
       // Non-critical: filesystem batch job will fail but others work fine
     }
 
-    spinner.stop(pc.green("Docker services started."))
+    spinner.stop(pc.green(`${engine.name} services started.`))
   } catch (err) {
-    spinner.stop(pc.red("Failed to start Docker services."))
+    spinner.stop(pc.red(`Failed to start ${engine.name} services.`))
     if (err instanceof Error) {
       console.error(pc.dim(err.message))
+      // Container-name collisions across engines are a common gotcha when
+      // switching between docker and podman: each engine maintains its own
+      // state, but the named containers conflict.
+      if (/already in use|name.*already|conflict/i.test(err.message)) {
+        console.error(
+          pc.dim(
+            "Hint: if switching between docker and podman, run `fr cluster down` with the previous engine to remove orphaned containers.",
+          ),
+        )
+      }
     }
     process.exitCode = 1
     return
   }
 
-  // Wait for services to be healthy
+  // Wait for services to be healthy. Only check ports for services we
+  // actually started — checking Kafka when its profile is dormant would
+  // timeout because the container isn't running.
+  const hasPostgres =
+    profiles.includes("timescaledb") || profiles.includes("postgres-plain")
   const { waitForServices } = await import("@/cli/cluster/health-check.js")
   try {
     await waitForServices({
       flinkPort: parseInt(opts.port, 10),
       sqlGatewayPort: 8083,
-      kafkaPort: 9094,
-      postgresPort: 5433,
+      kafkaPort: profiles.includes("kafka") ? 9094 : undefined,
+      postgresPort: hasPostgres ? 5433 : undefined,
       seaweedfsPort: 8333,
-      icebergRestPort: 8181,
+      icebergRestPort: profiles.includes("iceberg") ? 8181 : undefined,
+      flussPort: profiles.includes("fluss") ? 9123 : undefined,
     })
   } catch {
     console.error(pc.red("Services did not become ready in time."))
@@ -254,12 +441,27 @@ export async function runClusterUp(opts: {
     return
   }
 
-  // Initialize PostgreSQL databases (idempotent — skips if already exist)
-  const pgService = pgProfile === "timescaledb" ? "postgres" : "postgres-plain"
-  await initPostgresDatabases(compose, pgService, pgProfile === "timescaledb")
+  // Initialize PostgreSQL databases — only when a postgres profile is
+  // active. Idempotent — skips if databases already exist.
+  if (hasPostgres) {
+    const pgService = profiles.includes("timescaledb")
+      ? "postgres"
+      : "postgres-plain"
+    await initPostgresDatabases(
+      engine,
+      compose,
+      pgService,
+      profiles.includes("timescaledb"),
+    )
+  }
 
-  // Initialize Flink SQL catalogs and tables from project config
-  await initFlinkCatalogs(parseInt(opts.port, 10))
+  // Initialize Flink SQL catalogs and tables from project config. The
+  // helper itself further gates Iceberg/Fluss/Paimon DDL on whether
+  // those profiles are active.
+  await initFlinkCatalogs(parseInt(opts.port, 10), {
+    iceberg: profiles.includes("iceberg"),
+    fluss: profiles.includes("fluss"),
+  })
 
   console.log("")
   console.log(
@@ -268,23 +470,36 @@ export async function runClusterUp(opts: {
   console.log(
     `  ${pc.green("✓")} SQL Gateway:    ${pc.dim("http://localhost:8083")}`,
   )
-  console.log(`  ${pc.green("✓")} Kafka:          ${pc.dim("localhost:9094")}`)
-  console.log(
-    `  ${pc.green("✓")} PostgreSQL:     ${pc.dim("localhost:5433 (pagila, chinook, employees, flink_sink)")}`,
-  )
+  if (profiles.includes("kafka")) {
+    console.log(
+      `  ${pc.green("✓")} Kafka:          ${pc.dim("localhost:9094")}`,
+    )
+  }
+  if (hasPostgres) {
+    console.log(
+      `  ${pc.green("✓")} PostgreSQL:     ${pc.dim("localhost:5433 (pagila, chinook, employees, flink_sink)")}`,
+    )
+  }
   console.log(
     `  ${pc.green("✓")} SeaweedFS (S3): ${pc.dim("http://localhost:8333 (admin/admin, bucket: flink-state)")}`,
   )
   console.log(
     `  ${pc.green("✓")} SeaweedFS UI:   ${pc.dim("http://localhost:9333 (master) · http://localhost:8888 (filer)")}`,
   )
-  console.log(
-    `  ${pc.green("✓")} Iceberg UI:     ${pc.dim("http://lakekeeper.localtest.me:8181/ui (Lakekeeper) · API: /catalog/v1")}`,
-  )
+  if (profiles.includes("iceberg")) {
+    console.log(
+      `  ${pc.green("✓")} Iceberg UI:     ${pc.dim("http://lakekeeper.localtest.me:8181/ui (Lakekeeper) · API: /catalog/v1")}`,
+    )
+  }
+  if (profiles.includes("fluss")) {
+    console.log(
+      `  ${pc.green("✓")} Fluss:          ${pc.dim("localhost:9123 (coordinator)")}`,
+    )
+  }
   console.log("")
 
   if (opts.seed) {
-    await seedPipelines({ domain: opts.domain })
+    await seedPipelines({ domain: opts.domain }, engine, resolved)
   }
 
   clack.outro(pc.green("Cluster is ready!"))
@@ -294,34 +509,43 @@ export async function runClusterUp(opts: {
 
 export async function runClusterDown(opts: {
   volumes: boolean
+  containerEngine?: ContainerEngineChoice
 }): Promise<void> {
   clack.intro(pc.bgCyan(pc.black(" flink-reactor cluster down ")))
 
   // Kill background CDC publisher if running
   killCdcPublisher()
 
+  let engine: ResolvedEngine
+  try {
+    ;({ engine } = await resolveClusterContext({
+      containerEngine: opts.containerEngine,
+    }))
+  } catch (err) {
+    reportEngineError(err)
+    return
+  }
+
   const compose = bundledComposePath()
-  const args = [
-    "compose",
-    "-f",
-    compose,
-    "--profile",
-    "timescaledb",
-    "--profile",
-    "postgres-plain",
-    "down",
-  ]
+  // Always pass *every* profile here — `down` must be exhaustive so
+  // dormant containers (started under a different config that we've
+  // since edited away) get cleaned up too. Sourced from the single
+  // `ALL_PROFILES` constant so adding a new profile elsewhere
+  // automatically threads through here.
+  const allProfileArgs = ALL_PROFILES.flatMap((p) => ["--profile", p])
+  const composeArgs: string[] = ["-f", compose, ...allProfileArgs, "down"]
   if (opts.volumes) {
-    args.push("-v")
+    composeArgs.push("-v")
   }
 
   const spinner = clack.spinner()
   spinner.start("Stopping cluster...")
 
   try {
-    execSync(`docker ${args.join(" ")}`, {
+    execFileSync(engine.bin, [...engine.composeArgv(composeArgs)], {
       cwd: clusterDir(),
       stdio: "pipe",
+      env: { ...process.env, ...engine.composeEnv() },
     })
     spinner.stop(
       pc.green(
@@ -344,8 +568,20 @@ type SeedCategory = "streaming" | "batch" | "cdc" | "cdc-kafka"
 export async function runClusterSeed(opts: {
   only?: SeedCategory
   domain?: CdcDomain
+  containerEngine?: ContainerEngineChoice
 }): Promise<void> {
   clack.intro(pc.bgCyan(pc.black(" flink-reactor cluster seed ")))
+
+  let engine: ResolvedEngine
+  let resolved: ResolvedConfig | undefined
+  try {
+    ;({ engine, resolved } = await resolveClusterContext({
+      containerEngine: opts.containerEngine,
+    }))
+  } catch (err) {
+    reportEngineError(err)
+    return
+  }
 
   const { isClusterRunning } = await import("@/cli/cluster/health-check.js")
   if (!(await isClusterRunning(8081))) {
@@ -355,23 +591,34 @@ export async function runClusterSeed(opts: {
     return
   }
 
-  await seedPipelines(opts)
+  await seedPipelines(opts, engine, resolved)
   clack.outro(pc.green("Seeding complete!"))
 }
 
-async function seedPipelines(opts: {
-  only?: SeedCategory
-  domain?: CdcDomain
-}): Promise<void> {
+async function seedPipelines(
+  opts: {
+    only?: SeedCategory
+    domain?: CdcDomain
+  },
+  engine: ResolvedEngine,
+  resolved: ResolvedConfig | undefined,
+): Promise<void> {
   const { publishCdcMessages } = await import("@/cli/cluster/cdc-publisher.js")
 
   const category = opts.only
   const domain = opts.domain ?? "all"
+  // Kafka-publishing CDC steps require `services.kafka` to be declared.
+  // When it's not, `cluster up` never started Kafka — silently skip
+  // rather than hammer a non-existent container with retries.
+  const kafkaEnabled = resolved
+    ? !!profilesFromConfig(resolved).includes("kafka")
+    : true
   const publishCdc =
-    !category ||
-    category === "cdc" ||
-    category === "cdc-kafka" ||
-    category === "streaming"
+    kafkaEnabled &&
+    (!category ||
+      category === "cdc" ||
+      category === "cdc-kafka" ||
+      category === "streaming")
 
   // Step 1: Publish CDC batch data (needed before CDC pipelines)
   if (publishCdc) {
@@ -463,7 +710,7 @@ async function seedPipelines(opts: {
 
   // Step 3: Start continuous CDC publisher in background
   if (publishCdc) {
-    startBackgroundCdcPublisher(domain)
+    startBackgroundCdcPublisher(domain, engine)
   }
 }
 
@@ -634,7 +881,10 @@ export async function runClusterSubmit(
 
 // ── Background CDC publisher ─────────────────────────────────────────
 
-function startBackgroundCdcPublisher(domain: CdcDomain = "all"): void {
+function startBackgroundCdcPublisher(
+  domain: CdcDomain = "all",
+  engine: ResolvedEngine,
+): void {
   // Write a small inline script that imports and runs the continuous publisher
   // Fork it as a detached child process
   const scriptPath = join(tmpdir(), "flink-reactor-cdc-continuous.mjs")
@@ -654,9 +904,18 @@ publishCdcMessages({ mode: 'continuous', domain: '${domain}', composeFile: '${co
   )
 
   try {
+    // Pin the child process to the same engine via env var so it doesn't
+    // re-detect (and potentially pick a different one if both are installed).
+    // Also propagate DOCKER_HOST so the docker-compose provider talks to the
+    // podman socket — the child wouldn't get this otherwise.
     const child = fork(scriptPath, [], {
       detached: true,
       stdio: "ignore",
+      env: {
+        ...process.env,
+        ...engine.composeEnv(),
+        FR_CONTAINER_ENGINE: engine.name,
+      },
     })
     child.unref()
 
@@ -696,7 +955,13 @@ function initSqlPath(): string {
   return join(tmpdir(), "flink-reactor-init.sql")
 }
 
-async function initFlinkCatalogs(_flinkPort: number): Promise<void> {
+async function initFlinkCatalogs(
+  _flinkPort: number,
+  enabledServices: { iceberg: boolean; fluss: boolean } = {
+    iceberg: true,
+    fluss: true,
+  },
+): Promise<void> {
   const { loadConfig } = await import("@/cli/discovery.js")
   const { generateInitSql } = await import("@/cli/cluster/init-sql.js")
 
@@ -735,26 +1000,35 @@ async function initFlinkCatalogs(_flinkPort: number): Promise<void> {
       includeBuiltinJdbc: true,
     })
 
+    // Iceberg/Fluss/Paimon DDL is skipped when their compose profiles
+    // weren't activated — no point creating CREATE CATALOG statements
+    // pointing at services that aren't running. Paimon piggybacks on
+    // Fluss because `pg-fluss-paimon` always runs them together; if we
+    // ever split them, plumb a separate flag.
     const { icebergInitStatements } = await import(
       "@/cli/cluster/iceberg-init.js"
     )
-    const icebergDdl = icebergInitStatements(
-      initConfig?.iceberg?.databases ?? [],
-    )
+    const icebergDdl = enabledServices.iceberg
+      ? icebergInitStatements(initConfig?.iceberg?.databases ?? [])
+      : []
 
     const { flussInitStatements } = await import("@/cli/cluster/fluss-init.js")
-    const flussDdl = flussInitStatements(
-      initConfig?.fluss?.databases ?? [],
-      initConfig?.fluss?.bootstrapServers ?? "fluss-coordinator:9123",
-    )
+    const flussDdl = enabledServices.fluss
+      ? flussInitStatements(
+          initConfig?.fluss?.databases ?? [],
+          initConfig?.fluss?.bootstrapServers ?? "fluss-coordinator:9123",
+        )
+      : []
 
     const { paimonInitStatements } = await import(
       "@/cli/cluster/paimon-init.js"
     )
-    const paimonDdl = paimonInitStatements(
-      initConfig?.paimon?.databases ?? [],
-      initConfig?.paimon?.warehouse,
-    )
+    const paimonDdl = enabledServices.fluss
+      ? paimonInitStatements(
+          initConfig?.paimon?.databases ?? [],
+          initConfig?.paimon?.warehouse,
+        )
+      : []
 
     if (
       result.ddl.length === 0 &&
@@ -863,6 +1137,7 @@ async function initFlinkCatalogs(_flinkPort: number): Promise<void> {
 const EMPTY_DATABASES = ["flink_sink"] as const
 
 async function initPostgresDatabases(
+  engine: ResolvedEngine,
   compose: string,
   pgService: string = "postgres",
   timescaledb: boolean = false,
@@ -876,10 +1151,22 @@ async function initPostgresDatabases(
   spinner.start("Initializing PostgreSQL databases...")
 
   const cwd = clusterDir()
+  const composeChildEnv = { ...process.env, ...engine.composeEnv() }
   const psql = (db: string, sql: string) =>
     execSync(
-      `docker compose -f "${compose}" exec -T ${pgService} psql -U reactor -d ${db} -c ${JSON.stringify(sql)}`,
-      { cwd, stdio: "pipe" },
+      engine.composeCommand(compose, [
+        "exec",
+        "-T",
+        pgService,
+        "psql",
+        "-U",
+        "reactor",
+        "-d",
+        db,
+        "-c",
+        JSON.stringify(sql),
+      ]),
+      { cwd, stdio: "pipe", env: composeChildEnv },
     )
 
   try {
@@ -908,8 +1195,19 @@ async function initPostgresDatabases(
     for (const db of SAMPLE_DATABASES) {
       const schema = DB_SCHEMA[db]
       const result = execSync(
-        `docker compose -f "${compose}" exec -T ${pgService} psql -U reactor -d ${db} -tAc "SELECT count(*) FROM information_schema.tables WHERE table_schema = '${schema}'"`,
-        { cwd, stdio: "pipe" },
+        engine.composeCommand(compose, [
+          "exec",
+          "-T",
+          pgService,
+          "psql",
+          "-U",
+          "reactor",
+          "-d",
+          db,
+          "-tAc",
+          `"SELECT count(*) FROM information_schema.tables WHERE table_schema = '${schema}'"`,
+        ]),
+        { cwd, stdio: "pipe", env: composeChildEnv },
       )
       const tableCount = parseInt(result.toString().trim(), 10)
 
@@ -919,13 +1217,40 @@ async function initPostgresDatabases(
           spinner.message(`Skipping ${db} (dump not found)...`)
           continue
         }
-        execSync(
-          `docker compose -f "${compose}" cp "${sqlFile}" ${pgService}:/tmp/${db}.sql`,
-          { cwd, stdio: "pipe" },
+        execFileSync(
+          engine.bin,
+          [
+            ...engine.composeArgv([
+              "-f",
+              compose,
+              "cp",
+              sqlFile,
+              `${pgService}:/tmp/${db}.sql`,
+            ]),
+          ],
+          { cwd, stdio: "pipe", env: composeChildEnv },
         )
-        execSync(
-          `docker compose -f "${compose}" exec -T ${pgService} psql -v ON_ERROR_STOP=1 -U reactor -d ${db} -f /tmp/${db}.sql`,
-          { cwd, stdio: "pipe", timeout: 120_000 },
+        execFileSync(
+          engine.bin,
+          [
+            ...engine.composeArgv([
+              "-f",
+              compose,
+              "exec",
+              "-T",
+              pgService,
+              "psql",
+              "-v",
+              "ON_ERROR_STOP=1",
+              "-U",
+              "reactor",
+              "-d",
+              db,
+              "-f",
+              `/tmp/${db}.sql`,
+            ]),
+          ],
+          { cwd, stdio: "pipe", timeout: 120_000, env: composeChildEnv },
         )
         spinner.message(`Loaded ${db} dataset...`)
       }
@@ -941,15 +1266,6 @@ async function initPostgresDatabases(
 }
 
 // ── Utilities ────────────────────────────────────────────────────────
-
-function dockerAvailable(): boolean {
-  try {
-    execSync("docker info", { stdio: "pipe" })
-    return true
-  } catch {
-    return false
-  }
-}
 
 function padRight(str: string, len: number): string {
   return str.length >= len

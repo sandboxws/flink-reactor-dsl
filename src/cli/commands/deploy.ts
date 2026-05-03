@@ -1,8 +1,9 @@
-import type { Command } from "commander"
+import { type Command, Option } from "commander"
 import { Effect } from "effect"
 import pc from "picocolors"
 import { resolveProjectContext } from "@/cli/discovery.js"
 import { runCommand } from "@/cli/effect-runner.js"
+import type { ContainerEngineChoice } from "@/cli/runtime/container-engine.js"
 import { selectAdapter } from "@/cli/runtime/index.js"
 import type { Runtime } from "@/core/config.js"
 import { CliError } from "@/core/errors.js"
@@ -23,6 +24,12 @@ export function registerDeployCommand(program: Command): void {
       "--runtime <name>",
       "Override the env's runtime (docker | minikube | homebrew | kubernetes)",
     )
+    .addOption(
+      new Option(
+        "--container-engine <name>",
+        "Container engine override for the docker lane (auto | docker | podman)",
+      ).choices(["auto", "docker", "podman"]),
+    )
     .option("--context <context>", "kubectl context (overrides env config)")
     .option(
       "--console-url <url>",
@@ -34,6 +41,7 @@ export function registerDeployCommand(program: Command): void {
         env?: string
         dryRun?: boolean
         runtime?: string
+        containerEngine?: ContainerEngineChoice
         context?: string
         consoleUrl?: string
       }) => {

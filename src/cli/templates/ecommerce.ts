@@ -16,6 +16,9 @@ export function getEcommerceTemplates(opts: ScaffoldOptions): TemplateFile[] {
 export default defineConfig({
   flink: { version: '${opts.flinkVersion}' },
 
+  // Kafka for events; Postgres for the JDBC dim/fact sinks the pipelines write to.
+  services: { kafka: {}, postgres: {} },
+
   environments: {
     minikube: {
       cluster: { url: 'http://localhost:8081' },

@@ -13,9 +13,7 @@ import { registerStopCommand } from "@/cli/commands/stop.js"
 // names registered. Catches regressions like accidental option
 // renames or removed flags without spinning up a runtime.
 
-interface RegisterFn {
-  (program: Command): void
-}
+type RegisterFn = (program: Command) => void
 
 function freshProgram(): Command {
   return new Command().exitOverride().configureOutput({

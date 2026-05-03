@@ -3,14 +3,14 @@
 #
 # Build (from flink-reactor-dsl repo root):
 #   eval $(minikube docker-env)
-#   docker build -t flink-reactor:2.0.1 -f src/cli/cluster/Dockerfile.flink .
-#   docker build -t flink-reactor-s3:2.0.1 -f /path/to/Dockerfile.flink-s3 .
+#   docker build -t flink-reactor:2.2.0 -f src/cli/cluster/Dockerfile.flink .
+#   docker build -t flink-reactor-s3:2.2.0 -f /path/to/Dockerfile.flink-s3 .
 #
 # Multi-platform (Apple Silicon / x86_64):
-#   docker build -t flink-reactor-s3:2.0.1 --platform linux/arm64 -f Dockerfile.flink-s3 .
-#   docker build -t flink-reactor-s3:2.0.1 --platform linux/amd64 -f Dockerfile.flink-s3 .
+#   docker build -t flink-reactor-s3:2.2.0 --platform linux/arm64 -f Dockerfile.flink-s3 .
+#   docker build -t flink-reactor-s3:2.2.0 --platform linux/amd64 -f Dockerfile.flink-s3 .
 
-FROM flink-reactor:2.0.1
+FROM flink-reactor:2.2.0
 
 # Enable the S3 Hadoop filesystem plugin for checkpoint I/O
 RUN mkdir -p /opt/flink/plugins/s3-fs-hadoop && \

@@ -505,13 +505,13 @@ describe("FlussSink branch-aware artifact resolution", () => {
       children: [catalog.node, sink],
     })
 
-    const result = resolveConnectors(pipeline, { flinkVersion: "2.0" })
+    const result = resolveConnectors(pipeline, { flinkVersion: "2.2" })
     const artifactIds = result.jars.map((j) => j.artifact.artifactId)
     expect(artifactIds).toContain("flink-cdc-pipeline-connector-postgres")
     expect(artifactIds).toContain("flink-cdc-pipeline-connector-fluss")
     // Critical: the SQL-branch Fluss connector must NOT leak into a
     // Pipeline-YAML pipeline — that would produce a classpath collision.
-    expect(artifactIds).not.toContain("fluss-connector-flink")
+    expect(artifactIds).not.toContain("fluss-flink-2.2")
     expect(result.conflicts).toHaveLength(0)
   })
 
@@ -540,9 +540,9 @@ describe("FlussSink branch-aware artifact resolution", () => {
       children: [catalog.node, sink],
     })
 
-    const result = resolveConnectors(pipeline, { flinkVersion: "2.0" })
-    const sqlFluss = result.jars.find(
-      (j) => j.artifact.artifactId === "fluss-connector-flink",
+    const result = resolveConnectors(pipeline, { flinkVersion: "2.2" })
+    const sqlFluss = result.jars.find((j) =>
+      j.artifact.artifactId.startsWith("fluss-flink-"),
     )
     expect(sqlFluss).toBeUndefined()
   })
@@ -574,30 +574,40 @@ describe("FlussSink branch-aware artifact resolution", () => {
       children: [catalog.node, sink],
     })
 
-    const result = resolveConnectors(pipeline, { flinkVersion: "2.0" })
+    const result = resolveConnectors(pipeline, { flinkVersion: "2.2" })
     const artifactIds = result.jars.map((j) => j.artifact.artifactId)
-    expect(artifactIds).toContain("fluss-connector-flink")
+    expect(artifactIds).toContain("fluss-flink-2.2")
     expect(artifactIds).not.toContain("flink-cdc-pipeline-connector-fluss")
   })
 })
 
-// ── Apache Fluss 0.9.0-incubating GAV (change 45) ────────────────────
+// ── Apache Fluss 0.9.0-incubating GAV ────────────────────────────────
 
 describe("Fluss connector registry GAV", () => {
-  const APACHE_FLUSS = {
-    groupId: "org.apache.fluss",
-    artifactId: "fluss-connector-flink",
-    version: "0.9.0-incubating",
-  }
+  it("resolves fluss-flink-1.20 at Flink 1.20", () => {
+    const artifacts = resolveConnectorArtifacts("fluss", "1.20")
+    expect(artifacts).toContainEqual({
+      groupId: "org.apache.fluss",
+      artifactId: "fluss-flink-1.20",
+      version: "0.9.0-incubating",
+    })
+  })
+
+  it("resolves fluss-flink-2.2 at Flink 2.2", () => {
+    const artifacts = resolveConnectorArtifacts("fluss", "2.2")
+    expect(artifacts).toContainEqual({
+      groupId: "org.apache.fluss",
+      artifactId: "fluss-flink-2.2",
+      version: "0.9.0-incubating",
+    })
+  })
 
   it.each([
-    "1.20",
     "2.0",
     "2.1",
-    "2.2",
-  ] as const)("resolves the Apache GAV at Flink %s", (flinkVersion) => {
+  ] as const)("returns empty at Flink %s (Fluss 0.9.0 publishes only 1.20 and 2.2 artifacts)", (flinkVersion) => {
     const artifacts = resolveConnectorArtifacts("fluss", flinkVersion)
-    expect(artifacts).toContainEqual(APACHE_FLUSS)
+    expect(artifacts).toHaveLength(0)
   })
 
   it("does not resolve the deprecated Alibaba 0.6.0 coordinate", () => {

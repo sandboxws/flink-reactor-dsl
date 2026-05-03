@@ -1,15 +1,20 @@
 import type { ProjectContext } from "@/cli/discovery.js"
 import type { Runtime } from "@/core/config.js"
+import type { ContainerEngineChoice } from "./container-engine.js"
 
 export interface UpOptions {
   readonly port?: string
   readonly seed?: boolean
+  /** Override container engine (only honored by the docker adapter). */
+  readonly containerEngine?: ContainerEngineChoice
 }
 
 export interface DownOptions {
   readonly volumes?: boolean
   /** Stop the underlying VM (minikube) / full teardown. */
   readonly all?: boolean
+  /** Override container engine (only honored by the docker adapter). */
+  readonly containerEngine?: ContainerEngineChoice
 }
 
 export interface DeployOptions {

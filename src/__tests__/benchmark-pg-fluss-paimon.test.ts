@@ -14,7 +14,7 @@ import servePipeline, {
   type ServeMergeEngine,
 } from "../../pipelines/pg-fluss-paimon/serve.js"
 
-const FLINK_VERSION: FlinkMajorVersion = "2.0"
+const FLINK_VERSION: FlinkMajorVersion = "2.2"
 
 function jarCoordinates(
   jars: ReturnType<typeof resolveConnectors>["jars"],
@@ -73,7 +73,7 @@ describe("pg-fluss-paimon-ingest (Pipeline-YAML branch)", () => {
     const ids = jars.map((j) => j.artifact.artifactId)
     expect(ids).toContain("flink-cdc-pipeline-connector-postgres")
     expect(ids).toContain("flink-cdc-pipeline-connector-fluss")
-    expect(ids).not.toContain("fluss-connector-flink")
+    expect(ids).not.toContain("fluss-flink-2.2")
   })
 
   it("emits schema.evolution.behavior: lenient on the Fluss sink stanza", () => {
@@ -142,9 +142,7 @@ describe("pg-fluss-paimon-serve (Flink-SQL branch)", () => {
       commitMode: "throughput",
     })
     const { jars } = resolveConnectors(node, { flinkVersion: FLINK_VERSION })
-    const fluss = jars.find(
-      (j) => j.artifact.artifactId === "fluss-connector-flink",
-    )
+    const fluss = jars.find((j) => j.artifact.artifactId === "fluss-flink-2.2")
     expect(fluss?.artifact.groupId).toBe("org.apache.fluss")
     expect(fluss?.artifact.version).toBe("0.9.0-incubating")
   })
@@ -155,9 +153,9 @@ describe("pg-fluss-paimon-serve (Flink-SQL branch)", () => {
       commitMode: "throughput",
     })
 
-    const flink20 = resolveConnectors(node, { flinkVersion: "2.0" })
-    expect(flink20.jars.map((j) => j.artifact.artifactId)).toContain(
-      "paimon-flink-2.0",
+    const flink22 = resolveConnectors(node, { flinkVersion: "2.2" })
+    expect(flink22.jars.map((j) => j.artifact.artifactId)).toContain(
+      "paimon-flink-2.2",
     )
 
     const flink120 = resolveConnectors(node, { flinkVersion: "1.20" })

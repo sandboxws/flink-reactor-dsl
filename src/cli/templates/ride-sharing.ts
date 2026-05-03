@@ -16,6 +16,9 @@ export function getRideSharingTemplates(opts: ScaffoldOptions): TemplateFile[] {
 export default defineConfig({
   flink: { version: '${opts.flinkVersion}' },
 
+  // Kafka for the request stream; Postgres for the JDBC sinks (surge + alerts).
+  services: { kafka: {}, postgres: {} },
+
   environments: {
     minikube: {
       cluster: { url: 'http://localhost:8081' },

@@ -8,6 +8,7 @@ import { Effect } from "effect"
 import pc from "picocolors"
 import { loadConfig } from "@/cli/discovery.js"
 import { runCommand } from "@/cli/effect-runner.js"
+import { detectContainerEngine } from "@/cli/runtime/container-engine.js"
 import type { SimInitConfig } from "@/core/config.js"
 import { CliError } from "@/core/errors.js"
 
@@ -346,28 +347,52 @@ export async function runSimUp(opts: {
 
     const buildSpinner = clack.spinner()
     buildSpinner.start("Building pg-init image...")
-    try {
-      const dockerEnvOut = execSync("minikube docker-env --shell bash", {
-        stdio: "pipe",
-        encoding: "utf-8",
-      })
-      const envVars: Record<string, string> = {}
-      for (const match of dockerEnvOut.matchAll(/export (\w+)="([^"]+)"/g)) {
-        envVars[match[1]] = match[2]
-      }
 
-      execSync(
-        `docker build -t pg-init:latest -f "${join(simDir(), "Dockerfile.pg-init")}" "${initDir}"`,
-        {
-          stdio: "pipe",
-          env: { ...process.env, ...envVars },
-          timeout: 120_000,
-        },
-      )
-      buildSpinner.stop(pc.green("pg-init image built."))
+    // Minikube + podman is not yet supported: `minikube docker-env` and
+    // `minikube podman-env` differ enough (and podman driver requires its
+    // own minikube setup) that this needs its own integration. Surface a
+    // clear message instead of silently failing later.
+    let engineName: "docker" | "podman"
+    try {
+      engineName = detectContainerEngine().name
     } catch (err) {
-      buildSpinner.stop(pc.yellow("pg-init image build failed (non-critical)."))
-      if (err instanceof Error) console.log(pc.dim(`  ${err.message}`))
+      buildSpinner.stop(pc.red((err as Error).message))
+      process.exitCode = 1
+      return
+    }
+    if (engineName === "podman") {
+      buildSpinner.stop(
+        pc.yellow(
+          "Skipping pg-init image build — minikube + podman is not yet supported. " +
+            "Use `fr cluster up` for a Docker Compose lane, or set FR_CONTAINER_ENGINE=docker if Docker is also installed.",
+        ),
+      )
+    } else {
+      try {
+        const dockerEnvOut = execSync("minikube docker-env --shell bash", {
+          stdio: "pipe",
+          encoding: "utf-8",
+        })
+        const envVars: Record<string, string> = {}
+        for (const match of dockerEnvOut.matchAll(/export (\w+)="([^"]+)"/g)) {
+          envVars[match[1]] = match[2]
+        }
+
+        execSync(
+          `docker build -t pg-init:latest -f "${join(simDir(), "Dockerfile.pg-init")}" "${initDir}"`,
+          {
+            stdio: "pipe",
+            env: { ...process.env, ...envVars },
+            timeout: 120_000,
+          },
+        )
+        buildSpinner.stop(pc.green("pg-init image built."))
+      } catch (err) {
+        buildSpinner.stop(
+          pc.yellow("pg-init image build failed (non-critical)."),
+        )
+        if (err instanceof Error) console.log(pc.dim(`  ${err.message}`))
+      }
     }
   }
 
@@ -524,12 +549,12 @@ export async function runSimUp(opts: {
       console.log(pc.dim("    eval $(minikube docker-env)"))
       console.log(
         pc.dim(
-          "    docker build -t flink-reactor:2.0.1 -f src/cli/cluster/Dockerfile.flink .",
+          "    docker build -t flink-reactor:2.2.0 -f src/cli/cluster/Dockerfile.flink .",
         ),
       )
       console.log(
         pc.dim(
-          "    docker build -t flink-reactor-s3:2.0.1 -f src/cli/sim/Dockerfile.flink-s3 .",
+          "    docker build -t flink-reactor-s3:2.2.0 -f src/cli/sim/Dockerfile.flink-s3 .",
         ),
       )
       console.log(

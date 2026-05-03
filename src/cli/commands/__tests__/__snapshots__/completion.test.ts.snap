@@ -278,6 +278,7 @@ _flink_reactor_deploy() {
     '(-e --env)'{-e,--env}'[Environment name (default\\: auto-select)]: : ' \\
     '--dry-run[Synth only, print generated artifacts without applying]' \\
     '--runtime[Override the env'\\''s runtime (docker | minikube | homebrew | kubernetes)]: : ' \\
+    '--container-engine[Container engine override for the docker lane (auto | docker | podman)]: :(auto docker podman)' \\
     '--context[kubectl context (overrides env config)]: : ' \\
     '--console-url[Push tap manifests to reactor-console at this URL]: : '
 }
@@ -286,6 +287,7 @@ _flink_reactor_up() {
   _arguments \\
     '(-e --env)'{-e,--env}'[Environment name (default\\: auto-select)]: : ' \\
     '--runtime[Override the env'\\''s runtime (docker | minikube | homebrew | kubernetes)]: : ' \\
+    '--container-engine[Container engine override for the docker lane (auto | docker | podman)]: :(auto docker podman)' \\
     '--port[Flink REST port]: : ' \\
     '--seed[Submit example pipelines after startup (docker only)]'
 }
@@ -345,18 +347,21 @@ _flink_reactor_cluster_up() {
     '--port[Flink REST port]: : ' \\
     '--seed[Submit example pipelines after startup]' \\
     '--domain[Filter seed data by domain]: :(ecommerce iot all)' \\
-    '--no-timescaledb[Use plain PostgreSQL instead of TimescaleDB]'
+    '--no-timescaledb[Use plain PostgreSQL instead of TimescaleDB]' \\
+    '--container-engine[Container engine override (auto | docker | podman)]: :(auto docker podman)'
 }
 
 _flink_reactor_cluster_down() {
   _arguments \\
-    '--volumes[Remove Docker volumes (checkpoint and state data)]'
+    '--volumes[Remove Docker volumes (checkpoint and state data)]' \\
+    '--container-engine[Container engine override (auto | docker | podman)]: :(auto docker podman)'
 }
 
 _flink_reactor_cluster_seed() {
   _arguments \\
     '--only[Filter by category]: :(streaming batch cdc cdc-kafka)' \\
-    '--domain[Filter by domain]: :(ecommerce iot all)'
+    '--domain[Filter by domain]: :(ecommerce iot all)' \\
+    '--container-engine[Container engine override (auto | docker | podman)]: :(auto docker podman)'
 }
 
 _flink_reactor_cluster_status() {

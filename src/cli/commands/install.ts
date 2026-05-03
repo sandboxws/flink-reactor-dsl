@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process"
+import { execFileSync, execSync } from "node:child_process"
 import { writeFileSync } from "node:fs"
 import { arch, platform } from "node:os"
 import { join } from "node:path"
@@ -7,6 +7,12 @@ import { type Command, Option } from "commander"
 import { Effect } from "effect"
 import pc from "picocolors"
 import { runCommand } from "@/cli/effect-runner.js"
+import {
+  type ContainerEngineName,
+  detectContainerEngine,
+  dockerVersion,
+  podmanVersion,
+} from "@/cli/runtime/container-engine.js"
 import { CliError } from "@/core/errors.js"
 
 export type InstallMethod = "docker" | "homebrew" | "binary"
@@ -15,6 +21,9 @@ export interface PlatformInfo {
   os: "macos" | "linux" | "windows" | "unknown"
   arch: string
   hasDocker: boolean
+  hasPodman: boolean
+  /** Resolved engine (auto-detected) — null when neither docker nor podman is available. */
+  containerEngine: ContainerEngineName | null
   hasHomebrew: boolean
   existingFlink: string | null
 }
@@ -52,11 +61,26 @@ export function registerInstallCommand(program: Command): void {
 export function detectPlatform(): PlatformInfo {
   const os = mapPlatform(platform())
   const archName = arch()
-  const hasDocker = commandExists("docker")
+  const hasDocker = dockerVersion() !== null
+  const hasPodman = podmanVersion() !== null
+  let containerEngine: ContainerEngineName | null = null
+  try {
+    containerEngine = detectContainerEngine().name
+  } catch {
+    containerEngine = null
+  }
   const hasHomebrew = os === "macos" && commandExists("brew")
-  const existingFlink = detectExistingFlink()
+  const existingFlink = detectExistingFlink(containerEngine)
 
-  return { os, arch: archName, hasDocker, hasHomebrew, existingFlink }
+  return {
+    os,
+    arch: archName,
+    hasDocker,
+    hasPodman,
+    containerEngine,
+    hasHomebrew,
+    existingFlink,
+  }
 }
 
 function mapPlatform(p: string): PlatformInfo["os"] {
@@ -81,7 +105,9 @@ function commandExists(cmd: string): boolean {
   }
 }
 
-function detectExistingFlink(): string | null {
+function detectExistingFlink(
+  engine: ContainerEngineName | null,
+): string | null {
   try {
     const output = execSync("flink --version 2>/dev/null", {
       encoding: "utf-8",
@@ -89,18 +115,17 @@ function detectExistingFlink(): string | null {
     const match = output.match(/Version:\s*([\d.]+)/)
     return match?.[1] ?? output
   } catch {
-    // Check Docker images
+    if (!engine) return null
     try {
-      const output = execSync(
-        'docker images --format "{{.Repository}}:{{.Tag}}" 2>/dev/null',
-        {
-          encoding: "utf-8",
-        },
+      const output = execFileSync(
+        engine,
+        ["images", "--format", "{{.Repository}}:{{.Tag}}"],
+        { encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"] },
       ).trim()
       const flinkImage = output
         .split("\n")
         .find((line) => line.includes("flink"))
-      return flinkImage ? `Docker: ${flinkImage}` : null
+      return flinkImage ? `${engine}: ${flinkImage}` : null
     } catch {
       return null
     }
@@ -118,6 +143,9 @@ export async function runInstallFlink(
   console.log(`  ${pc.dim("OS:")} ${info.os} (${info.arch})`)
   console.log(
     `  ${pc.dim("Docker:")} ${info.hasDocker ? "available" : "not found"}`,
+  )
+  console.log(
+    `  ${pc.dim("Podman:")} ${info.hasPodman ? "available" : "not found"}`,
   )
   if (info.os === "macos") {
     console.log(
@@ -149,10 +177,13 @@ export async function runInstallFlink(
       hint?: string
     }> = []
 
-    if (info.hasDocker) {
+    if (info.containerEngine) {
       options.push({
         value: "docker",
-        label: "Docker (recommended)",
+        label:
+          info.containerEngine === "docker"
+            ? "Docker (recommended)"
+            : "Podman (recommended)",
         hint: "docker-compose.flink.yml",
       })
     }
@@ -171,7 +202,9 @@ export async function runInstallFlink(
 
     if (options.length === 0) {
       console.error(
-        pc.red("No installation methods available. Install Docker first."),
+        pc.red(
+          "No installation methods available. Install Docker or Podman ≥ 4.7 first.",
+        ),
       )
       process.exitCode = 1
       return
@@ -206,6 +239,15 @@ export async function runInstallFlink(
 async function installViaDocker(flinkVersion: string): Promise<void> {
   const spinner = clack.spinner()
 
+  let engine: ContainerEngineName
+  try {
+    engine = detectContainerEngine().name
+  } catch (err) {
+    spinner.stop(pc.red((err as Error).message))
+    process.exitCode = 1
+    return
+  }
+
   const composeContent = generateDockerCompose(flinkVersion)
   const composePath = join(process.cwd(), "docker-compose.flink.yml")
 
@@ -214,10 +256,10 @@ async function installViaDocker(flinkVersion: string): Promise<void> {
     `  ${pc.green("✓")} Created ${pc.dim("docker-compose.flink.yml")}`,
   )
 
-  spinner.start("Pulling Flink Docker image...")
+  spinner.start(`Pulling Flink image via ${engine}...`)
   try {
-    execSync(`docker pull flink:${flinkVersion}`, { stdio: "pipe" })
-    spinner.stop("Flink Docker image pulled.")
+    execFileSync(engine, ["pull", `flink:${flinkVersion}`], { stdio: "pipe" })
+    spinner.stop(`Flink image pulled (via ${engine}).`)
   } catch {
     spinner.stop(
       pc.yellow("Failed to pull image. You can pull it manually later."),
@@ -228,22 +270,20 @@ async function installViaDocker(flinkVersion: string): Promise<void> {
   // Verify
   spinner.start("Verifying installation...")
   try {
-    const output = execSync(
-      `docker run --rm flink:${flinkVersion} flink --version`,
-      {
-        encoding: "utf-8",
-        stdio: ["pipe", "pipe", "pipe"],
-      },
+    const output = execFileSync(
+      engine,
+      ["run", "--rm", `flink:${flinkVersion}`, "flink", "--version"],
+      { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
     ).trim()
     spinner.stop(`Verified: ${output}`)
   } catch {
     spinner.stop(pc.yellow("Image pulled but verification failed."))
   }
 
-  clack.outro(pc.green("Flink installed via Docker!"))
+  clack.outro(pc.green(`Flink installed via ${engine}!`))
   console.log("")
   console.log(
-    `  Start the cluster: ${pc.dim("docker compose -f docker-compose.flink.yml up -d")}`,
+    `  Start the cluster: ${pc.dim(`${engine} compose -f docker-compose.flink.yml up -d`)}`,
   )
   console.log(`  Flink UI: ${pc.dim("http://localhost:8081")}`)
   console.log("")
@@ -284,7 +324,9 @@ async function installViaBinary(flinkVersion: string): Promise<void> {
 export function generateDockerCompose(flinkVersion: string): string {
   return `# Generated by flink-reactor install flink
 # Start: docker compose -f docker-compose.flink.yml up -d
+#    or: podman compose -f docker-compose.flink.yml up -d
 # Stop:  docker compose -f docker-compose.flink.yml down
+#    or: podman compose -f docker-compose.flink.yml down
 
 services:
   jobmanager:

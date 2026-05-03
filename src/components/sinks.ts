@@ -233,6 +233,9 @@ export interface PaimonSinkProps extends BaseComponentProps {
  * upstream table-option keys; see the Paimon docs for guidance per option.
  *
  * @see Paimon merge engines: https://paimon.apache.org/docs/master/primary-key-table/merge-engine/
+ * @see https://flink-reactor.dev/docs/templates/pg-fluss-paimon/paimon-merge-engines —
+ *      engine-by-engine reference (deduplicate / partial-update / first-row /
+ *      aggregation) with code snippets and SELECT-shape examples.
  */
 export function PaimonSink(props: PaimonSinkProps): ConstructNode {
   const { children, catalog, ...rest } = props
@@ -295,6 +298,10 @@ export interface FlussSinkProps extends BaseComponentProps {
  * a Fluss Log table and the sink only accepts append-only input. On the
  * Pipeline-YAML branch a primary key is required because the upstream CDC
  * stream is a retract changelog.
+ *
+ * @see https://flink-reactor.dev/docs/templates/pg-fluss-paimon/ingest — worked
+ *      walkthrough of `FlussSink` consuming Postgres CDC inside the
+ *      `pg-fluss-paimon` template's ingest pipeline.
  */
 export function FlussSink(props: FlussSinkProps): ConstructNode {
   const { children, catalog, ...rest } = props

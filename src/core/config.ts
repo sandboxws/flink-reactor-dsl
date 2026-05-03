@@ -1,5 +1,6 @@
 import type { EnvVarRef } from "./env-var.js"
 import type { FlinkReactorPlugin } from "./plugin.js"
+import type { SecretRef } from "./secret-ref.js"
 import type { FlinkMajorVersion } from "./types.js"
 
 // ── Connector configuration ──────────────────────────────────────────
@@ -181,6 +182,63 @@ export interface SimConfig {
   readonly init?: SimInitConfig
 }
 
+// ── Services ────────────────────────────────────────────────────────
+//
+// Declarative infrastructure surface. The presence of an entry means
+// "this project depends on this service in dev/sim runtimes." `false`
+// explicitly disables a service in a per-environment override (so a
+// common block can declare it and `production` can subtract it).
+//
+// `cluster up` reads the resolved services to decide which Compose
+// profiles to activate. `synthesizeApp` cross-checks pipelines against
+// the services block and errors at synth time if a connector references
+// a service that isn't declared.
+
+export interface KafkaServiceConfig {
+  /** Bootstrap address used by in-cluster components. Default: `kafka:9092`. */
+  readonly bootstrapServers?: string | EnvVarRef
+  /** Host port for external (host machine) clients. Default: 9094. */
+  readonly externalPort?: number
+  /** Image override; default ships in `docker-compose.yml`. */
+  readonly image?: string
+}
+
+export interface PostgresServiceConfig {
+  /** `timescaledb` (default) ships TimescaleDB extension; `plain` is vanilla postgres:17. */
+  readonly flavor?: "timescaledb" | "plain"
+  /** Host port for external clients. Default: 5433. */
+  readonly externalPort?: number
+  /** Database superuser. Default: `reactor`. */
+  readonly user?: string
+  /** Superuser password. Default: `reactor`. Use `secretRef()` for k8s. */
+  readonly password?: string | EnvVarRef | SecretRef
+  /** Initial database. Default: `postgres`. */
+  readonly database?: string
+}
+
+export interface FlussServiceConfig {
+  /** Coordinator address used in-network. Default: `fluss-coordinator:9123`. */
+  readonly coordinator?: string | EnvVarRef
+  /** Tablet-server replica count. Default 3 (matches minikube StatefulSet). */
+  readonly tabletServers?: 1 | 2 | 3
+  /** Host port for external clients. Default: 9123. */
+  readonly externalPort?: number
+}
+
+export interface IcebergServiceConfig {
+  /** REST catalog URL used in-network. Default: `http://iceberg-rest:8181`. */
+  readonly catalogUrl?: string | EnvVarRef
+  /** Host port for external clients. Default: 8181. */
+  readonly externalPort?: number
+}
+
+export interface ServicesConfig {
+  readonly kafka?: KafkaServiceConfig | false
+  readonly postgres?: PostgresServiceConfig | false
+  readonly fluss?: FlussServiceConfig | false
+  readonly iceberg?: IcebergServiceConfig | false
+}
+
 // ── Runtime ─────────────────────────────────────────────────────────
 
 /**
@@ -211,6 +269,13 @@ export interface EnvironmentEntry {
    * overridden to exercise the minikube lane locally".
    */
   readonly supportedRuntimes?: readonly Runtime[]
+  /**
+   * Container engine to drive when runtime is `docker`.
+   * - `"auto"` (default): try docker, fall back to podman ≥ 4.7
+   * - `"docker"` / `"podman"`: pin explicitly (errors if missing)
+   * Overridden by `FR_CONTAINER_ENGINE` env var or `--container-engine` flag.
+   */
+  readonly containerEngine?: "auto" | "docker" | "podman"
   readonly cluster?: ClusterConfig
   readonly kubernetes?: {
     readonly namespace?: string
@@ -229,6 +294,11 @@ export interface EnvironmentEntry {
    * `$FLINK_HOME` / `brew --prefix apache-flink` auto-detection.
    */
   readonly flinkHome?: string
+  /**
+   * @deprecated Use `services.kafka.bootstrapServers` instead. The
+   * resolver back-fills this field for one release with a one-time
+   * deprecation warning.
+   */
   readonly kafka?: {
     readonly bootstrapServers?: string
   }
@@ -238,6 +308,12 @@ export interface EnvironmentEntry {
   readonly pipelines?: Record<string, PipelineOverrides>
   /** Simulation stack configuration (used by `flink-reactor sim up`) */
   readonly sim?: SimConfig
+  /**
+   * Per-environment service overrides. Deep-merged onto the top-level
+   * `services` block. Set a service to `false` to subtract it from this
+   * environment (e.g., `production` uses managed Kafka, no local broker).
+   */
+  readonly services?: ServicesConfig
 }
 
 // ── FlinkReactorConfig ───────────────────────────────────────────────
@@ -250,6 +326,11 @@ export interface FlinkReactorConfig {
     readonly namespace?: string
     readonly image?: string
   }
+  /**
+   * @deprecated Use `services.kafka.bootstrapServers` instead. The
+   * resolver back-fills this field for one release with a one-time
+   * deprecation warning.
+   */
   readonly kafka?: {
     readonly bootstrapServers?: string
   }
@@ -263,6 +344,14 @@ export interface FlinkReactorConfig {
   readonly dashboard?: DashboardSection
   /** Console (reactor-server) connection for tap manifest push */
   readonly console?: ConsoleConfig
+  /**
+   * Infrastructure services this project depends on (Kafka, Postgres,
+   * Fluss, Iceberg). Templates ship a `services` block matching the
+   * components they use; `cluster up` activates exactly the matching
+   * Compose profiles. Per-environment overrides under
+   * `environments.<name>.services` are deep-merged.
+   */
+  readonly services?: ServicesConfig
   /** Named environments with overrides */
   readonly environments?: Record<string, EnvironmentEntry>
 
@@ -284,7 +373,7 @@ export interface FlinkReactorConfig {
  * import { defineConfig, env } from '@flink-reactor/dsl';
  *
  * export default defineConfig({
- *   flink: { version: '2.0' },
+ *   flink: { version: '2.2' },
  *   dashboard: { pollIntervalMs: 5000 },
  *   environments: {
  *     development: {

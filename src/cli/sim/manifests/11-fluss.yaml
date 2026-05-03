@@ -19,8 +19,6 @@ data:
     zookeeper.path.root: "/fluss"
     coordinator.host: "fluss-coordinator"
     coordinator.port: "9123"
-    bind.listeners: "FLUSS://0.0.0.0:9123"
-    internal.listener.name: "FLUSS"
     tablet-server.port: "9124"
     data.dir: "/tmp/fluss-data"
     remote.data.dir: "s3a://flink-state/fluss-remote"
@@ -69,7 +67,7 @@ spec:
     spec:
       containers:
         - name: coordinator
-          image: fluss/fluss:0.9.0-incubating
+          image: apache/fluss:0.9.0-incubating
           imagePullPolicy: IfNotPresent
           command: ["/opt/fluss/bin/coordinator-server.sh", "start-foreground"]
           ports:
@@ -149,7 +147,7 @@ spec:
     spec:
       containers:
         - name: tabletserver
-          image: fluss/fluss:0.9.0-incubating
+          image: apache/fluss:0.9.0-incubating
           imagePullPolicy: IfNotPresent
           command:
             - sh

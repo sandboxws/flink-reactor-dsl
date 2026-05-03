@@ -4,10 +4,11 @@ import pc from "picocolors"
 export async function waitForServices(opts: {
   flinkPort: number
   sqlGatewayPort: number
-  kafkaPort: number
+  kafkaPort?: number
   postgresPort?: number
   seaweedfsPort?: number
   icebergRestPort?: number
+  flussPort?: number
   timeoutMs?: number
   intervalMs?: number
 }): Promise<void> {
@@ -19,23 +20,36 @@ export async function waitForServices(opts: {
 
   const deadline = Date.now() + timeout
 
-  const services = [
+  const services: Array<{ name: string; check: () => Promise<boolean> }> = [
     { name: "Flink JobManager", check: () => checkFlink(opts.flinkPort) },
     { name: "SQL Gateway", check: () => checkSqlGateway(opts.sqlGatewayPort) },
-    { name: "Kafka", check: () => checkKafka(opts.kafkaPort) },
-    {
-      name: "PostgreSQL",
-      check: () => checkTcp(opts.postgresPort ?? 5432),
-    },
-    {
-      name: "SeaweedFS (S3)",
-      check: () => checkTcp(opts.seaweedfsPort ?? 8333),
-    },
-    {
-      name: "Iceberg REST",
-      check: () => checkIcebergRest(opts.icebergRestPort ?? 8181),
-    },
   ]
+  const { kafkaPort, postgresPort, seaweedfsPort, icebergRestPort, flussPort } =
+    opts
+  if (kafkaPort !== undefined) {
+    services.push({ name: "Kafka", check: () => checkKafka(kafkaPort) })
+  }
+  if (postgresPort !== undefined) {
+    services.push({ name: "PostgreSQL", check: () => checkTcp(postgresPort) })
+  }
+  if (seaweedfsPort !== undefined) {
+    services.push({
+      name: "SeaweedFS (S3)",
+      check: () => checkTcp(seaweedfsPort),
+    })
+  }
+  if (icebergRestPort !== undefined) {
+    services.push({
+      name: "Iceberg REST",
+      check: () => checkIcebergRest(icebergRestPort),
+    })
+  }
+  if (flussPort !== undefined) {
+    services.push({
+      name: "Fluss Coordinator",
+      check: () => checkTcp(flussPort),
+    })
+  }
 
   const ready = new Set<string>()
 

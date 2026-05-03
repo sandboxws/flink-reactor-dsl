@@ -16,6 +16,10 @@ export function getStarterTemplates(opts: ScaffoldOptions): TemplateFile[] {
 export default defineConfig({
   flink: { version: '${opts.flinkVersion}' },
 
+  // Kafka-only template: \`fr cluster up\` and \`fr sim up\` start Flink + Kafka.
+  // No Postgres, Iceberg, or Fluss.
+  services: { kafka: {} },
+
   environments: {
     // Docker-compose by default — matches the platform docs' recommended
     // local lane. Override with \`fr up --runtime=minikube\` to exercise the

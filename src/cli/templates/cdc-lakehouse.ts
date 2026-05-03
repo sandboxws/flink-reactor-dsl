@@ -18,6 +18,10 @@ export function getCdcLakehouseTemplates(
 export default defineConfig({
   flink: { version: '${opts.flinkVersion}' },
 
+  // CDC stream lands in Kafka, lakehouse stores in Iceberg
+  // (Lakekeeper-backed Iceberg REST → Postgres pulls in implicitly).
+  services: { kafka: {}, iceberg: {} },
+
   environments: {
     minikube: {
       cluster: { url: 'http://localhost:8081' },

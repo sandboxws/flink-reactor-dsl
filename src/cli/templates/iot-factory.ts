@@ -16,6 +16,9 @@ export function getIotFactoryTemplates(opts: ScaffoldOptions): TemplateFile[] {
 export default defineConfig({
   flink: { version: '${opts.flinkVersion}' },
 
+  // Kafka for telemetry; Postgres for the JDBC sinks the pipelines write to.
+  services: { kafka: {}, postgres: {} },
+
   environments: {
     minikube: {
       cluster: { url: 'http://localhost:8081' },

@@ -1,8 +1,9 @@
-import type { Command } from "commander"
+import { type Command, Option } from "commander"
 import { Effect } from "effect"
 import pc from "picocolors"
 import { resolveProjectContext } from "@/cli/discovery.js"
 import { runCommand } from "@/cli/effect-runner.js"
+import type { ContainerEngineChoice } from "@/cli/runtime/container-engine.js"
 import { selectAdapter } from "@/cli/runtime/index.js"
 import type { Runtime } from "@/core/config.js"
 import { CliError } from "@/core/errors.js"
@@ -18,12 +19,19 @@ export function registerUpCommand(program: Command): void {
       "--runtime <name>",
       "Override the env's runtime (docker | minikube | homebrew | kubernetes)",
     )
+    .addOption(
+      new Option(
+        "--container-engine <name>",
+        "Container engine override for the docker lane (auto | docker | podman)",
+      ).choices(["auto", "docker", "podman"]),
+    )
     .option("--port <port>", "Flink REST port", "8081")
     .option("--seed", "Submit example pipelines after startup (docker only)")
     .action(
       async (opts: {
         env?: string
         runtime?: string
+        containerEngine?: ContainerEngineChoice
         port: string
         seed?: boolean
       }) => {
@@ -43,7 +51,11 @@ export function registerUpCommand(program: Command): void {
                   }...\n`,
                 ),
               )
-              await adapter.up(ctx, { port: opts.port, seed: opts.seed })
+              await adapter.up(ctx, {
+                port: opts.port,
+                seed: opts.seed,
+                containerEngine: opts.containerEngine,
+              })
             },
             catch: (err) =>
               new CliError({

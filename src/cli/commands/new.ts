@@ -195,7 +195,7 @@ export async function runNewCommand(
       projectName,
       template: validateTemplate(opts.template as string) ?? "starter",
       pm: validatePm(opts.pm as string) ?? "pnpm",
-      flinkVersion: validateFlinkVersion(opts.flinkVersion as string) ?? "2.0",
+      flinkVersion: validateFlinkVersion(opts.flinkVersion as string) ?? "2.2",
       gitInit: opts.git !== false,
       installDeps: opts.install !== false,
       registry: registryChoice ? REGISTRY_URLS[registryChoice] : undefined,
@@ -260,7 +260,7 @@ async function collectOptions(
   }
 
   const flinkVersion = cliOpts.flinkVersion
-    ? (validateFlinkVersion(cliOpts.flinkVersion as string) ?? "2.0")
+    ? (validateFlinkVersion(cliOpts.flinkVersion as string) ?? "2.2")
     : await promptFlinkVersion()
 
   if (clack.isCancel(flinkVersion)) {
@@ -411,10 +411,10 @@ async function promptFlinkVersion(): Promise<FlinkVersion | symbol> {
   return clack.select({
     message: "Target Flink version?",
     options: [
-      { value: "2.0", label: "Flink 2.0", hint: "recommended" },
-      { value: "1.20", label: "Flink 1.20 LTS" },
+      { value: "2.2", label: "Flink 2.2", hint: "recommended" },
       { value: "2.1", label: "Flink 2.1" },
-      { value: "2.2", label: "Flink 2.2" },
+      { value: "2.0", label: "Flink 2.0" },
+      { value: "1.20", label: "Flink 1.20 LTS" },
     ],
   }) as Promise<FlinkVersion | symbol>
 }

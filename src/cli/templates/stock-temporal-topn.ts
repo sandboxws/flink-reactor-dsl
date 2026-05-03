@@ -389,6 +389,9 @@ function makeConfig(opts: ScaffoldOptions): string {
 export default defineConfig({
   flink: { version: '${opts.flinkVersion}' },
 
+  // Kafka-only template.
+  services: { kafka: {} },
+
   environments: {
     development: {
       cluster: { url: 'http://localhost:8081' },

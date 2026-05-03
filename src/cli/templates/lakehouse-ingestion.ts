@@ -18,6 +18,9 @@ export function getLakehouseIngestionTemplates(
 export default defineConfig({
   flink: { version: '${opts.flinkVersion}' },
 
+  // Lakehouse ingestion: Kafka events land in Iceberg.
+  services: { kafka: {}, iceberg: {} },
+
   environments: {
     minikube: {
       cluster: { url: 'http://localhost:8081' },

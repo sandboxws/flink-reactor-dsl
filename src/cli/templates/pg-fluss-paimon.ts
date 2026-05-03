@@ -21,6 +21,10 @@ export function getPgFlussPaimonTemplates(
 export default defineConfig({
   flink: { version: '2.2' },
 
+  // Postgres for the CDC source (TPC-H), Fluss for streaming + Paimon
+  // shared storage. No Kafka in this lane.
+  services: { postgres: {}, fluss: {} },
+
   environments: {
     // \`pnpm fr sim up\` provisions Fluss + Paimon catalogs and the
     // \`benchmark\` database in each, zero-config. The same \`sim.init\`

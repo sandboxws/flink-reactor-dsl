@@ -14,7 +14,7 @@ import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
 import { Field, Schema } from "@/core/schema.js"
 import type { ConstructNode, FlinkMajorVersion } from "@/core/types.js"
 
-const FLINK_VERSION: FlinkMajorVersion = "2.0"
+const FLINK_VERSION: FlinkMajorVersion = "2.2"
 
 const OrderSchema = Schema({
   fields: {
@@ -277,7 +277,7 @@ describe("FlussSource connector resolution", () => {
       flinkVersion: FLINK_VERSION,
     })
     const fluss = jars.filter(
-      (j) => j.artifact.artifactId === "fluss-connector-flink",
+      (j) => j.artifact.artifactId === "fluss-flink-2.2",
     )
     expect(fluss).toHaveLength(1)
   })
@@ -313,7 +313,7 @@ describe("FlussSource connector resolution", () => {
       flinkVersion: FLINK_VERSION,
     })
     const fluss = jars.filter(
-      (j) => j.artifact.artifactId === "fluss-connector-flink",
+      (j) => j.artifact.artifactId === "fluss-flink-2.2",
     )
     expect(fluss).toHaveLength(1)
   })
@@ -616,6 +616,6 @@ describe("FlussSource connector registry self-check", () => {
     const seen = jars
       .map((j) => `${j.artifact.groupId}:${j.artifact.artifactId}`)
       .sort()
-    expect(seen).toEqual(["org.apache.fluss:fluss-connector-flink"])
+    expect(seen).toEqual(["org.apache.fluss:fluss-flink-2.2"])
   })
 })

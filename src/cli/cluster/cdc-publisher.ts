@@ -1,5 +1,6 @@
 import { execSync } from "node:child_process"
 import pc from "picocolors"
+import { detectContainerEngine } from "@/cli/runtime/container-engine.js"
 
 export type CdcDomain = "ecommerce" | "iot" | "all"
 
@@ -210,9 +211,51 @@ const SENSOR_RANGES: Record<
 
 // ── Main entry point ────────────────────────────────────────────────
 
+/**
+ * Defensive guard: refuse to publish when the project hasn't declared
+ * `services.kafka`. The seed flow already gates on this at a higher
+ * level, but we double-check here so that direct callers (forked
+ * background script, future scripts) can't silently drive a non-existent
+ * Kafka container into a retry storm.
+ *
+ * Returns `true` when Kafka is declared, `false` (with a logged warning)
+ * when it isn't. Treats "no config found" as `true` — the publisher is
+ * also runnable outside of a project for ad-hoc testing.
+ */
+async function ensureKafkaEnabled(): Promise<boolean> {
+  try {
+    const { loadConfig } = await import("@/cli/discovery.js")
+    const { resolveConfig } = await import("@/core/config-resolver.js")
+    const config = await loadConfig(process.cwd())
+    if (!config?.environments) return true
+    const envName = config.environments.development
+      ? "development"
+      : config.environments.docker
+        ? "docker"
+        : Object.keys(config.environments).sort()[0]
+    if (!envName) return true
+    const resolved = resolveConfig(config, envName)
+    const kafka = resolved.services?.kafka
+    if (kafka === undefined || kafka === false) {
+      console.log(
+        pc.yellow(
+          "  Skipping CDC publish: `services.kafka` is not declared in flink-reactor.config.ts.",
+        ),
+      )
+      return false
+    }
+    return true
+  } catch {
+    // Config absent or unparseable — allow publish (back-compat).
+    return true
+  }
+}
+
 export async function publishCdcMessages(
   opts: CdcPublishOptions,
 ): Promise<void> {
+  if (!(await ensureKafkaEnabled())) return
+
   const composeFile = opts.composeFile
   const domain = opts.domain ?? "all"
 
@@ -473,19 +516,26 @@ function publishToKafka(
   topic: string,
   messages: string[],
 ): void {
-  // Pipe messages to kafka-console-producer via docker compose exec (uses service names)
+  // Pipe messages to kafka-console-producer via the resolved container
+  // engine's `compose exec` (uses service names from the bundled compose).
   const input = messages.join("\n")
-  const composeArgs = composeFile
-    ? `docker compose -f "${composeFile}" exec -T`
-    : "docker compose exec -T"
-  execSync(
-    `${composeArgs} kafka /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic ${topic}`,
-    {
-      input,
-      stdio: ["pipe", "pipe", "pipe"],
-      timeout: 10_000,
-    },
-  )
+  const engine = detectContainerEngine()
+  const command = engine.composeCommand(composeFile, [
+    "exec",
+    "-T",
+    "kafka",
+    "/opt/kafka/bin/kafka-console-producer.sh",
+    "--bootstrap-server",
+    "localhost:9092",
+    "--topic",
+    topic,
+  ])
+  execSync(command, {
+    input,
+    stdio: ["pipe", "pipe", "pipe"],
+    timeout: 10_000,
+    env: { ...process.env, ...engine.composeEnv() },
+  })
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {

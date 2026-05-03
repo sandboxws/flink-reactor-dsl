@@ -74,6 +74,12 @@ export function makeConfig(opts: ScaffoldOptions): string {
 export default defineConfig({
   flink: { version: '${opts.flinkVersion}' },
 
+  // Infra services this project depends on. Empty here — \`fr cluster up\`
+  // and \`fr sim up\` will start only the always-on services (Flink core,
+  // SQL gateway, SeaweedFS). Add services as your pipelines need them, e.g.
+  // \`services: { kafka: {} }\` to enable Kafka.
+  services: {},
+
   environments: {
     development: {
       cluster: { url: 'http://localhost:8081' },

@@ -16,6 +16,9 @@ export function getBankingTemplates(opts: ScaffoldOptions): TemplateFile[] {
 export default defineConfig({
   flink: { version: '${opts.flinkVersion}' },
 
+  // Kafka for transaction streams; Postgres for the JDBC sinks (fraud + compliance).
+  services: { kafka: {}, postgres: {} },
+
   environments: {
     minikube: {
       cluster: { url: 'http://localhost:8081' },

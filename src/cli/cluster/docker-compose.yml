@@ -12,6 +12,7 @@ services:
     # UI's API calls are same-origin with BASE_URI. See iceberg-init.ts.
     extra_hosts:
       - "lakekeeper.localtest.me:host-gateway"
+      - "host.containers.internal:host-gateway"
     environment:
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: jobmanager
@@ -42,6 +43,7 @@ services:
     command: taskmanager
     extra_hosts:
       - "lakekeeper.localtest.me:host-gateway"
+      - "host.containers.internal:host-gateway"
     environment:
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: jobmanager
@@ -68,6 +70,7 @@ services:
     command: taskmanager
     extra_hosts:
       - "lakekeeper.localtest.me:host-gateway"
+      - "host.containers.internal:host-gateway"
     environment:
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: jobmanager
@@ -95,6 +98,7 @@ services:
       - "${SQL_GATEWAY_PORT:-8083}:8083"
     extra_hosts:
       - "lakekeeper.localtest.me:host-gateway"
+      - "host.containers.internal:host-gateway"
     command:
       [
         "bash",
@@ -108,7 +112,9 @@ services:
       retries: 10
 
   kafka:
-    image: apache/kafka:3.9.0
+    image: ${KAFKA_IMAGE:-apache/kafka:3.9.0}
+    profiles:
+      - kafka
     ports:
       - "${KAFKA_EXTERNAL_PORT:-9094}:9094"
     environment:
@@ -219,10 +225,21 @@ services:
   # `src/cli/sim/fluss-config/server.yaml` — single source of truth.
   zookeeper-fluss:
     image: zookeeper:3.9
+    profiles:
+      - fluss
     environment:
       ZOO_MY_ID: 1
       ZOO_SERVERS: server.1=zookeeper-fluss:2888:3888;2181
       ALLOW_ANONYMOUS_LOGIN: "yes"
+      # ZK 3.5+ disables 4-letter-word commands by default. The healthcheck
+      # below uses `ruok`; without this whitelist the server silently
+      # rejects the probe and the container never becomes healthy. Mirrors
+      # `src/cli/sim/manifests/10-zookeeper-fluss.yaml`'s `zk-fluss-config`
+      # ConfigMap.
+      ZOO_4LW_COMMANDS_WHITELIST: "ruok,mntr,srvr,stat"
+      ZOO_TICK_TIME: "2000"
+      ZOO_INIT_LIMIT: "10"
+      ZOO_SYNC_LIMIT: "5"
     volumes:
       - zk-fluss-data:/data
     healthcheck:
@@ -232,110 +249,164 @@ services:
       retries: 20
 
   fluss-coordinator:
-    image: fluss/fluss:0.9.0-incubating
+    image: apache/fluss:0.9.0-incubating
+    profiles:
+      - fluss
     depends_on:
       zookeeper-fluss:
         condition: service_healthy
     ports:
       - "${FLUSS_COORDINATOR_PORT:-9123}:9123"
-    # Single-node ZK in Docker; the shared server.yaml's
-    # zookeeper.address (3-entry list, sized for minikube) is overridden
-    # here via env so the same file works for both lanes.
+    # Single-node ZK in Docker; the shared server.yaml's zookeeper.address
+    # (3-entry list, sized for minikube) is overridden per-lane via -D on
+    # the command. We do NOT use FLUSS_PROPERTIES here: the entrypoint's
+    # sed-based merge needs to rename server.yaml in place, which fails
+    # against the :ro bind mount and silently drops the override.
     environment:
       FLUSS_HOME: /opt/fluss
-      FLUSS_PROPERTIES: |
-        zookeeper.address: zookeeper-fluss:2181
-    command: ["/opt/fluss/bin/coordinator-server.sh", "start-foreground"]
+    command:
+      - sh
+      - -c
+      - |
+        exec /opt/fluss/bin/coordinator-server.sh start-foreground \
+          -D zookeeper.address=zookeeper-fluss:2181
     volumes:
       - ./fluss-config/server.yaml:/opt/fluss/conf/server.yaml:ro
       - fluss-coordinator-data:/tmp/fluss-data
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 9123"]
+      # The apache/fluss image ships *without* `nc`, `ss`, or `netstat`,
+      # so we use bash's `/dev/tcp` builtin (bash IS in the image).
+      # Fluss binds Netty to the resolved address of `coordinator.host`
+      # — an IPv4-mapped IPv6 socket on the container's external IP —
+      # not loopback. `hostname -i` returns that IP directly, sidestepping
+      # any /etc/hosts/DNS quirks. `$$(...)` escapes compose's `$`
+      # interpolation so bash inside the container does the expansion.
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/$$(hostname -i)/9123'"]
       interval: 5s
       timeout: 3s
       retries: 20
+      # Generous warmup window: a cold image pull + JVM start + ZK
+      # connection can run 60–90s on first run. During start_period,
+      # failed probes don't count toward `retries` — past it, we still
+      # have 20 × 5s = 100s of post-warmup tolerance before declaring
+      # unhealthy.
+      start_period: 90s
 
   fluss-tabletserver-1:
-    image: fluss/fluss:0.9.0-incubating
+    image: apache/fluss:0.9.0-incubating
+    profiles:
+      - fluss
     depends_on:
       fluss-coordinator:
         condition: service_healthy
     environment:
       FLUSS_HOME: /opt/fluss
-      FLUSS_PROPERTIES: |
-        zookeeper.address: zookeeper-fluss:2181
-    # Per-tablet id/host injected as `-D` overrides; the shared server.yaml
-    # leaves these blank because they're pod/container-specific.
+    # Per-tablet id/host plus the lane-specific zookeeper.address all go
+    # through `-D` overrides — see fluss-coordinator for why FLUSS_PROPERTIES
+    # is unusable here.
     command:
       - sh
       - -c
       - |
         exec /opt/fluss/bin/tablet-server.sh start-foreground \
+          -D zookeeper.address=zookeeper-fluss:2181 \
           -D tablet-server.id=1 \
           -D tablet-server.host=fluss-tabletserver-1
     volumes:
       - ./fluss-config/server.yaml:/opt/fluss/conf/server.yaml:ro
       - fluss-tablet-1-data:/tmp/fluss-data
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 9124"]
+      # Same rationale as fluss-coordinator's healthcheck above —
+      # bash's `/dev/tcp` because nc isn't in the apache/fluss image,
+      # `hostname -i` because Netty binds to the container's IP not
+      # loopback. Tablet servers listen on 9124.
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/$$(hostname -i)/9124'"]
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 90s
 
   fluss-tabletserver-2:
-    image: fluss/fluss:0.9.0-incubating
+    image: apache/fluss:0.9.0-incubating
+    profiles:
+      - fluss
     depends_on:
       fluss-coordinator:
         condition: service_healthy
     environment:
       FLUSS_HOME: /opt/fluss
-      FLUSS_PROPERTIES: |
-        zookeeper.address: zookeeper-fluss:2181
     command:
       - sh
       - -c
       - |
         exec /opt/fluss/bin/tablet-server.sh start-foreground \
+          -D zookeeper.address=zookeeper-fluss:2181 \
           -D tablet-server.id=2 \
           -D tablet-server.host=fluss-tabletserver-2
     volumes:
       - ./fluss-config/server.yaml:/opt/fluss/conf/server.yaml:ro
       - fluss-tablet-2-data:/tmp/fluss-data
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 9124"]
+      # Same rationale as fluss-coordinator's healthcheck above —
+      # bash's `/dev/tcp` because nc isn't in the apache/fluss image,
+      # `hostname -i` because Netty binds to the container's IP not
+      # loopback. Tablet servers listen on 9124.
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/$$(hostname -i)/9124'"]
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 90s
 
   fluss-tabletserver-3:
-    image: fluss/fluss:0.9.0-incubating
+    image: apache/fluss:0.9.0-incubating
+    profiles:
+      - fluss
     depends_on:
       fluss-coordinator:
         condition: service_healthy
     environment:
       FLUSS_HOME: /opt/fluss
-      FLUSS_PROPERTIES: |
-        zookeeper.address: zookeeper-fluss:2181
     command:
       - sh
       - -c
       - |
         exec /opt/fluss/bin/tablet-server.sh start-foreground \
+          -D zookeeper.address=zookeeper-fluss:2181 \
           -D tablet-server.id=3 \
           -D tablet-server.host=fluss-tabletserver-3
     volumes:
       - ./fluss-config/server.yaml:/opt/fluss/conf/server.yaml:ro
       - fluss-tablet-3-data:/tmp/fluss-data
     healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 9124"]
+      # Same rationale as fluss-coordinator's healthcheck above —
+      # bash's `/dev/tcp` because nc isn't in the apache/fluss image,
+      # `hostname -i` because Netty binds to the container's IP not
+      # loopback. Tablet servers listen on 9124.
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/$$(hostname -i)/9124'"]
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 90s
 
   # Creates the `lakekeeper` Postgres database before Lakekeeper boots.
   # Idempotent — uses pg_database lookup before issuing CREATE.
+  #
+  # `depends_on` lists BOTH postgres flavors. Compose drops the inactive
+  # one silently (it's filtered out by the postgres flavor profile), so
+  # whichever flavor is active gates this init's start. The polling loop
+  # below is belt-and-braces — same `flink-reactor-postgres` container
+  # name is used by both flavors, so the connection target is stable.
   lakekeeper-pg-init:
     image: postgres:17-alpine
+    profiles:
+      - iceberg
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+      postgres-plain:
+        condition: service_healthy
+        required: false
     environment:
       PGPASSWORD: reactor
     entrypoint:
@@ -353,6 +424,8 @@ services:
   # Idempotent — re-running on an already-migrated DB is a no-op.
   lakekeeper-migrate:
     image: quay.io/lakekeeper/catalog:latest
+    profiles:
+      - iceberg
     depends_on:
       lakekeeper-pg-init:
         condition: service_completed_successfully
@@ -369,6 +442,8 @@ services:
   # at /catalog/v1, the management API at /management/v1, and a UI at /ui.
   iceberg-rest:
     image: quay.io/lakekeeper/catalog:latest
+    profiles:
+      - iceberg
     depends_on:
       seaweedfs:
         condition: service_healthy
@@ -398,6 +473,8 @@ services:
   # 409 / 404, which we swallow.
   iceberg-rest-init:
     image: curlimages/curl:8.10.1
+    profiles:
+      - iceberg
     depends_on:
       iceberg-rest:
         condition: service_started

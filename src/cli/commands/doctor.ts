@@ -1,10 +1,15 @@
-import { execSync } from "node:child_process"
+import { execFileSync, execSync } from "node:child_process"
 import { existsSync, readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
 import type { Command } from "commander"
 import { Effect } from "effect"
 import pc from "picocolors"
 import { runCommand as runEffectAction } from "@/cli/effect-runner.js"
+import {
+  detectContainerEngine,
+  dockerVersion,
+  podmanVersion,
+} from "@/cli/runtime/container-engine.js"
 import { CliError } from "@/core/errors.js"
 
 export interface CheckResult {
@@ -39,7 +44,7 @@ export async function runDoctorCommand(cwd?: string): Promise<CheckResult[]> {
 
   results.push(checkNodeVersion())
   results.push(checkTypeScriptVersion())
-  results.push(checkDockerVersion())
+  results.push(...checkContainerEngines())
   results.push(checkFlinkInstallation())
   results.push(checkKubectl())
   results.push(checkProjectConfig(projectDir))
@@ -102,8 +107,8 @@ export function checkTypeScriptVersion(): CheckResult {
 }
 
 export function checkDockerVersion(): CheckResult {
-  const output = runShellCommand("docker --version")
-  if (!output) {
+  const version = dockerVersion()
+  if (!version) {
     return {
       name: "Docker",
       status: "warn",
@@ -111,9 +116,58 @@ export function checkDockerVersion(): CheckResult {
       hint: "Install Docker from https://docs.docker.com/get-docker/ (needed for local Flink)",
     }
   }
-  const match = output.match(/Docker version\s+([\d.]+)/)
-  const version = match?.[1] ?? output
   return { name: "Docker", status: "pass", version, message: `v${version}` }
+}
+
+export function checkPodmanVersion(): CheckResult {
+  const version = podmanVersion()
+  if (!version) {
+    return {
+      name: "Podman",
+      status: "warn",
+      message: "Not found",
+      hint: "Install Podman ≥ 4.7 from https://podman.io/docs/installation (alternative to Docker)",
+    }
+  }
+  return { name: "Podman", status: "pass", version, message: `v${version}` }
+}
+
+/**
+ * Container-engine triplet: Docker row, Podman row, and a Selected row that
+ * names the resolved engine (or marks both as missing). Splitting the rows
+ * lets users see which engine is missing when their pin / env / alias setup
+ * isn't behaving as expected.
+ */
+export function checkContainerEngines(): CheckResult[] {
+  const docker = checkDockerVersion()
+  const podman = checkPodmanVersion()
+
+  let selected: CheckResult
+  try {
+    const resolved = detectContainerEngine()
+    const sourceLabel =
+      resolved.source === "auto"
+        ? `auto-detected${resolved.available.length > 1 ? `; ${resolved.available.filter((e) => e !== resolved.name).join(", ")} also available` : ""}`
+        : resolved.source === "env"
+          ? "pinned via FR_CONTAINER_ENGINE"
+          : resolved.source === "config"
+            ? "pinned via flink-reactor.config.ts"
+            : "pinned via --container-engine flag"
+    selected = {
+      name: "Selected engine",
+      status: "pass",
+      message: `${resolved.name} (${sourceLabel})`,
+    }
+  } catch (err) {
+    selected = {
+      name: "Selected engine",
+      status: "warn",
+      message: (err as Error).message.split("\n")[0] ?? "No engine available",
+      hint: "Install Docker or Podman ≥ 4.7 to run the local Flink cluster",
+    }
+  }
+
+  return [docker, podman, selected]
 }
 
 export function checkFlinkInstallation(): CheckResult {
@@ -130,15 +184,33 @@ export function checkFlinkInstallation(): CheckResult {
     }
   }
 
-  // Check for Flink Docker image
-  const dockerOutput = runShellCommand(
-    'docker images --format "{{.Repository}}:{{.Tag}}" | grep -i flink | head -1',
-  )
-  if (dockerOutput) {
+  // Check for a Flink image on the resolved container engine
+  const flinkImage = (() => {
+    let engine: string
+    try {
+      engine = detectContainerEngine().name
+    } catch {
+      return null
+    }
+    try {
+      const output = execFileSync(
+        engine,
+        ["images", "--format", "{{.Repository}}:{{.Tag}}"],
+        { encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"] },
+      ).trim()
+      const line = output
+        .split("\n")
+        .find((l) => l.toLowerCase().includes("flink"))
+      return line ? { engine, line } : null
+    } catch {
+      return null
+    }
+  })()
+  if (flinkImage) {
     return {
       name: "Apache Flink",
       status: "pass",
-      message: `Docker: ${dockerOutput}`,
+      message: `${flinkImage.engine}: ${flinkImage.line}`,
     }
   }
 

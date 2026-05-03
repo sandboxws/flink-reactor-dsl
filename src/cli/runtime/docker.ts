@@ -24,11 +24,15 @@ export const DockerAdapter: RuntimeAdapter = {
       port: opts.port ?? "8081",
       seed: opts.seed ?? false,
       timescaledb: true,
+      containerEngine: opts.containerEngine,
     })
   },
 
   async down(_ctx: ProjectContext, opts: DownOptions): Promise<void> {
-    await runClusterDown({ volumes: opts.volumes ?? false })
+    await runClusterDown({
+      volumes: opts.volumes ?? false,
+      containerEngine: opts.containerEngine,
+    })
   },
 
   async deploy(ctx: ProjectContext, opts: DeployOptions): Promise<void> {

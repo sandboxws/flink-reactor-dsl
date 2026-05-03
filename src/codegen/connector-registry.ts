@@ -27,7 +27,7 @@ export interface ConnectorRegistryEntry {
   /**
    * Synthesis-branch affinity. When set, the connector is only resolved on
    * the matching branch:
-   *   • `"sql"` — Flink-SQL connectors (e.g. `fluss-connector-flink`).
+   *   • `"sql"` — Flink-SQL connectors (e.g. `fluss-flink-<ver>`).
    *   • `"pipeline-yaml"` — Flink CDC 3.6 Pipeline Connectors.
    * When undefined the connector applies on either branch.
    */
@@ -247,14 +247,19 @@ const CONNECTOR_REGISTRY: readonly ConnectorRegistryEntry[] = [
     ],
   },
 
-  // Apache Fluss Flink connector. Single artifact spans the full Flink
-  // 1.20 → 2.2 range under the Apache Fluss 0.9.0-incubating release.
-  // SQL-branch only — the Pipeline-YAML branch uses `fluss-cdc-pipeline`
-  // instead.
+  // Apache Fluss Flink connector. Per-Flink-major artifact (mirrors the
+  // Iceberg/Paimon pattern). Apache Fluss 0.9.0-incubating only publishes
+  // `fluss-flink-1.20` and `fluss-flink-2.2` — Flink 2.0 and 2.1 bases have
+  // no matching Fluss artifact and resolution returns empty (synthesis
+  // surfaces a clear "no connector" error rather than delivering a
+  // mismatched JAR). SQL-branch only — the Pipeline-YAML branch uses
+  // `fluss-cdc-pipeline` instead.
   //
   // Apache groupId migration: Fluss became an Apache Incubator project in
   // June 2025 and the canonical artifact moved from `com.alibaba.fluss` to
-  // `org.apache.fluss`. See https://fluss.apache.org/ for upstream context.
+  // `org.apache.fluss`. The artifact was simultaneously renamed from
+  // `fluss-connector-flink` to per-Flink-major `fluss-flink-<ver>`. See
+  // https://fluss.apache.org/ for upstream context.
   {
     connectorId: "fluss",
     builtIn: false,
@@ -262,10 +267,21 @@ const CONNECTOR_REGISTRY: readonly ConnectorRegistryEntry[] = [
     versions: [
       {
         minVersion: "1.20",
+        maxVersion: "1.20",
         artifacts: [
           {
             groupId: "org.apache.fluss",
-            artifactId: "fluss-connector-flink",
+            artifactId: "fluss-flink-1.20",
+            version: "0.9.0-incubating",
+          },
+        ],
+      },
+      {
+        minVersion: "2.2",
+        artifacts: [
+          {
+            groupId: "org.apache.fluss",
+            artifactId: "fluss-flink-2.2",
             version: "0.9.0-incubating",
           },
         ],
@@ -273,10 +289,9 @@ const CONNECTOR_REGISTRY: readonly ConnectorRegistryEntry[] = [
     ],
   },
 
-  // Apache Paimon Flink connector. Mirrors the Iceberg pattern: one artifact
-  // per Flink major (1.20 → paimon-flink-1.20; 2.x → paimon-flink-2.0). Pinned
-  // to Paimon 1.0.0 — the first release that ships the Flink 2.0 runtime
-  // alongside 1.20. See https://paimon.apache.org/.
+  // Apache Paimon Flink connector. Per-Flink-major artifact, single Paimon
+  // version pin. Paimon 1.4.1 ships connectors for the full 1.20 → 2.2
+  // range. See https://paimon.apache.org/.
   {
     connectorId: "paimon",
     builtIn: false,
@@ -288,17 +303,39 @@ const CONNECTOR_REGISTRY: readonly ConnectorRegistryEntry[] = [
           {
             groupId: "org.apache.paimon",
             artifactId: "paimon-flink-1.20",
-            version: "1.0.0",
+            version: "1.4.1",
           },
         ],
       },
       {
         minVersion: "2.0",
+        maxVersion: "2.0",
         artifacts: [
           {
             groupId: "org.apache.paimon",
             artifactId: "paimon-flink-2.0",
-            version: "1.0.0",
+            version: "1.4.1",
+          },
+        ],
+      },
+      {
+        minVersion: "2.1",
+        maxVersion: "2.1",
+        artifacts: [
+          {
+            groupId: "org.apache.paimon",
+            artifactId: "paimon-flink-2.1",
+            version: "1.4.1",
+          },
+        ],
+      },
+      {
+        minVersion: "2.2",
+        artifacts: [
+          {
+            groupId: "org.apache.paimon",
+            artifactId: "paimon-flink-2.2",
+            version: "1.4.1",
           },
         ],
       },
@@ -628,4 +665,36 @@ export function artifactToMavenUrl(
  */
 export function artifactToJarName(artifact: MavenArtifact): string {
   return `${artifact.artifactId}-${artifact.version}.jar`
+}
+
+// ── Connector → service mapping ──────────────────────────────────────
+//
+// Tells the synth-time validator and `cluster up` which `services.*`
+// entry a given connector depends on. Connectors not listed here have
+// no infra dependency (e.g. `filesystem` writes to the always-on
+// SeaweedFS bucket; `paimon` runs in-Flink against the same bucket).
+//
+// The keys are values of the `services` config block (see
+// `src/core/config.ts:ServicesConfig`). When adding a connector,
+// add its mapping here in the same file as its registry entry.
+
+export type ServiceKind = "kafka" | "postgres" | "fluss" | "iceberg"
+
+export const CONNECTOR_TO_SERVICE: Readonly<Record<string, ServiceKind>> = {
+  kafka: "kafka",
+  jdbc: "postgres",
+  "postgres-cdc-pipeline": "postgres",
+  iceberg: "iceberg",
+  fluss: "fluss",
+  "fluss-cdc-pipeline": "fluss",
+}
+
+/**
+ * Look up the `services` block key a connector depends on, or
+ * `undefined` if it has no infra requirement.
+ */
+export function serviceForConnector(
+  connectorId: string,
+): ServiceKind | undefined {
+  return CONNECTOR_TO_SERVICE[connectorId]
 }

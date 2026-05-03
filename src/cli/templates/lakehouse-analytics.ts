@@ -18,6 +18,9 @@ export function getLakehouseAnalyticsTemplates(
 export default defineConfig({
   flink: { version: '${opts.flinkVersion}' },
 
+  // Bronze/silver/gold lakehouse analytics on Iceberg, fed from Kafka CDC.
+  services: { kafka: {}, iceberg: {} },
+
   environments: {
     minikube: {
       cluster: { url: 'http://localhost:8081' },

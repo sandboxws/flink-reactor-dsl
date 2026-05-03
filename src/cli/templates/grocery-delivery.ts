@@ -18,6 +18,9 @@ export function getGroceryDeliveryTemplates(
 export default defineConfig({
   flink: { version: '${opts.flinkVersion}' },
 
+  // Kafka for orders; Postgres for the JDBC sinks (substitution + delivery alerts).
+  services: { kafka: {}, postgres: {} },
+
   environments: {
     minikube: {
       cluster: { url: 'http://localhost:8081' },

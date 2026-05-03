@@ -14,8 +14,8 @@ exports[`pg-fluss-paimon-ingest (Pipeline-YAML branch) > synthesizes a stable ar
         "execution.checkpointing.mode": "EXACTLY_ONCE",
         "execution.runtime-mode": "STREAMING",
       },
-      "flinkVersion": "v2_0",
-      "image": "flink:2.0",
+      "flinkVersion": "v2_2",
+      "image": "flink:2.2",
       "job": {
         "args": [
           "--pipeline",
@@ -122,8 +122,8 @@ exports[`pg-fluss-paimon-ingest (Pipeline-YAML branch) > synthesizes a stable ar
         "execution.checkpointing.mode": "EXACTLY_ONCE",
         "execution.runtime-mode": "STREAMING",
       },
-      "flinkVersion": "v2_0",
-      "image": "flink:2.0",
+      "flinkVersion": "v2_2",
+      "image": "flink:2.2",
       "job": {
         "args": [
           "--pipeline",
@@ -230,8 +230,8 @@ exports[`pg-fluss-paimon-ingest (Pipeline-YAML branch) > synthesizes a stable ar
         "execution.checkpointing.mode": "EXACTLY_ONCE",
         "execution.runtime-mode": "STREAMING",
       },
-      "flinkVersion": "v2_0",
-      "image": "flink:2.0",
+      "flinkVersion": "v2_2",
+      "image": "flink:2.2",
       "job": {
         "args": [
           "--pipeline",
@@ -338,8 +338,8 @@ exports[`pg-fluss-paimon-ingest (Pipeline-YAML branch) > synthesizes a stable ar
         "execution.checkpointing.mode": "EXACTLY_ONCE",
         "execution.runtime-mode": "STREAMING",
       },
-      "flinkVersion": "v2_0",
-      "image": "flink:2.0",
+      "flinkVersion": "v2_2",
+      "image": "flink:2.2",
       "job": {
         "args": [
           "--pipeline",
@@ -446,8 +446,8 @@ exports[`pg-fluss-paimon-serve (Flink-SQL branch) > synthesizes a stable artifac
         "execution.checkpointing.mode": "EXACTLY_ONCE",
         "execution.runtime-mode": "STREAMING",
       },
-      "flinkVersion": "v2_0",
-      "image": "flink:2.0",
+      "flinkVersion": "v2_2",
+      "image": "flink:2.2",
       "job": {
         "jarURI": "local:///opt/flink/usrlib/sql-runner.jar",
         "parallelism": 4,
@@ -468,8 +468,8 @@ exports[`pg-fluss-paimon-serve (Flink-SQL branch) > synthesizes a stable artifac
     },
   },
   "jars": [
-    "org.apache.fluss:fluss-connector-flink:0.9.0-incubating",
-    "org.apache.paimon:paimon-flink-2.0:1.0.0",
+    "org.apache.fluss:fluss-flink-2.2:0.9.0-incubating",
+    "org.apache.paimon:paimon-flink-2.2:1.4.1",
   ],
   "sql": "-- ====================================================================
 -- PIPELINE
@@ -603,8 +603,8 @@ exports[`pg-fluss-paimon-serve (Flink-SQL branch) > synthesizes a stable artifac
         "execution.checkpointing.mode": "EXACTLY_ONCE",
         "execution.runtime-mode": "STREAMING",
       },
-      "flinkVersion": "v2_0",
-      "image": "flink:2.0",
+      "flinkVersion": "v2_2",
+      "image": "flink:2.2",
       "job": {
         "jarURI": "local:///opt/flink/usrlib/sql-runner.jar",
         "parallelism": 4,
@@ -625,8 +625,8 @@ exports[`pg-fluss-paimon-serve (Flink-SQL branch) > synthesizes a stable artifac
     },
   },
   "jars": [
-    "org.apache.fluss:fluss-connector-flink:0.9.0-incubating",
-    "org.apache.paimon:paimon-flink-2.0:1.0.0",
+    "org.apache.fluss:fluss-flink-2.2:0.9.0-incubating",
+    "org.apache.paimon:paimon-flink-2.2:1.4.1",
   ],
   "sql": "-- ====================================================================
 -- PIPELINE
@@ -760,8 +760,8 @@ exports[`pg-fluss-paimon-serve (Flink-SQL branch) > synthesizes a stable artifac
         "execution.checkpointing.mode": "EXACTLY_ONCE",
         "execution.runtime-mode": "STREAMING",
       },
-      "flinkVersion": "v2_0",
-      "image": "flink:2.0",
+      "flinkVersion": "v2_2",
+      "image": "flink:2.2",
       "job": {
         "jarURI": "local:///opt/flink/usrlib/sql-runner.jar",
         "parallelism": 4,
@@ -782,8 +782,8 @@ exports[`pg-fluss-paimon-serve (Flink-SQL branch) > synthesizes a stable artifac
     },
   },
   "jars": [
-    "org.apache.fluss:fluss-connector-flink:0.9.0-incubating",
-    "org.apache.paimon:paimon-flink-2.0:1.0.0",
+    "org.apache.fluss:fluss-flink-2.2:0.9.0-incubating",
+    "org.apache.paimon:paimon-flink-2.2:1.4.1",
   ],
   "sql": "-- ====================================================================
 -- PIPELINE
@@ -917,8 +917,8 @@ exports[`pg-fluss-paimon-serve (Flink-SQL branch) > synthesizes a stable artifac
         "execution.checkpointing.mode": "EXACTLY_ONCE",
         "execution.runtime-mode": "STREAMING",
       },
-      "flinkVersion": "v2_0",
-      "image": "flink:2.0",
+      "flinkVersion": "v2_2",
+      "image": "flink:2.2",
       "job": {
         "jarURI": "local:///opt/flink/usrlib/sql-runner.jar",
         "parallelism": 4,
@@ -939,8 +939,8 @@ exports[`pg-fluss-paimon-serve (Flink-SQL branch) > synthesizes a stable artifac
     },
   },
   "jars": [
-    "org.apache.fluss:fluss-connector-flink:0.9.0-incubating",
-    "org.apache.paimon:paimon-flink-2.0:1.0.0",
+    "org.apache.fluss:fluss-flink-2.2:0.9.0-incubating",
+    "org.apache.paimon:paimon-flink-2.2:1.4.1",
   ],
   "sql": "-- ====================================================================
 -- PIPELINE
