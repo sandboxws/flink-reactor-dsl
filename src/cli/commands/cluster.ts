@@ -1217,6 +1217,21 @@ async function initPostgresDatabases(
           spinner.message(`Skipping ${db} (dump not found)...`)
           continue
         }
+
+        // Partial-state recovery: a prior interrupted load can commit
+        // CREATE SCHEMA before failing on a later CREATE TABLE, leaving
+        // the schema present with zero tables. tableCount=0 then green-
+        // lights the load again, which crashes on `CREATE SCHEMA … already
+        // exists`. Drop + recreate the *database* — it's empty by the
+        // tableCount=0 definition (sample DBs hold dump data only), so
+        // nothing of value is at risk. Uses WITH (FORCE) (PG 13+) to
+        // evict any lingering connections from prior psql attempts.
+        psql("postgres", `DROP DATABASE IF EXISTS ${db} WITH (FORCE)`)
+        psql("postgres", `CREATE DATABASE ${db}`)
+        if (timescaledb) {
+          psql(db, "CREATE EXTENSION IF NOT EXISTS timescaledb")
+        }
+
         execFileSync(
           engine.bin,
           [
