@@ -24,6 +24,14 @@ services:
         s3.path.style.access: true
         s3.access-key: admin
         s3.secret-key: admin
+        # Force Fluss classes (including shaded netty under
+        # org.apache.fluss.shaded.netty4) to load via the parent
+        # AppClassLoader. Without this the SQL connector and the CDC
+        # pipeline-connector each pull their own copy of those shaded
+        # interfaces into ChildFirstClassLoaders, then the JM/TM hits
+        # "loader constraint violation" the first time the same shaded
+        # interface is requested through the parent loader.
+        classloader.parent-first-patterns.additional: org.apache.fluss.
     volumes:
       - flink-checkpoints:/opt/flink/checkpoints
       - flink-data:/opt/flink/data
@@ -56,6 +64,14 @@ services:
         s3.path.style.access: true
         s3.access-key: admin
         s3.secret-key: admin
+        # Force Fluss classes (including shaded netty under
+        # org.apache.fluss.shaded.netty4) to load via the parent
+        # AppClassLoader. Without this the SQL connector and the CDC
+        # pipeline-connector each pull their own copy of those shaded
+        # interfaces into ChildFirstClassLoaders, then the JM/TM hits
+        # "loader constraint violation" the first time the same shaded
+        # interface is requested through the parent loader.
+        classloader.parent-first-patterns.additional: org.apache.fluss.
     volumes:
       - flink-checkpoints:/opt/flink/checkpoints
       - flink-data:/opt/flink/data
@@ -83,6 +99,14 @@ services:
         s3.path.style.access: true
         s3.access-key: admin
         s3.secret-key: admin
+        # Force Fluss classes (including shaded netty under
+        # org.apache.fluss.shaded.netty4) to load via the parent
+        # AppClassLoader. Without this the SQL connector and the CDC
+        # pipeline-connector each pull their own copy of those shaded
+        # interfaces into ChildFirstClassLoaders, then the JM/TM hits
+        # "loader constraint violation" the first time the same shaded
+        # interface is requested through the parent loader.
+        classloader.parent-first-patterns.additional: org.apache.fluss.
     volumes:
       - flink-checkpoints:/opt/flink/checkpoints
       - flink-data:/opt/flink/data

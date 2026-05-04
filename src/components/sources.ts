@@ -245,6 +245,21 @@ export interface PostgresCdcPipelineSourceProps<
   /** Row-chunk size for the incremental snapshot fan-out. */
   readonly chunkSize?: number
   /**
+   * Project the source commit timestamp (`__op_ts__`, TIMESTAMP_LTZ(3))
+   * onto each row as a real, named column. The codegen emits a CDC
+   * `transform` stanza of the shape
+   *   projection: `*, CAST(__op_ts__ AS TIMESTAMP_LTZ(3)) AS <col>`
+   * for every entry in `tableList`, so the column survives across the
+   * Fluss boundary as regular schema (no virtual/metadata indirection
+   * downstream consumers have to know about). Idempotent on replay
+   * because `__op_ts__` is the postgres WAL commit time, not a wall-
+   * clock value computed during ingest.
+   *
+   * Pair this with a watermark on the same column in any downstream
+   * `Schema(...)` declarations that want windowed/temporal semantics.
+   */
+  readonly eventTimeColumn?: string
+  /**
    * Optional static schema. When absent, downstream tooling that requires
    * columns (e.g. `schema --live`) must introspect the Postgres server
    * directly via `information_schema.columns`.

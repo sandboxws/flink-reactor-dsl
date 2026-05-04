@@ -121,6 +121,17 @@ function buildPostgresSourceStanza(
     "debezium.publication.autocreate.mode": "filtered",
   }
 
+  // Expose connector-specific metadata columns to downstream transforms.
+  // The 3.6 PostgresDataSource registers `op_ts` as a SupportedMetadataColumn
+  // (source-commit timestamp). Connector-specific columns differ from the
+  // CDC runtime's universal ones (`__schema_name__`, `__table_name__`, etc.)
+  // — those are always-on; this list opts in to the per-connector ones.
+  // Only declared when downstream transforms reference them via
+  // `eventTimeColumn`, otherwise we'd ship a dangling column nothing reads.
+  if (p.eventTimeColumn) {
+    stanza["metadata.list"] = "op_ts"
+  }
+
   // snapshotMode → scan.startup.mode (replaces the older
   // scan.snapshot.enabled toggle).
   const snapshotMode = (p.snapshotMode as string | undefined) ?? "initial"
@@ -408,8 +419,11 @@ export function generatePipelineYaml(
     )
   }
 
-  const doc = {
+  const transform = buildTransformStanzaList(source)
+
+  const doc: Record<string, unknown> = {
     source: buildPostgresSourceStanza(source, pipelineName),
+    ...(transform ? { transform } : {}),
     sink: buildSinkStanza(sink, pipelineNode),
     pipeline: {
       name: pipelineName,
@@ -421,4 +435,49 @@ export function generatePipelineYaml(
   }
 
   return toYaml(doc)
+}
+
+/**
+ * Project Debezium's source-commit timestamp (`__op_ts__`) as a real
+ * column on every captured table when the source declares an
+ * `eventTimeColumn`. Returns one transform entry per upstream table so
+ * each schema event independently carries the new column — using a
+ * regex `source-table` would technically work but couples the projection
+ * to whatever else lives in the postgres schema.
+ */
+function buildTransformStanzaList(
+  source: ConstructNode,
+): readonly Record<string, unknown>[] | undefined {
+  const eventTimeColumn = source.props.eventTimeColumn as string | undefined
+  if (!eventTimeColumn) return undefined
+
+  const database = source.props.database as string
+  const tableList = source.props.tableList as readonly string[]
+
+  return tableList.map((t) => ({
+    "source-table": t.includes(".") ? `${database}.${t}` : `${database}.${t}`,
+    // CAST keeps the column type explicit and matches whatever
+    // downstream Schema(...) declarations expect — avoid surprising
+    // implicit conversions if a consumer declares TIMESTAMP(3) without
+    // _LTZ.
+    // Flink CDC requires `*` (all-columns) to be escaped as `\*` in YAML
+    // because YAML treats a bare `*` as an anchor-reference operator; the
+    // CDC parser unescapes it before evaluating the projection. `op_ts`
+    // is the postgres connector's source-commit-timestamp metadata column
+    // (a SupportedMetadataColumn on PostgresDataSource — different from
+    // the universal `__namespace_name__`/`__schema_name__` doubly-
+    // underscored constants). It must be declared via `metadata.list:
+    // op_ts` on the source for the parser to find it.
+    //
+    // OpTsMetadataColumn.getType() returns BIGINT (epoch milliseconds),
+    // not TIMESTAMP_LTZ. A bare rename `op_ts AS event_time` would land
+    // a BIGINT column in Fluss, which then can't carry watermarks
+    // downstream and conflicts on subsequent schema events. Use
+    // `TO_TIMESTAMP_LTZ(epoch, 3)` — Flink's standard helper for the
+    // conversion — to pin the output column's type as TIMESTAMP_LTZ(3)
+    // at the projection level. `CAST(... AS TIMESTAMP_LTZ(3))` would also
+    // work conceptually but Calcite's parser rejects the Flink-specific
+    // `TIMESTAMP_LTZ` keyword in CAST grammar.
+    projection: `\\*, TO_TIMESTAMP_LTZ(op_ts, 3) AS ${eventTimeColumn}`,
+  }))
 }

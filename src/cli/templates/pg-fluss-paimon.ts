@@ -73,6 +73,13 @@ export default defineConfig({
       path: "schemas/orders.ts",
       content: `import { Schema, Field } from '@flink-reactor/dsl'
 
+// Schema mirrors the upstream Postgres \`public.orders\` columns 1:1
+// plus an \`event_time\` column populated by the ingest pipeline from
+// Debezium's source-commit timestamp (\`__op_ts__\`). The CDC transform
+// stanza in pipelines/ingest/index.tsx (\`eventTimeColumn: 'event_time'\`)
+// adds it before the Fluss sink, so the column survives end-to-end as
+// regular schema. Watermark stays on this column for downstream
+// windowed/temporal pipelines.
 export const OrdersSchema = Schema({
   fields: {
     o_orderkey: Field.BIGINT(),
@@ -84,7 +91,7 @@ export const OrdersSchema = Schema({
     o_clerk: Field.STRING(),
     o_shippriority: Field.INT(),
     o_comment: Field.STRING(),
-    event_time: Field.TIMESTAMP(3),
+    event_time: Field.TIMESTAMP_LTZ(3),
   },
   primaryKey: { columns: ['o_orderkey'] },
   watermark: {
@@ -116,7 +123,7 @@ export const LineitemSchema = Schema({
     l_shipinstruct: Field.STRING(),
     l_shipmode: Field.STRING(),
     l_comment: Field.STRING(),
-    event_time: Field.TIMESTAMP(3),
+    event_time: Field.TIMESTAMP_LTZ(3),
   },
   primaryKey: { columns: ['l_orderkey', 'l_linenumber'] },
   watermark: {
@@ -140,7 +147,7 @@ export const CustomerSchema = Schema({
     c_acctbal: Field.DECIMAL(15, 2),
     c_mktsegment: Field.STRING(),
     c_comment: Field.STRING(),
-    event_time: Field.TIMESTAMP(3),
+    event_time: Field.TIMESTAMP_LTZ(3),
   },
   primaryKey: { columns: ['c_custkey'] },
   watermark: {
@@ -185,6 +192,12 @@ const source = PostgresCdcPipelineSource({
   tableList: ['public.orders', 'public.lineitem', 'public.customer'],
   snapshotMode: 'initial',
   chunkSize: 100_000,
+  // Project Debezium's source-commit timestamp onto each row as a real
+  // \`event_time\` column. The column survives across the Fluss
+  // boundary so downstream pipelines (\`serve\`) can declare a watermark
+  // on it without needing virtual/metadata column support — see the
+  // \`OrdersSchema\` watermark stanza in schemas/orders.ts.
+  eventTimeColumn: 'event_time',
 })
 
 const sink = FlussSink({
