@@ -201,6 +201,24 @@ export function registerClusterCommand(program: Command): void {
         }),
       )
     })
+
+  cluster
+    .command("open <target>")
+    .description(
+      `Open a cluster URL in the browser. Targets: ${CLUSTER_OPEN_TARGETS.join(", ")}`,
+    )
+    .action(async (target: string) => {
+      await runCommand(
+        Effect.tryPromise({
+          try: () => runClusterOpen(target),
+          catch: (err) =>
+            new CliError({
+              reason: "invalid_args",
+              message: (err as Error).message,
+            }),
+        }),
+      )
+    })
 }
 
 // ── Engine + config resolution ───────────────────────────────────────
@@ -442,6 +460,8 @@ export async function runClusterUp(opts: {
       seaweedfsPort: 8333,
       icebergRestPort: profiles.includes("iceberg") ? 8181 : undefined,
       flussPort: profiles.includes("fluss") ? 9123 : undefined,
+      prometheusPort: profiles.includes("observability") ? 9090 : undefined,
+      grafanaPort: profiles.includes("observability") ? 3000 : undefined,
     })
   } catch {
     console.error(pc.red("Services did not become ready in time."))
@@ -503,6 +523,14 @@ export async function runClusterUp(opts: {
   if (profiles.includes("fluss")) {
     console.log(
       `  ${pc.green("✓")} Fluss:          ${pc.dim("localhost:9123 (coordinator)")}`,
+    )
+  }
+  if (profiles.includes("observability")) {
+    console.log(
+      `  ${pc.green("✓")} Grafana:        ${pc.dim("http://localhost:3000 (admin/admin · anon viewer)")}`,
+    )
+    console.log(
+      `  ${pc.green("✓")} Prometheus:     ${pc.dim("http://localhost:9090")}`,
     )
   }
   console.log("")
@@ -886,6 +914,41 @@ export async function runClusterSubmit(
     }
     process.exitCode = 1
   }
+}
+
+// ── cluster open ─────────────────────────────────────────────────────
+
+/**
+ * URL targets exposed by `fr cluster open <target>`. Static — these are
+ * the always-on or canonical-port endpoints. If a user customizes ports
+ * via `services.<svc>.externalPort` they can fall back to opening the
+ * URL manually; the goal here is a fast keyboard shortcut for the 90%
+ * case, not a deeply configurable launcher.
+ */
+const OPEN_TARGETS: Record<string, { url: string; label: string }> = {
+  flink: { url: "http://localhost:8081", label: "Flink UI" },
+  "sql-gateway": { url: "http://localhost:8083", label: "SQL Gateway" },
+  grafana: { url: "http://localhost:3000", label: "Grafana" },
+  prometheus: { url: "http://localhost:9090", label: "Prometheus" },
+  seaweedfs: { url: "http://localhost:8333", label: "SeaweedFS" },
+  iceberg: {
+    url: "http://lakekeeper.localtest.me:8181/ui",
+    label: "Iceberg / Lakekeeper UI",
+  },
+}
+
+export const CLUSTER_OPEN_TARGETS: readonly string[] = Object.keys(OPEN_TARGETS)
+
+export async function runClusterOpen(target: string): Promise<void> {
+  const choice = OPEN_TARGETS[target]
+  if (!choice) {
+    console.error(pc.red(`Unknown target: ${target}`))
+    console.error(pc.dim(`Available: ${Object.keys(OPEN_TARGETS).join(", ")}`))
+    process.exitCode = 1
+    return
+  }
+  const { openUrl } = await import("@/cli/runtime/open-url.js")
+  openUrl(choice.url, choice.label)
 }
 
 // ── Background CDC publisher ─────────────────────────────────────────

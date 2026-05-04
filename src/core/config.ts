@@ -232,11 +232,43 @@ export interface IcebergServiceConfig {
   readonly externalPort?: number
 }
 
+export interface PrometheusServiceConfig {
+  /** Host port for the Prometheus UI. Default: 9090. */
+  readonly externalPort?: number
+  /** Image override; default ships in `docker-compose.yml`. */
+  readonly image?: string
+}
+
+export interface GrafanaServiceConfig {
+  /** Host port for the Grafana UI. Default: 3000. */
+  readonly externalPort?: number
+  /** Image override; default ships in `docker-compose.yml`. */
+  readonly image?: string
+  /**
+   * When `false`, ship Grafana with its stock dark theme instead of the
+   * bundled Gruvppuccin (FlinkReactor Console-matching) theme. Default `true`.
+   */
+  readonly theme?: boolean
+}
+
 export interface ServicesConfig {
   readonly kafka?: KafkaServiceConfig | false
   readonly postgres?: PostgresServiceConfig | false
   readonly fluss?: FlussServiceConfig | false
   readonly iceberg?: IcebergServiceConfig | false
+  /**
+   * Activates the `observability` Compose profile (Prometheus + Grafana).
+   * Implies `prometheus`. Default off — Grafana adds ~270MB resident memory.
+   * No template enables it by default; users opt in by adding
+   * `services: { ..., grafana: {} }` to their `flink-reactor.config.ts`.
+   */
+  readonly grafana?: GrafanaServiceConfig | false
+  /**
+   * Implicitly activated when `services.grafana` is set. Surfaced as a
+   * separate config so the Prometheus port can be overridden without
+   * touching Grafana settings.
+   */
+  readonly prometheus?: PrometheusServiceConfig | false
 }
 
 // ── Runtime ─────────────────────────────────────────────────────────

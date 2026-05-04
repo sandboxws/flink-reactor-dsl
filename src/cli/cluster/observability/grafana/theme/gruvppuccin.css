@@ -1,0 +1,216 @@
+/*
+ * Gruvppuccin theme for Grafana — matches FlinkReactor Console.
+ *
+ * Mapping: tokens come from /Users/ahmed/Development/github/gruvpuccin/gruvppuccin
+ * (palette.json) — the same palette the Console (`flink-reactor-console`) uses
+ * as its default. License: MIT.
+ *
+ * Compatibility: targeted at Grafana 11.4.x. Grafana minor bumps occasionally
+ * rename CSS variables — re-validate after a Grafana version bump. The
+ * docker-compose.yml pins the image tag for this reason.
+ *
+ * Scope: chrome only (background hierarchy, text, borders, primary accent).
+ * Semantic colors (red/green/yellow for alerts and status indicators) stay
+ * close to Grafana defaults so dashboards still read correctly. Per-panel
+ * chart colors are set in dashboards/*.json's `fieldConfig` blocks because
+ * Grafana renders charts via VisX/D3, not via CSS variables.
+ */
+
+/* ── Self-hosted Geist font (matches Console) ─────────────────────────
+ *
+ * Grafana serves static assets only from /usr/share/grafana/public/ —
+ * docker-compose.yml bind-mounts our fonts/ into /usr/share/grafana/public/fr-fonts
+ * so the absolute URL below resolves through Grafana's static handler.
+ * Without that bind mount the fonts 404 and the cascade falls back to
+ * Grafana's bundled Inter, which still looks clean.
+ */
+@font-face {
+  font-family: "Geist";
+  src: url("/public/fr-fonts/GeistVF.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "GeistMono";
+  src: url("/public/fr-fonts/GeistMonoVF.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ── Color tokens (Gruvppuccin dark variant) ──────────────────────────
+ *
+ * Surfaces       crust  #101213   page bg
+ *                mantle #141617   secondary surface (sidebar)
+ *                base   #181a1b   panel bg
+ *                surface0 #242424 elevated/hover
+ *                surface1 #2e2c2b borders
+ * Text           text   #d4be98   primary
+ *                subtext1 #bfb3a2 secondary
+ *                subtext0 #a69a8a muted
+ *                overlay2 #7c7269 disabled
+ * Accent         green  #a9b665   primary action / active
+ *                peach  #e78a4e   secondary action / hover
+ *                yellow #d8a657   warning
+ *                red    #ea6962   error
+ *                teal   #7daea3   info / link
+ */
+
+:root,
+:root.theme-dark,
+body.theme-dark,
+body[class*="theme-dark"] {
+  /* Tokens we expose so per-panel CSS or dashboard JSON can reference them. */
+  --gp-crust: #101213;
+  --gp-mantle: #141617;
+  --gp-base: #181a1b;
+  --gp-surface0: #242424;
+  --gp-surface1: #2e2c2b;
+  --gp-text: #d4be98;
+  --gp-subtext1: #bfb3a2;
+  --gp-subtext0: #a69a8a;
+  --gp-overlay2: #7c7269;
+  --gp-green: #a9b665;
+  --gp-peach: #e78a4e;
+  --gp-yellow: #d8a657;
+  --gp-red: #ea6962;
+  --gp-teal: #7daea3;
+  --gp-mauve: #c28fd6;
+
+  /* ── Grafana background hierarchy ─────────────────────────────────── */
+  --background-canvas: var(--gp-crust);
+  --background-primary: var(--gp-base);
+  --background-secondary: var(--gp-mantle);
+  --background-elevated: var(--gp-surface0);
+
+  /* ── Borders ──────────────────────────────────────────────────────── */
+  --border-weak: var(--gp-surface0);
+  --border-medium: var(--gp-surface1);
+  --border-strong: #413c39; /* gp-surface2 */
+
+  /* ── Text ─────────────────────────────────────────────────────────── */
+  --text-primary: var(--gp-text);
+  --text-secondary: var(--gp-subtext1);
+  --text-disabled: var(--gp-overlay2);
+  --text-link: var(--gp-teal);
+  --text-maxContrast: #f0e5cc;
+
+  /* ── Primary brand accent ─────────────────────────────────────────── */
+  --primary-text-on-strong: #101213;
+  --primary-shade: var(--gp-green);
+  --primary-main: var(--gp-green);
+  --primary-bg: rgba(169, 182, 101, 0.12);
+  --primary-border: rgba(169, 182, 101, 0.4);
+  --primary-text: var(--gp-green);
+
+  /* ── Secondary action ─────────────────────────────────────────────── */
+  --secondary-text: var(--gp-text);
+  --secondary-bg: rgba(212, 190, 152, 0.05);
+  --secondary-border: var(--gp-surface1);
+  --secondary-shade: var(--gp-peach);
+
+  /* ── Brand gradient (used in login screen, sidebar pinning UI) ────── */
+  --gradient-brand-vertical: linear-gradient(
+    0deg,
+    var(--gp-green) 0%,
+    var(--gp-peach) 100%
+  );
+  --gradient-brand-horizontal: linear-gradient(
+    90deg,
+    var(--gp-green) 0%,
+    var(--gp-peach) 100%
+  );
+
+  /* ── Font stack (matches Console) ────────────────────────────────── */
+  --font-family-base:
+    "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-family-monospace:
+    "GeistMono", ui-monospace, SFMono-Regular, "SF Mono", Consolas,
+    "Liberation Mono", monospace;
+}
+
+/* ── Hard-coded base body styling (CSS-var fallback if Grafana renames) */
+body {
+  background-color: var(--gp-crust) !important;
+  color: var(--gp-text);
+  font-family:
+    "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* ── Sidebar / nav ────────────────────────────────────────────────── */
+.sidemenu,
+nav[class*="sidemenu"],
+[class*="navbar"],
+[data-testid="data-testid app chrome menu"] {
+  background-color: var(--gp-mantle) !important;
+  border-color: var(--gp-surface1) !important;
+}
+
+/* ── Panel chrome ─────────────────────────────────────────────────── */
+[class*="panel-container"],
+[data-testid="data-testid panel content"],
+.panel {
+  background-color: var(--gp-base) !important;
+  border: 1px solid var(--gp-surface1) !important;
+  border-radius: 12px;
+}
+
+/* ── Active / hover affordances ──────────────────────────────────── */
+a,
+[class*="link"]:not(button) {
+  color: var(--gp-teal);
+}
+
+a:hover {
+  color: var(--gp-peach) !important;
+}
+
+button[class*="primary"],
+[class*="button"][class*="primary"] {
+  background-color: var(--gp-green) !important;
+  color: var(--gp-crust) !important;
+  border-color: var(--gp-green) !important;
+}
+
+button[class*="primary"]:hover,
+[class*="button"][class*="primary"]:hover {
+  background-color: var(--gp-peach) !important;
+  border-color: var(--gp-peach) !important;
+}
+
+/* ── Tabs (active indicator: peach underline, matching Console) ───── */
+[role="tab"][aria-selected="true"],
+[class*="tab"][class*="active"] {
+  border-bottom-color: var(--gp-peach) !important;
+  color: var(--gp-text) !important;
+}
+
+/* ── Scrollbar (subtle, on-theme) ─────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--gp-mantle);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--gp-surface1);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--gp-overlay2);
+}
+
+/* ── Login screen polish ─────────────────────────────────────────── */
+[class*="login-content"],
+[class*="login-form"] {
+  background-color: var(--gp-base) !important;
+  border: 1px solid var(--gp-surface1) !important;
+  border-radius: 12px;
+}

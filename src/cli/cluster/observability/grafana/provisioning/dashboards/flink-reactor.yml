@@ -1,0 +1,15 @@
+# Dashboard provider — points at the JSON files bind-mounted from
+# observability/grafana/dashboards/. `disableDeletion: true` keeps users
+# from accidentally removing the bundled dashboards through the UI.
+apiVersion: 1
+
+providers:
+  - name: flink-reactor
+    folder: FlinkReactor
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

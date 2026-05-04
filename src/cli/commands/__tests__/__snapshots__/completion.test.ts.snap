@@ -122,6 +122,8 @@ _flink_reactor_new() {
     '(-y --yes)'{-y,--yes}'[Use defaults, skip prompts]' \\
     '--no-git[Skip git initialization]' \\
     '--no-install[Skip dependency installation]' \\
+    '--grafana[Enable the Grafana metrics dashboard in the rendered config (Flink 2.x only)]' \\
+    '--no-grafana[Disable the Grafana opt-in prompt]' \\
     '1:Name of the new project: '
 }
 
@@ -296,6 +298,7 @@ _flink_reactor_down() {
   _arguments \\
     '(-e --env)'{-e,--env}'[Environment name (default\\: auto-select)]: : ' \\
     '--runtime[Override the env'\\''s runtime (docker | minikube | homebrew | kubernetes)]: : ' \\
+    '--container-engine[Container engine (auto | docker | podman); pinned via FR_DOCKER_BIN if set]: : ' \\
     '--volumes[Remove persistent volumes]' \\
     '--all[Full teardown (e.g. stop the minikube VM entirely)]'
 }
@@ -317,6 +320,7 @@ _flink_reactor_cluster() {
         'seed:Submit example SQL pipelines and publish CDC data'
         'status:Show cluster health, running jobs, and resource utilization'
         'submit:Submit a single SQL file via SQL Gateway'
+        'open:Open a cluster URL in the browser. Targets\\: flink, sql-gateway, grafana, prometheus, seaweedfs, iceberg'
       )
       _describe 'subcommand' subcommands
       ;;
@@ -336,6 +340,9 @@ _flink_reactor_cluster() {
           ;;
         submit)
           _flink_reactor_cluster_submit
+          ;;
+        open)
+          _flink_reactor_cluster_open
           ;;
       esac
       ;;
@@ -373,6 +380,11 @@ _flink_reactor_cluster_submit() {
   _arguments \\
     '--port[SQL Gateway port]: : ' \\
     '1::_files -g "*.sql"'
+}
+
+_flink_reactor_cluster_open() {
+  _arguments \\
+    '1:: '
 }
 
 _flink_reactor_schema() {

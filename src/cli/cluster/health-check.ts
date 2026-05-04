@@ -9,6 +9,8 @@ export async function waitForServices(opts: {
   seaweedfsPort?: number
   icebergRestPort?: number
   flussPort?: number
+  grafanaPort?: number
+  prometheusPort?: number
   timeoutMs?: number
   intervalMs?: number
 }): Promise<void> {
@@ -24,8 +26,15 @@ export async function waitForServices(opts: {
     { name: "Flink JobManager", check: () => checkFlink(opts.flinkPort) },
     { name: "SQL Gateway", check: () => checkSqlGateway(opts.sqlGatewayPort) },
   ]
-  const { kafkaPort, postgresPort, seaweedfsPort, icebergRestPort, flussPort } =
-    opts
+  const {
+    kafkaPort,
+    postgresPort,
+    seaweedfsPort,
+    icebergRestPort,
+    flussPort,
+    grafanaPort,
+    prometheusPort,
+  } = opts
   if (kafkaPort !== undefined) {
     services.push({ name: "Kafka", check: () => checkKafka(kafkaPort) })
   }
@@ -48,6 +57,18 @@ export async function waitForServices(opts: {
     services.push({
       name: "Fluss Coordinator",
       check: () => checkTcp(flussPort),
+    })
+  }
+  if (prometheusPort !== undefined) {
+    services.push({
+      name: "Prometheus",
+      check: () => checkPrometheus(prometheusPort),
+    })
+  }
+  if (grafanaPort !== undefined) {
+    services.push({
+      name: "Grafana",
+      check: () => checkGrafana(grafanaPort),
     })
   }
 
@@ -117,6 +138,30 @@ async function checkIcebergRest(port: number): Promise<boolean> {
 
 async function checkKafka(port: number): Promise<boolean> {
   return checkTcp(port)
+}
+
+async function checkPrometheus(port: number): Promise<boolean> {
+  try {
+    const res = await fetch(`http://localhost:${port}/-/healthy`)
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+async function checkGrafana(port: number): Promise<boolean> {
+  // `/api/health` returns JSON like `{"database": "ok", "version": "..."}`.
+  // A 200 status is sufficient for "ready" — the body inspection is a
+  // belt-and-braces guard against the edge case where Grafana is up but
+  // its sqlite DB hasn't migrated yet.
+  try {
+    const res = await fetch(`http://localhost:${port}/api/health`)
+    if (!res.ok) return false
+    const body = (await res.json()) as { database?: string }
+    return body.database === "ok"
+  } catch {
+    return false
+  }
 }
 
 async function checkTcp(port: number): Promise<boolean> {

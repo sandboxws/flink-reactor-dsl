@@ -1,0 +1,28 @@
+# Prometheus scrape config for the local FlinkReactor cluster.
+#
+# Targets the Flink JobManager and TaskManagers. Each container exposes
+# its Prometheus reporter on port 9249 (configured via FLINK_PROPERTIES
+# in docker-compose.yml; the bundled reporter JAR is wired onto the
+# classpath in Dockerfile.flink).
+#
+# In-network DNS uses Compose service names (`jobmanager`, `taskmanager-1`,
+# `taskmanager-2`) — port 9249 inside the container is the JM/TM reporter
+# regardless of any host-side port mapping.
+global:
+  scrape_interval: 5s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: flink-jobmanager
+    static_configs:
+      - targets: ["jobmanager:9249"]
+        labels:
+          flink_role: jobmanager
+
+  - job_name: flink-taskmanager
+    static_configs:
+      - targets:
+          - "taskmanager-1:9249"
+          - "taskmanager-2:9249"
+        labels:
+          flink_role: taskmanager

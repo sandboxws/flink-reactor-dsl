@@ -1,4 +1,3 @@
-import { execSync } from "node:child_process"
 import { existsSync, type FSWatcher, watch } from "node:fs"
 import { join } from "node:path"
 import type { Command } from "commander"
@@ -7,6 +6,7 @@ import pc from "picocolors"
 import { discoverPipelines, resolveProjectContext } from "@/cli/discovery.js"
 import { runCommand } from "@/cli/effect-runner.js"
 import { selectAdapter } from "@/cli/runtime/index.js"
+import { openUrl } from "@/cli/runtime/open-url.js"
 import type { Runtime } from "@/core/config.js"
 import { CliError } from "@/core/errors.js"
 import { runGraph } from "./graph.js"
@@ -277,27 +277,8 @@ function printHelp(): void {
   console.log("")
 }
 
-function openUrl(url: string | null, label: string, hint?: string): void {
-  if (!url) {
-    if (hint) console.log(pc.yellow(`\n${hint}`))
-    return
-  }
-
-  console.log(pc.dim(`\nOpening ${label} (${url})...`))
-
-  try {
-    const platform = process.platform
-    const cmd =
-      platform === "darwin"
-        ? "open"
-        : platform === "win32"
-          ? "start"
-          : "xdg-open"
-    execSync(`${cmd} ${url}`, { stdio: "ignore" })
-  } catch {
-    console.log(pc.dim(`Open manually: ${url}`))
-  }
-}
+// `openUrl` lives in src/cli/runtime/open-url.ts so `fr cluster open <target>`
+// can share it with the dev REPL's "f" shortcut.
 
 async function showSqlPreview(state: DevState): Promise<void> {
   const { readFileSync } = await import("node:fs")

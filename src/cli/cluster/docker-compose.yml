@@ -32,6 +32,15 @@ services:
         # "loader constraint violation" the first time the same shaded
         # interface is requested through the parent loader.
         classloader.parent-first-patterns.additional: org.apache.fluss.
+        # Prometheus reporter for the local JM/TM (the bundled JAR is
+        # copied to /opt/flink/lib/ in Dockerfile.flink). Range 9249-9259
+        # gives Flink room to pick a free port if multiple reporter
+        # instances bind on the same container; in our compose layout
+        # each JM/TM has its own container so 9249 is the steady-state
+        # port. The user-pipeline metrics path on the K8s/CRD lane is
+        # handled by `metricsPlugin` instead.
+        metrics.reporter.prometheus.factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
+        metrics.reporter.prometheus.port: 9249-9259
     volumes:
       - flink-checkpoints:/opt/flink/checkpoints
       - flink-data:/opt/flink/data
@@ -72,6 +81,15 @@ services:
         # "loader constraint violation" the first time the same shaded
         # interface is requested through the parent loader.
         classloader.parent-first-patterns.additional: org.apache.fluss.
+        # Prometheus reporter for the local JM/TM (the bundled JAR is
+        # copied to /opt/flink/lib/ in Dockerfile.flink). Range 9249-9259
+        # gives Flink room to pick a free port if multiple reporter
+        # instances bind on the same container; in our compose layout
+        # each JM/TM has its own container so 9249 is the steady-state
+        # port. The user-pipeline metrics path on the K8s/CRD lane is
+        # handled by `metricsPlugin` instead.
+        metrics.reporter.prometheus.factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
+        metrics.reporter.prometheus.port: 9249-9259
     volumes:
       - flink-checkpoints:/opt/flink/checkpoints
       - flink-data:/opt/flink/data
@@ -107,6 +125,15 @@ services:
         # "loader constraint violation" the first time the same shaded
         # interface is requested through the parent loader.
         classloader.parent-first-patterns.additional: org.apache.fluss.
+        # Prometheus reporter for the local JM/TM (the bundled JAR is
+        # copied to /opt/flink/lib/ in Dockerfile.flink). Range 9249-9259
+        # gives Flink room to pick a free port if multiple reporter
+        # instances bind on the same container; in our compose layout
+        # each JM/TM has its own container so 9249 is the steady-state
+        # port. The user-pipeline metrics path on the K8s/CRD lane is
+        # handled by `metricsPlugin` instead.
+        metrics.reporter.prometheus.factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
+        metrics.reporter.prometheus.port: 9249-9259
     volumes:
       - flink-checkpoints:/opt/flink/checkpoints
       - flink-data:/opt/flink/data
@@ -554,6 +581,66 @@ services:
           }' || true
     restart: "no"
 
+  # ── Observability (Prometheus + Grafana) ─────────────────────────────
+  # Opt-in via `services.grafana: {}` in flink-reactor.config.ts. Both
+  # services share the `observability` profile so a single profile flag
+  # brings up the pair. Grafana auto-provisions a Prometheus datasource
+  # plus dashboards from `./observability/grafana/provisioning/` and
+  # ships a Gruvppuccin theme matching FlinkReactor Console.
+  prometheus:
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v2.55.1}
+    profiles:
+      - observability
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=24h"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  grafana:
+    image: ${GRAFANA_IMAGE:-grafana/grafana:11.4.0}
+    profiles:
+      - observability
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_USERS_DEFAULT_THEME: dark
+      GF_INSTALL_PLUGINS: ""
+    volumes:
+      - ./observability/grafana/grafana.ini:/etc/grafana/grafana.ini:ro
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./observability/grafana/theme:/etc/grafana/theme:ro
+      # Fonts also bind into Grafana's static-asset path — Grafana only
+      # serves files under /usr/share/grafana/public/, so the @font-face
+      # `url()` references in gruvppuccin.css resolve from there.
+      - ./observability/grafana/theme/fonts:/usr/share/grafana/public/fr-fonts:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      # Grafana's `/api/health` returns JSON like `{"database":"ok",...}`.
+      # `wget -q -O-` fetches without writing a file; grep verifies the
+      # database key is OK before the container is considered healthy.
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3000/api/health | grep -q '\"database\":\"ok\"'"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+
 volumes:
   flink-checkpoints:
   flink-data:
@@ -564,3 +651,5 @@ volumes:
   fluss-tablet-1-data:
   fluss-tablet-2-data:
   fluss-tablet-3-data:
+  prometheus-data:
+  grafana-data:

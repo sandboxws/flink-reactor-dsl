@@ -63,6 +63,14 @@ RUN mkdir -p /opt/flink/plugins/s3-fs-hadoop \
   && wget -q -O /opt/flink/plugins/s3-fs-hadoop/flink-s3-fs-hadoop-2.2.0.jar \
   https://repo1.maven.org/maven2/org/apache/flink/flink-s3-fs-hadoop/2.2.0/flink-s3-fs-hadoop-2.2.0.jar
 
+# NB: Flink 2.x ships the Prometheus reporter as a plugin under
+# `/opt/flink/plugins/metrics-prometheus/flink-metrics-prometheus-2.2.0.jar`
+# rather than under `/opt/flink/opt/` (the Flink 1.x layout). Plugin
+# JARs are already on the reporter-factory lookup path, so no `cp` is
+# needed — the FLINK_PROPERTIES `metrics.reporter.prometheus.factory.class`
+# wired in `docker-compose.yml` resolves directly. Documented here so a
+# future contributor doesn't try to "fix" the missing copy.
+
 # Pre-create the checkpoint and data directories with Flink ownership.
 # The compose stack mounts named volumes onto these paths; without this
 # `chown` the root-owned mount roots prevent the `flink` user (uid 9999)

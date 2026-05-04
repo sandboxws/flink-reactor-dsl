@@ -34,7 +34,8 @@
     "src/cli/cluster/fluss-config",
     "src/cli/sim/fluss-config",
     "src/cli/cluster/init/00-init-databases.sh",
-    "src/cli/cluster/pipelines"
+    "src/cli/cluster/pipelines",
+    "src/cli/cluster/observability"
   ],
   "publishConfig": {
     "access": "public"

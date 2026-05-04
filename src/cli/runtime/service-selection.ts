@@ -27,6 +27,7 @@ export const ALL_PROFILES = [
   "fluss",
   "timescaledb",
   "postgres-plain",
+  "observability",
 ] as const
 
 export type ComposeProfile = (typeof ALL_PROFILES)[number]
@@ -65,6 +66,11 @@ export function profilesFromConfig(resolved: ResolvedConfig): ComposeProfile[] {
   if (services.kafka) out.add("kafka")
   if (services.fluss) out.add("fluss")
   if (services.iceberg) out.add("iceberg")
+  // `observability` covers both Prometheus and Grafana — they're a single
+  // unit since Grafana is useless without Prometheus. Either entry flips
+  // the profile on; the docker-compose `prometheus` service is always
+  // brought up alongside Grafana via shared profile membership.
+  if (services.grafana || services.prometheus) out.add("observability")
 
   // Postgres is the only multi-flavor profile. We resolve it after
   // looking at iceberg, so iceberg's implicit postgres dependency uses
@@ -147,6 +153,26 @@ export function buildComposeEnv(
   if (iceberg) {
     if (iceberg.externalPort !== undefined) {
       env.ICEBERG_REST_PORT = String(iceberg.externalPort)
+    }
+  }
+
+  const grafana = services.grafana
+  if (grafana) {
+    if (grafana.externalPort !== undefined) {
+      env.GRAFANA_PORT = String(grafana.externalPort)
+    }
+    if (grafana.image !== undefined) {
+      env.GRAFANA_IMAGE = grafana.image
+    }
+  }
+
+  const prometheus = services.prometheus
+  if (prometheus) {
+    if (prometheus.externalPort !== undefined) {
+      env.PROMETHEUS_PORT = String(prometheus.externalPort)
+    }
+    if (prometheus.image !== undefined) {
+      env.PROMETHEUS_IMAGE = prometheus.image
     }
   }
 

@@ -222,7 +222,7 @@ describe("publishCdcMessages", () => {
 // ── Command registration ────────────────────────────────────────────
 
 describe("registerClusterCommand", () => {
-  it("registers cluster command with all 5 subcommands", () => {
+  it("registers cluster command with all 6 subcommands", () => {
     const program = new Command()
     registerClusterCommand(program)
 
@@ -235,7 +235,8 @@ describe("registerClusterCommand", () => {
     expect(subcommandNames).toContain("seed")
     expect(subcommandNames).toContain("status")
     expect(subcommandNames).toContain("submit")
-    expect(subcommandNames).toHaveLength(5)
+    expect(subcommandNames).toContain("open")
+    expect(subcommandNames).toHaveLength(6)
   })
 
   it("cluster up has --port and --seed options", () => {

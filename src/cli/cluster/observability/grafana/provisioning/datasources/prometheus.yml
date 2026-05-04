@@ -1,0 +1,15 @@
+# Auto-provisioned Prometheus datasource for the FlinkReactor stack.
+# Picked up by Grafana on first boot from /etc/grafana/provisioning/datasources/.
+apiVersion: 1
+
+datasources:
+  - name: prometheus
+    type: prometheus
+    access: proxy
+    # In-network address — `prometheus` is the Compose service name.
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      httpMethod: POST
+      timeInterval: 5s
