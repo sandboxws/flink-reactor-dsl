@@ -333,18 +333,6 @@ export async function runSimUp(opts: {
     const initDir = clusterInitDir()
     await ensureSqlDumps(initDir)
 
-    // Delete stale chinook.sql if it still contains DROP DATABASE
-    const chinookPath = join(initDir, "chinook.sql")
-    if (existsSync(chinookPath)) {
-      const { readFileSync } = await import("node:fs")
-      const head = readFileSync(chinookPath, "utf-8").slice(0, 2000)
-      if (/^DROP DATABASE\b/m.test(head)) {
-        const { unlinkSync } = await import("node:fs")
-        unlinkSync(chinookPath)
-        await ensureSqlDumps(initDir)
-      }
-    }
-
     const buildSpinner = clack.spinner()
     buildSpinner.start("Building pg-init image...")
 

@@ -49,8 +49,10 @@ const DUMP_SOURCES: Record<string, DumpSource> = {
     removeLine: /^DROP DATABASE\b|^CREATE DATABASE\b|^\\c\b/,
   },
   employees: {
+    // The data dump is a self-contained pg_dump (DDL + COPY data), so we
+    // fetch only that file. Concatenating the schema dump with it produced
+    // duplicate `CREATE SCHEMA employees;` statements that broke loading.
     urls: [
-      "https://raw.githubusercontent.com/h8/employees-database/master/employees_schema.sql",
       "https://raw.githubusercontent.com/h8/employees-database/master/employees_data.sql.bz2",
     ],
     bzip2Last: true,
@@ -58,9 +60,43 @@ const DUMP_SOURCES: Record<string, DumpSource> = {
   },
 }
 
+// ── Cache invalidation ─────────────────────────────────────────────────
+
+/**
+ * Per-DB markers identifying a cached dump as broken. When found, the dump
+ * is deleted so the next `ensureSqlDumps()` call re-fetches from the
+ * (corrected) source URLs. Keep markers narrow — they should match only
+ * the broken variant, never a valid dump.
+ */
+const STALE_DUMP_MARKERS: Record<string, RegExp> = {
+  // Pre-fix concatenation of schema + data dumps left two `CREATE SCHEMA
+  // employees;` statements in the file, which crashed psql at line 277.
+  employees: /CREATE SCHEMA employees;[\s\S]+CREATE SCHEMA employees;/,
+  // Older chinook dumps still embedded `DROP DATABASE` before our
+  // removeLine filter was added.
+  chinook: /^DROP DATABASE\b/m,
+}
+
+function invalidateStaleDumps(initDir: string): void {
+  for (const [db, marker] of Object.entries(STALE_DUMP_MARKERS)) {
+    const path = join(initDir, `${db}.sql`)
+    if (!existsSync(path)) continue
+    // Only read enough to match the marker — employees.sql is ~3.9M lines
+    // and reading the whole file just to detect a header-region issue is
+    // wasteful. The duplicate CREATE SCHEMA sits within the first ~300
+    // lines, and chinook's DROP DATABASE is at the very top.
+    const head = readFileSync(path, "utf-8").slice(0, 16_000)
+    if (marker.test(head)) unlinkSync(path)
+  }
+}
+
 // ── Download logic ─────────────────────────────────────────────────────
 
 export async function ensureSqlDumps(initDir: string): Promise<void> {
+  // Invalidate cached dumps that match a known-bad marker so they get
+  // re-downloaded with the corrected DUMP_SOURCES.
+  invalidateStaleDumps(initDir)
+
   const missing = SAMPLE_DATABASES.filter(
     (db) => !existsSync(join(initDir, `${db}.sql`)),
   )
