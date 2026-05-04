@@ -7,9 +7,11 @@
 # Why this is structured this way:
 #   • The upstream postgres entrypoint script auto-detects an empty PGDATA,
 #     runs initdb, then executes /docker-entrypoint-initdb.d/ scripts via a
-#     temporary local server before exiting. We background it, poll until
-#     the dumps have actually loaded, and pg_ctl-stop cleanly so the image
-#     layer captures a consistent on-disk state.
+#     temporary local server before `exec`-ing the main server as the
+#     postgres user (gosu). We background that, poll until the dumps have
+#     actually loaded, and signal the server with SIGINT (= fast shutdown)
+#     so the image layer captures a consistent on-disk state. See the
+#     comment above the RUN block for why we don't use `pg_ctl stop`.
 #   • Bulk-load tuning (synchronous_commit=off, fsync=off, large
 #     maintenance_work_mem) is applied as CLI flags — these are read fresh
 #     on each start, NOT stored in PGDATA, so the runtime compose `command:`
@@ -34,8 +36,20 @@ RUN cp /data/00-init-databases.sh /docker-entrypoint-initdb.d/00-init-databases.
 # Run the upstream entrypoint with bulk-load flags so initdb + dump
 # loading completes during build. The poll on `tpch.orders` is the
 # synchronisation point that guarantees init scripts have finished
-# before we issue pg_ctl stop — without it we'd risk capturing a
+# before we shut postgres down — without it we'd risk capturing a
 # half-loaded PGDATA in the image layer.
+#
+# We shut postgres down with `kill -INT` (= fast shutdown, equivalent
+# to `pg_ctl stop -m fast`) rather than `pg_ctl` itself: the upstream
+# entrypoint drops privileges to the postgres user via `gosu` before
+# `exec`-ing the server, while our parent RUN shell stays root. That
+# ownership mismatch makes `pg_ctl` refuse to operate ("cannot be run
+# as root"), but root-side `kill` is unaffected.
+#
+# `pg_isready -d postgres` pins the probe to a database we know
+# exists; without it the probe defaults `dbname=$POSTGRES_USER`
+# (= `reactor`), which doesn't exist and emits a misleading
+# `FATAL: database "reactor" does not exist` line in the build log.
 RUN bash -c '\
     set -e; \
     /usr/local/bin/docker-entrypoint.sh postgres \
@@ -50,9 +64,9 @@ RUN bash -c '\
         -c checkpoint_timeout=1h \
         & \
     pg_pid=$!; \
-    until pg_isready -U "$POSTGRES_USER" -h localhost -q; do sleep 1; done; \
+    until pg_isready -U "$POSTGRES_USER" -d postgres -h localhost -q; do sleep 1; done; \
     until psql -U "$POSTGRES_USER" -d tpch -tAc "SELECT count(*) FROM orders" 2>/dev/null \
         | grep -qE "^[1-9][0-9]*$"; do sleep 2; done; \
-    pg_ctl -D "$PGDATA" stop -m fast; \
-    wait $pg_pid 2>/dev/null || true \
+    kill -INT "$pg_pid"; \
+    wait "$pg_pid" 2>/dev/null || true \
 '
