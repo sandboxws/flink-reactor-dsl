@@ -11,8 +11,16 @@
  *
  * Usage:
  *   pnpm tpch:gen                    # SF=0.01 (default — keeps repo lean)
- *   TPCH_SF=0.1 pnpm tpch:gen        # full proposal scale (commits gzipped)
+ *   TPCH_SF=0.1 pnpm tpch:gen        # full proposal scale
  *   TPCH_SF=0.001 pnpm tpch:gen      # tiny — useful for CI snapshots
+ *   TPCH_SF=10 pnpm tpch:gen         # 15M orders local (gitignored, gzipped)
+ *
+ * Output behaviour:
+ *   • SF < 1   → writes uncompressed `tpch.sql`. The committed default
+ *     (SF=0.01, ~10MB) lives here.
+ *   • SF >= 1  → writes gzipped `tpch.sql.gz`. The init script prefers
+ *     .gz when present; any stale large `tpch.sql` is cleaned up but the
+ *     small committed SF=0.01 dump is preserved.
  *
  * Requirements:
  *   • DuckDB CLI on PATH (brew install duckdb)
@@ -25,14 +33,22 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { gzipSync } from "node:zlib"
 
 const SF = Number.parseFloat(process.env.TPCH_SF ?? "0.01")
 const REPO_ROOT = join(import.meta.dirname, "..")
-const OUTPUT_PATH = join(REPO_ROOT, "src/cli/cluster/init/tpch.sql")
+const INIT_DIR = join(REPO_ROOT, "src/cli/cluster/init")
+const OUTPUT_PATH = join(INIT_DIR, "tpch.sql")
+const GZIP_OUTPUT_PATH = join(INIT_DIR, "tpch.sql.gz")
+// Auto-gzip when the dump would be unwieldy in-tree. SF=1 produces ~150MB
+// raw / ~30MB gzipped; SF=10 is ~1.5GB raw / ~300MB gzipped. The init
+// script already prefers tpch.sql.gz over tpch.sql when both are present.
+const SHOULD_GZIP = SF >= 1
 
 const TABLES = [
   "region",
@@ -84,6 +100,13 @@ EXPORT DATABASE '${exportDir}' (FORMAT CSV, DELIMITER '|');
     "",
     "BEGIN;",
     "",
+    "-- Bulk-load tuning. SET LOCAL is scoped to the enclosing transaction",
+    "-- so settings revert on COMMIT — safe under psql --single-transaction",
+    "-- and under the Docker entrypoint's temp-server load.",
+    "SET LOCAL maintenance_work_mem = '1GB';",
+    "SET LOCAL synchronous_commit = OFF;",
+    "SET LOCAL session_replication_role = 'replica';",
+    "",
   )
 
   // Schema DDL (DuckDB types are Postgres-compatible — BIGINT, INTEGER,
@@ -131,14 +154,30 @@ EXPORT DATABASE '${exportDir}' (FORMAT CSV, DELIMITER '|');
   lines.push("")
 
   const dump = lines.join("\n")
-  writeFileSync(OUTPUT_PATH, dump)
-  const sizeMB = (Buffer.byteLength(dump) / 1024 / 1024).toFixed(2)
-  console.log(`\nWrote ${OUTPUT_PATH} (${sizeMB} MB)`)
+  const rawSizeMB = (Buffer.byteLength(dump) / 1024 / 1024).toFixed(2)
 
-  if (Number.parseFloat(sizeMB) > 50) {
+  if (SHOULD_GZIP) {
+    // Auto-gzip at SF >= 1: the raw dump is too unwieldy to keep on disk
+    // uncompressed, and we don't want both `tpch.sql` (committed,
+    // SF=0.01) and a stale `tpch.sql` (local, SF=N) competing for the
+    // same path. The init script already prefers .gz when present.
+    const gz = gzipSync(dump, { level: 6 })
+    writeFileSync(GZIP_OUTPUT_PATH, gz)
+    if (existsSync(OUTPUT_PATH)) {
+      // Avoid leaving a stale uncompressed dump alongside the new gz —
+      // 00-init-databases.sh prefers .gz, but a leftover .sql confuses
+      // anyone inspecting the init dir.
+      const committedSize = readFileSync(OUTPUT_PATH).length
+      // Keep the committed SF=0.01 dump (tiny, ~10MB) untouched.
+      if (committedSize > 25 * 1024 * 1024) unlinkSync(OUTPUT_PATH)
+    }
+    const gzSizeMB = (gz.byteLength / 1024 / 1024).toFixed(2)
     console.log(
-      "  Dump exceeds 50MB — consider committing gzipped (rename .sql → .sql.gz, gzip it).",
+      `\nWrote ${GZIP_OUTPUT_PATH} (${gzSizeMB} MB compressed, ${rawSizeMB} MB raw)`,
     )
+  } else {
+    writeFileSync(OUTPUT_PATH, dump)
+    console.log(`\nWrote ${OUTPUT_PATH} (${rawSizeMB} MB)`)
   }
 } finally {
   rmSync(tmp, { recursive: true, force: true })

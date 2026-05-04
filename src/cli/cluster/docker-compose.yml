@@ -164,11 +164,23 @@ services:
       retries: 10
 
   postgres:
-    image: timescale/timescaledb:latest-pg17
+    # Pre-baked image: PGDATA is populated at build time so `fr down
+    # --volumes && fr up` is seconds, not minutes. See
+    # src/cli/cluster/Dockerfile.postgres for the bake mechanics. The
+    # `image:` tag is reused as the build's cache key — Docker rebuilds
+    # only when the build context (init/) changes.
+    image: flink-reactor-postgres:tsdb-pg17
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
+      args:
+        BASE_IMAGE: timescale/timescaledb:latest-pg17
     container_name: flink-reactor-postgres
     # wal_level=logical + matching senders/slots are required for the
     # Postgres CDC Pipeline Connector consumed by the pg-fluss-paimon
-    # template. See OpenSpec change 53-prepare-postgres-for-cdc.
+    # template. See OpenSpec change 53-prepare-postgres-for-cdc. These
+    # CLI flags override the bulk-load-friendly flags used at bake time
+    # (CLI flags are read fresh on every start; not persisted in PGDATA).
     command: postgres -c shared_preload_libraries=timescaledb -c wal_level=logical -c max_wal_senders=10 -c max_replication_slots=10
     profiles:
       - timescaledb
@@ -187,7 +199,12 @@ services:
       retries: 10
 
   postgres-plain:
-    image: postgres:17-alpine
+    image: flink-reactor-postgres:plain-pg17
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
+      args:
+        BASE_IMAGE: postgres:17-alpine
     container_name: flink-reactor-postgres
     # See `postgres` service above for rationale on wal_level=logical etc.
     command: postgres -c wal_level=logical -c max_wal_senders=10 -c max_replication_slots=10

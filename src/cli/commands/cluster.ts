@@ -331,6 +331,16 @@ export async function runClusterUp(opts: {
       ? `profiles: ${profiles.join(", ")}`
       : "always-on services only"
 
+  // The postgres image is now `build:`-baked from src/cli/cluster/init/.
+  // Make sure pagila/chinook/employees/tpch dumps are on disk BEFORE
+  // `compose up --build` triggers the build, otherwise the COPY layer
+  // ships an empty dataset.
+  const hasPostgres =
+    profiles.includes("timescaledb") || profiles.includes("postgres-plain")
+  if (hasPostgres) {
+    await ensureSqlDumps(join(clusterDir(), "init"))
+  }
+
   const spinner = clack.spinner()
   spinner.start(
     `Building Flink image and starting services (${profileSummary})...`,
@@ -420,9 +430,8 @@ export async function runClusterUp(opts: {
 
   // Wait for services to be healthy. Only check ports for services we
   // actually started — checking Kafka when its profile is dormant would
-  // timeout because the container isn't running.
-  const hasPostgres =
-    profiles.includes("timescaledb") || profiles.includes("postgres-plain")
+  // timeout because the container isn't running. `hasPostgres` is
+  // computed earlier (before the build) so it can guide the pre-fetch.
   const { waitForServices } = await import("@/cli/cluster/health-check.js")
   try {
     await waitForServices({

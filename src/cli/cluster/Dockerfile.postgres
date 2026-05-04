@@ -1,0 +1,58 @@
+# Pre-baked Postgres image for the FlinkReactor cluster.
+#
+# Bakes the populated PGDATA into the image at build time so the runtime
+# container starts on an already-initialised database — `fr down --volumes
+# && fr up` becomes seconds instead of minutes once the image is cached.
+#
+# Why this is structured this way:
+#   • The upstream postgres entrypoint script auto-detects an empty PGDATA,
+#     runs initdb, then executes /docker-entrypoint-initdb.d/ scripts via a
+#     temporary local server before exiting. We background it, poll until
+#     the dumps have actually loaded, and pg_ctl-stop cleanly so the image
+#     layer captures a consistent on-disk state.
+#   • Bulk-load tuning (synchronous_commit=off, fsync=off, large
+#     maintenance_work_mem) is applied as CLI flags — these are read fresh
+#     on each start, NOT stored in PGDATA, so the runtime compose `command:`
+#     can safely override them with CDC-friendly values (wal_level=logical
+#     etc.) without rebuilding the image.
+
+ARG BASE_IMAGE=timescale/timescaledb:latest-pg17
+FROM ${BASE_IMAGE}
+
+ENV POSTGRES_USER=reactor \
+    POSTGRES_PASSWORD=reactor \
+    POSTGRES_DB=postgres
+
+# Build context = src/cli/cluster/ (set via compose `build.context: .`).
+# Stage every file under init/ — sample dumps land in /data/, which is
+# what 00-init-databases.sh expects, and the script itself moves to the
+# entrypoint scan dir.
+COPY init/ /data/
+RUN cp /data/00-init-databases.sh /docker-entrypoint-initdb.d/00-init-databases.sh \
+    && chmod +x /docker-entrypoint-initdb.d/00-init-databases.sh
+
+# Run the upstream entrypoint with bulk-load flags so initdb + dump
+# loading completes during build. The poll on `tpch.orders` is the
+# synchronisation point that guarantees init scripts have finished
+# before we issue pg_ctl stop — without it we'd risk capturing a
+# half-loaded PGDATA in the image layer.
+RUN bash -c '\
+    set -e; \
+    /usr/local/bin/docker-entrypoint.sh postgres \
+        -c wal_level=minimal \
+        -c max_wal_senders=0 \
+        -c synchronous_commit=off \
+        -c fsync=off \
+        -c full_page_writes=off \
+        -c maintenance_work_mem=2GB \
+        -c shared_buffers=2GB \
+        -c max_wal_size=8GB \
+        -c checkpoint_timeout=1h \
+        & \
+    pg_pid=$!; \
+    until pg_isready -U "$POSTGRES_USER" -h localhost -q; do sleep 1; done; \
+    until psql -U "$POSTGRES_USER" -d tpch -tAc "SELECT count(*) FROM orders" 2>/dev/null \
+        | grep -qE "^[1-9][0-9]*$"; do sleep 2; done; \
+    pg_ctl -D "$PGDATA" stop -m fast; \
+    wait $pg_pid 2>/dev/null || true \
+'

@@ -395,6 +395,10 @@ src/cli/cluster/init/pagila.sql
 # scripts/generate-tpch.ts). Unlike pagila/chinook/employees which are
 # downloaded from public mirrors, TPC-H has no canonical Postgres dump,
 # so we ship a small SF=0.01 default in-tree.
+# Larger local dumps (SF >= 1) are emitted gzipped and gitignored —
+# `00-init-databases.sh` prefers `.gz` over `.sql` so the local override
+# transparently replaces the committed default at bake/load time.
+src/cli/cluster/init/tpch.sql.gz
 
 packages/intellij/.intellijPlatform
 packages/intellij/build
