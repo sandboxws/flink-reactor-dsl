@@ -82,5 +82,76 @@ describe("pg-fluss-paimon template", () => {
     it("documents the docker-compose lane as a first-class option", () => {
       expect(readme.content).toContain("pnpm fr cluster up --runtime=docker")
     })
+
+    it("documents the optional Grafana opt-in snippet", () => {
+      // The pg-fluss-paimon template stays opt-out by default, but the
+      // README must show users how to enable Grafana so the bundled
+      // `pg-fluss-paimon` dashboard panels actually populate.
+      expect(readme.content).toContain("Optional: enable Grafana metrics")
+      expect(readme.content).toContain(
+        "services: { postgres: {}, fluss: {}, grafana: {} }",
+      )
+      expect(readme.content).toContain("metricsPlugin({ reporters:")
+      expect(readme.content).toContain("pnpm fr cluster open grafana")
+    })
+  })
+
+  describe("with grafanaEnabled: true", () => {
+    // When the user opts in via `fr new --grafana` (or the interactive
+    // prompt on Flink 2.x), the rendered config must wire up *both* the
+    // service entry and the Prometheus reporter plugin. Half-config
+    // produces a Grafana dashboard with no data — worse than no opt-in.
+    const files = getPgFlussPaimonTemplates({
+      ...baseOpts,
+      grafanaEnabled: true,
+    })
+    const config = findFile(files, "flink-reactor.config.ts")
+
+    it("imports metricsPlugin from the dsl plugins entry-point", () => {
+      expect(config.content).toContain(
+        "import { metricsPlugin } from '@flink-reactor/dsl/plugins'",
+      )
+    })
+
+    it("adds grafana to the existing services block (preserving postgres + fluss)", () => {
+      expect(config.content).toContain(
+        "services: { postgres: {}, fluss: {}, grafana: {} }",
+      )
+    })
+
+    it("registers metricsPlugin with the Prometheus reporter on port 9249", () => {
+      expect(config.content).toContain("plugins: [")
+      expect(config.content).toContain(
+        "metricsPlugin({ reporters: [{ type: 'prometheus', port: 9249 }] })",
+      )
+    })
+
+    it("matches the locked-in snapshot for the opt-in path", () => {
+      expect(config.content).toMatchSnapshot()
+    })
+  })
+
+  describe("with grafanaEnabled: false", () => {
+    // The default path must remain byte-identical to the legacy output
+    // so existing scaffolds aren't churned by passing through the new
+    // option.
+    const files = getPgFlussPaimonTemplates({
+      ...baseOpts,
+      grafanaEnabled: false,
+    })
+    const config = findFile(files, "flink-reactor.config.ts")
+
+    it("does not import metricsPlugin", () => {
+      expect(config.content).not.toContain("metricsPlugin")
+    })
+
+    it("ships the legacy services block (postgres + fluss only)", () => {
+      expect(config.content).toContain("services: { postgres: {}, fluss: {} }")
+      expect(config.content).not.toContain("grafana: {}")
+    })
+
+    it("does not include a plugins array", () => {
+      expect(config.content).not.toContain("plugins:")
+    })
   })
 })

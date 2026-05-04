@@ -33,6 +33,27 @@ No manual \`CREATE CATALOG\` / \`CREATE DATABASE\` SQL is required before \`pnpm
 
 > **Note on deploy ordering.** The serve pipeline references \`fluss_catalog.public.orders\` via a SQL \`LIKE\` clause that resolves at submit time. Deploy ingest first and wait until it has emitted at least one record (the CDC initial-snapshot phase) before deploying serve, otherwise serve will fail planning with "Source table … not found".
 
+### Optional: enable Grafana metrics
+
+The local cluster ships an opt-in Prometheus + Grafana stack that's themed to match FlinkReactor Console (Gruvppuccin). Two changes opt this project in — a \`services.grafana\` entry plus the bundled \`metricsPlugin\`:
+
+\`\`\`ts
+// flink-reactor.config.ts
+import { defineConfig } from '@flink-reactor/dsl'
+import { metricsPlugin } from '@flink-reactor/dsl/plugins'
+
+export default defineConfig({
+  flink: { version: '2.2' },
+  services: { postgres: {}, fluss: {}, grafana: {} },
+  plugins: [
+    metricsPlugin({ reporters: [{ type: 'prometheus', port: 9249 }] }),
+  ],
+  // ...environments unchanged
+})
+\`\`\`
+
+Then \`pnpm fr cluster up\` will additionally start Prometheus on \`http://localhost:9090\` and Grafana on \`http://localhost:3000\` (admin/admin, anonymous viewer enabled). Two dashboards are auto-provisioned: **Flink Cluster Overview** (JM/TM heap, slots, jobs, checkpoints) and **pg-fluss-paimon Pipeline** (per-job throughput, restarts, checkpoint duration). Use \`pnpm fr cluster open grafana\` to launch the UI.
+
 ## Prerequisites
 
 - Postgres with \`wal_level=logical\`, a \`flink_cdc\` user with \`REPLICATION\` and read on the published tables, and a Kubernetes Secret (or \`.env\` entry) supplying \`PG_PRIMARY_PASSWORD\`.
@@ -59,6 +80,69 @@ export default defineConfig({
   // Postgres for the CDC source (TPC-H), Fluss for streaming + Paimon
   // shared storage. No Kafka in this lane.
   services: { postgres: {}, fluss: {} },
+
+  environments: {
+    // The Docker (\`pnpm fr cluster up\`) and minikube (\`pnpm fr sim up\`) lanes
+    // both ship a Postgres seeded with TPC-H data (\`tpch.public.{orders,
+    // lineitem,customer}\`), the \`flink_cdc\` replication role, and the
+    // \`flink_cdc_pub\` publication — everything the ingest pipeline needs.
+    //
+    // Fluss starts empty: the Flink CDC Pipeline Connector creates the
+    // \`fluss_catalog.public.<table>\` entries on the first record, mirroring
+    // upstream Postgres schemas. Paimon's serve pipeline emits
+    // \`CREATE DATABASE/TABLE IF NOT EXISTS\` so its targets are self-bootstrapping.
+    test: {
+      runtime: 'minikube',
+      pipelines: {
+        '*': {
+          parallelism: 4,
+          checkpoint: { interval: '30s', mode: 'exactly-once' },
+        },
+      },
+    },
+    development: {
+      cluster: { url: 'http://localhost:8081' },
+      pipelines: {
+        '*': {
+          parallelism: 4,
+          checkpoint: { interval: '30s', mode: 'exactly-once' },
+        },
+      },
+    },
+    production: {
+      cluster: { url: 'https://flink-prod:8081' },
+      kubernetes: { namespace: 'flink-prod' },
+      pipelines: {
+        '*': {
+          parallelism: 4,
+          checkpoint: { interval: '30s', mode: 'exactly-once' },
+        },
+      },
+    },
+  },
+})
+"
+`;
+
+exports[`pg-fluss-paimon template > with grafanaEnabled: true > matches the locked-in snapshot for the opt-in path 1`] = `
+"import { defineConfig } from '@flink-reactor/dsl'
+import { metricsPlugin } from '@flink-reactor/dsl/plugins'
+
+export default defineConfig({
+  flink: { version: '2.2' },
+
+  // Postgres for the CDC source (TPC-H), Fluss for streaming + Paimon
+  // shared storage. No Kafka in this lane. \`grafana: {}\` was added by
+  // \`fr new --grafana\` — \`fr cluster up\` will also start Prometheus +
+  // Grafana under the \`observability\` Compose profile.
+  services: { postgres: {}, fluss: {}, grafana: {} },
+
+  // Configure the Flink Prometheus reporter for the JM/TM. Port 9249
+  // matches the scrape target the bundled Grafana datasource uses
+  // (see \`src/cli/cluster/observability/prometheus/prometheus.yml\`).
+  plugins: [
+    metricsPlugin({ reporters: [{ type: 'prometheus', port: 9249 }] }),
+  ],
 
   environments: {
     // The Docker (\`pnpm fr cluster up\`) and minikube (\`pnpm fr sim up\`) lanes

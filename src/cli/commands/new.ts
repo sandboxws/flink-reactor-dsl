@@ -19,6 +19,7 @@ import { getMonorepoTemplates } from "@/cli/templates/monorepo.js"
 import { getPgFlussPaimonTemplates } from "@/cli/templates/pg-fluss-paimon.js"
 import { getRealtimeAnalyticsTemplates } from "@/cli/templates/realtime-analytics.js"
 import { getRideSharingTemplates } from "@/cli/templates/ride-sharing.js"
+import { injectGrafanaWiring } from "@/cli/templates/shared.js"
 import { getStarterTemplates } from "@/cli/templates/starter.js"
 import { getStockBasicsTemplates } from "@/cli/templates/stock-basics.js"
 import { getStockDsEasyTemplates } from "@/cli/templates/stock-ds-easy.js"
@@ -55,6 +56,15 @@ export interface ScaffoldOptions {
   gitInit: boolean
   installDeps: boolean
   registry?: string
+  /**
+   * When true, the rendered `flink-reactor.config.ts` opts the project
+   * into the bundled Prometheus + Grafana stack — `services.grafana: {}`
+   * plus a `metricsPlugin` configured for the local cluster's port 9249
+   * scrape target. Only meaningful when `flinkVersion` is on Flink 2.x
+   * (the local Docker runtime + reporter wiring are 2.x-only); on 1.20
+   * the field is ignored even if true. Off by default.
+   */
+  grafanaEnabled?: boolean
 }
 
 export type RegistryChoice = "npm" | "verdaccio"
@@ -147,6 +157,11 @@ export function registerNewCommand(program: Command): void {
     .option("-y, --yes", "Use defaults, skip prompts")
     .option("--no-git", "Skip git initialization")
     .option("--no-install", "Skip dependency installation")
+    .option(
+      "--grafana",
+      "Enable the Grafana metrics dashboard in the rendered config (Flink 2.x only)",
+    )
+    .option("--no-grafana", "Disable the Grafana opt-in prompt")
     .description("Create a new FlinkReactor project")
     .action(async (projectName: string, opts: Record<string, unknown>) => {
       await runCommand(
@@ -191,14 +206,31 @@ export async function runNewCommand(
 
   if (nonInteractive) {
     const registryChoice = opts.registry as RegistryChoice | undefined
+    const flinkVersion =
+      validateFlinkVersion(opts.flinkVersion as string) ?? "2.2"
+    // `--grafana` is only wired for Flink 2.x. If the user combines
+    // `--flink-version=1.20 --grafana` we surface a one-time warning and
+    // ignore the flag; aborting would be hostile in `--yes` mode where
+    // the user is wiring up CI scripts. The same gate applies to the
+    // interactive prompt below.
+    let grafanaEnabled = opts.grafana === true
+    if (grafanaEnabled && !flinkVersion.startsWith("2.")) {
+      console.warn(
+        pc.yellow(
+          `Warning: --grafana is only wired for Flink 2.x in this release; ignoring for ${flinkVersion}.`,
+        ),
+      )
+      grafanaEnabled = false
+    }
     options = {
       projectName,
       template: validateTemplate(opts.template as string) ?? "starter",
       pm: validatePm(opts.pm as string) ?? "pnpm",
-      flinkVersion: validateFlinkVersion(opts.flinkVersion as string) ?? "2.2",
+      flinkVersion,
       gitInit: opts.git !== false,
       installDeps: opts.install !== false,
       registry: registryChoice ? REGISTRY_URLS[registryChoice] : undefined,
+      grafanaEnabled,
     }
   } else {
     const collected = await collectOptions(projectName, opts)
@@ -268,6 +300,37 @@ async function collectOptions(
     return null
   }
 
+  // Grafana opt-in is only meaningful on Flink 2.x — the local Docker
+  // runtime, Prometheus reporter wiring (Dockerfile.flink), and bundled
+  // dashboards' PromQL all assume Flink 2.x. On 1.20 we skip the prompt
+  // entirely rather than offer a half-supported feature.
+  const flinkVersionResolved = flinkVersion as FlinkVersion
+  let grafanaEnabled = false
+  if (flinkVersionResolved.startsWith("2.")) {
+    if (cliOpts.grafana === true) {
+      grafanaEnabled = true
+    } else if (cliOpts.grafana === false) {
+      grafanaEnabled = false
+    } else {
+      const grafanaChoice = await clack.confirm({
+        message:
+          "Enable Grafana metrics dashboard? (Prometheus + Grafana, themed to match FlinkReactor Console)",
+        initialValue: false,
+      })
+      if (clack.isCancel(grafanaChoice)) {
+        clack.cancel("Operation cancelled.")
+        return null
+      }
+      grafanaEnabled = grafanaChoice as boolean
+    }
+  } else if (cliOpts.grafana === true) {
+    console.warn(
+      pc.yellow(
+        `Warning: --grafana is only wired for Flink 2.x in this release; ignoring for ${flinkVersionResolved}.`,
+      ),
+    )
+  }
+
   let registry: string | undefined
   if (cliOpts.registry) {
     registry = REGISTRY_URLS[cliOpts.registry as RegistryChoice]
@@ -310,6 +373,7 @@ async function collectOptions(
     gitInit: gitInit as boolean,
     installDeps: installDeps as boolean,
     registry,
+    grafanaEnabled,
   }
 }
 
@@ -479,7 +543,19 @@ export function scaffoldProject(
     const filePath = join(projectDir, file.path)
     const dir = join(filePath, "..")
     mkdirSync(dir, { recursive: true })
-    writeFileSync(filePath, file.content, "utf-8")
+
+    // Centralized Grafana opt-in injection. Most templates ship their own
+    // hand-rolled `flink-reactor.config.ts` content, so updating each
+    // template factory to consume `grafanaEnabled` would mean ~17 edits.
+    // Instead we post-process the single config file. The helper is
+    // idempotent so templates that pre-wire Grafana themselves (e.g.
+    // pg-fluss-paimon's nicer comments) are left unchanged.
+    const content =
+      file.path === "flink-reactor.config.ts" && options.grafanaEnabled
+        ? injectGrafanaWiring(file.content, options.grafanaEnabled)
+        : file.content
+
+    writeFileSync(filePath, content, "utf-8")
   }
 }
 

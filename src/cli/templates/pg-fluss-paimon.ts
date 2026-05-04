@@ -8,6 +8,33 @@ import {
 export function getPgFlussPaimonTemplates(
   opts: ScaffoldOptions,
 ): TemplateFile[] {
+  // Grafana opt-in is plumbed into pg-fluss-paimon's hand-rolled config
+  // override (rather than the shared `makeConfig`) because this template
+  // pins Flink 2.2 and ships its own services block. When opted in we
+  // add `grafana: {}` to the existing `{ postgres, fluss }` services and
+  // register `metricsPlugin` for the local cluster's port-9249 scrape.
+  const grafanaImport = opts.grafanaEnabled
+    ? "\nimport { metricsPlugin } from '@flink-reactor/dsl/plugins'"
+    : ""
+  const servicesLine = opts.grafanaEnabled
+    ? "services: { postgres: {}, fluss: {}, grafana: {} },"
+    : "services: { postgres: {}, fluss: {} },"
+  const servicesComment = opts.grafanaEnabled
+    ? `// Postgres for the CDC source (TPC-H), Fluss for streaming + Paimon
+  // shared storage. No Kafka in this lane. \`grafana: {}\` was added by
+  // \`fr new --grafana\` — \`fr cluster up\` will also start Prometheus +
+  // Grafana under the \`observability\` Compose profile.`
+    : `// Postgres for the CDC source (TPC-H), Fluss for streaming + Paimon
+  // shared storage. No Kafka in this lane.`
+  const pluginsBlock = opts.grafanaEnabled
+    ? `\n\n  // Configure the Flink Prometheus reporter for the JM/TM. Port 9249
+  // matches the scrape target the bundled Grafana datasource uses
+  // (see \`src/cli/cluster/observability/prometheus/prometheus.yml\`).
+  plugins: [
+    metricsPlugin({ reporters: [{ type: 'prometheus', port: 9249 }] }),
+  ],`
+    : ""
+
   return [
     ...sharedFiles(opts),
 
@@ -16,14 +43,13 @@ export function getPgFlussPaimonTemplates(
     // CDC commits land on every checkpoint cycle).
     {
       path: "flink-reactor.config.ts",
-      content: `import { defineConfig } from '@flink-reactor/dsl'
+      content: `import { defineConfig } from '@flink-reactor/dsl'${grafanaImport}
 
 export default defineConfig({
   flink: { version: '2.2' },
 
-  // Postgres for the CDC source (TPC-H), Fluss for streaming + Paimon
-  // shared storage. No Kafka in this lane.
-  services: { postgres: {}, fluss: {} },
+  ${servicesComment}
+  ${servicesLine}${pluginsBlock}
 
   environments: {
     // The Docker (\`pnpm fr cluster up\`) and minikube (\`pnpm fr sim up\`) lanes
@@ -416,6 +442,27 @@ The Docker and minikube lanes both ship a Postgres seeded with TPC-H data plus t
 No manual \`CREATE CATALOG\` / \`CREATE DATABASE\` SQL is required before \`pnpm fr deploy\` succeeds.
 
 > **Note on deploy ordering.** The serve pipeline references \`fluss_catalog.public.orders\` via a SQL \`LIKE\` clause that resolves at submit time. Deploy ingest first and wait until it has emitted at least one record (the CDC initial-snapshot phase) before deploying serve, otherwise serve will fail planning with "Source table … not found".
+
+### Optional: enable Grafana metrics
+
+The local cluster ships an opt-in Prometheus + Grafana stack that's themed to match FlinkReactor Console (Gruvppuccin). Two changes opt this project in — a \`services.grafana\` entry plus the bundled \`metricsPlugin\`:
+
+\`\`\`ts
+// flink-reactor.config.ts
+import { defineConfig } from '@flink-reactor/dsl'
+import { metricsPlugin } from '@flink-reactor/dsl/plugins'
+
+export default defineConfig({
+  flink: { version: '2.2' },
+  services: { postgres: {}, fluss: {}, grafana: {} },
+  plugins: [
+    metricsPlugin({ reporters: [{ type: 'prometheus', port: 9249 }] }),
+  ],
+  // ...environments unchanged
+})
+\`\`\`
+
+Then \`pnpm fr cluster up\` will additionally start Prometheus on \`http://localhost:9090\` and Grafana on \`http://localhost:3000\` (admin/admin, anonymous viewer enabled). Two dashboards are auto-provisioned: **Flink Cluster Overview** (JM/TM heap, slots, jobs, checkpoints) and **pg-fluss-paimon Pipeline** (per-job throughput, restarts, checkpoint duration). Use \`pnpm fr cluster open grafana\` to launch the UI.
 
 ## Prerequisites
 

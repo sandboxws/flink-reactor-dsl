@@ -69,16 +69,43 @@ export function makeTsconfig(_opts: ScaffoldOptions): string {
 }
 
 export function makeConfig(opts: ScaffoldOptions): string {
-  return `import { defineConfig } from '@flink-reactor/dsl'
+  // When the user opts into Grafana at scaffold time, we render the
+  // matching `metricsPlugin` import + `services.grafana: {}` + `plugins:`
+  // entry. Both pieces are needed together: Grafana scrapes Prometheus,
+  // and Prometheus only sees Flink metrics if `metricsPlugin` configures
+  // the JM/TM Prometheus reporter. Wiring just one half would silently
+  // produce empty dashboards.
+  const grafanaImport = opts.grafanaEnabled
+    ? "\nimport { metricsPlugin } from '@flink-reactor/dsl/plugins'"
+    : ""
+  const servicesLine = opts.grafanaEnabled
+    ? "services: { grafana: {} },"
+    : "services: {},"
+  const servicesComment = opts.grafanaEnabled
+    ? `// Infra services this project depends on. \`grafana: {}\` was added
+  // by \`fr new --grafana\` (or the interactive prompt) — \`fr cluster up\`
+  // will additionally start Prometheus + Grafana under the
+  // \`observability\` Compose profile.`
+    : `// Infra services this project depends on. Empty here — \`fr cluster up\`
+  // and \`fr sim up\` will start only the always-on services (Flink core,
+  // SQL gateway, SeaweedFS). Add services as your pipelines need them, e.g.
+  // \`services: { kafka: {} }\` to enable Kafka.`
+  const pluginsBlock = opts.grafanaEnabled
+    ? `\n\n  // Configure the Flink Prometheus reporter for the JM/TM. Port 9249
+  // matches the scrape target the bundled Grafana datasource uses
+  // (see \`src/cli/cluster/observability/prometheus/prometheus.yml\`).
+  plugins: [
+    metricsPlugin({ reporters: [{ type: 'prometheus', port: 9249 }] }),
+  ],`
+    : ""
+
+  return `import { defineConfig } from '@flink-reactor/dsl'${grafanaImport}
 
 export default defineConfig({
   flink: { version: '${opts.flinkVersion}' },
 
-  // Infra services this project depends on. Empty here — \`fr cluster up\`
-  // and \`fr sim up\` will start only the always-on services (Flink core,
-  // SQL gateway, SeaweedFS). Add services as your pipelines need them, e.g.
-  // \`services: { kafka: {} }\` to enable Kafka.
-  services: {},
+  ${servicesComment}
+  ${servicesLine}${pluginsBlock}
 
   environments: {
     development: {
@@ -136,6 +163,109 @@ export default defineConfig({
   },
 })
 `
+}
+
+// ── Grafana opt-in injector ──────────────────────────────────────────
+//
+// `fr new --grafana` flips `opts.grafanaEnabled` for any template; most
+// templates ship hand-rolled `flink-reactor.config.ts` content (rather
+// than going through `makeConfig`), so we post-process the rendered
+// config after the factory returns. The helper below is idempotent:
+// running it on a config that already has the metricsPlugin import or
+// `grafana: {}` in services is a no-op, so per-template factories that
+// emit pre-wired Grafana output (e.g. pg-fluss-paimon) stay correct.
+//
+// This is intentionally string-based — Grafana wiring is a 3-line
+// surgical insertion, not worth pulling in a TS AST library for. The
+// injectGrafanaWiringTests cover the regex shapes templates emit today.
+
+/**
+ * Inject Grafana opt-in wiring into a rendered `flink-reactor.config.ts`.
+ *
+ * Three transformations, each idempotent:
+ *   1. Add `import { metricsPlugin } from '@flink-reactor/dsl/plugins'`
+ *      after the existing `import { defineConfig } ...` line.
+ *   2. Add `grafana: {}` to the `services: { ... }` block (handling both
+ *      empty `services: {}` and populated `services: { foo: ... }`).
+ *   3. Register `metricsPlugin({ reporters: [{ type: 'prometheus', port: 9249 }] })`
+ *      either by prepending to an existing `plugins: [ ... ]` array or
+ *      by adding a new `plugins:` block before `environments:`.
+ *
+ * Returns the original content unchanged when `enabled` is false.
+ */
+export function injectGrafanaWiring(
+  content: string,
+  enabled: boolean | undefined,
+): string {
+  if (!enabled) return content
+
+  // Step 1: import. Skip if metricsPlugin is already imported (template
+  // pre-wired the opt-in itself, e.g. pg-fluss-paimon). The regex
+  // consumes only the single newline at end of the defineConfig import
+  // line — not the blank line that often follows — so the blank line
+  // stays between the imports and `export default`.
+  let result = content
+  if (!result.includes("@flink-reactor/dsl/plugins")) {
+    result = result.replace(
+      /(import \{ defineConfig \} from '@flink-reactor\/dsl';?\n)/,
+      `$1import { metricsPlugin } from '@flink-reactor/dsl/plugins'\n`,
+    )
+  }
+
+  // Step 2: services. Find the opening `{` after `services:` and walk
+  // forward counting brace depth to handle nested objects (e.g.
+  // `services: { kafka: { bootstrapServers: '...' } }`). The
+  // `inner.includes('grafana:')` check guards idempotency by inspecting
+  // the actual extracted slice — a regex like `services:\s*\{[^}]*grafana:`
+  // would fail on populated blocks because `[^}]*` halts at the first
+  // nested `}` (e.g. inside `kafka: {}`).
+  const servicesMatch = /services:\s*\{/.exec(result)
+  if (servicesMatch) {
+    const openIdx = servicesMatch.index + servicesMatch[0].length - 1
+    const closeIdx = findMatchingBrace(result, openIdx)
+    if (closeIdx > openIdx) {
+      const inner = result.slice(openIdx + 1, closeIdx)
+      if (!inner.includes("grafana:")) {
+        const trimmed = inner.trim()
+        const newInner =
+          trimmed === ""
+            ? " grafana: {} "
+            : ` ${trimmed}${trimmed.endsWith(",") ? "" : ","} grafana: {} `
+        result = `${result.slice(0, openIdx + 1)}${newInner}${result.slice(closeIdx)}`
+      }
+    }
+  }
+
+  // Step 3: plugins. If `plugins: [` already exists, prepend our entry.
+  // Otherwise add a fresh block before the `environments:` key.
+  if (/metricsPlugin\(/.test(result)) {
+    // Already wired — skip.
+  } else if (/plugins:\s*\[/.test(result)) {
+    result = result.replace(
+      /plugins:\s*\[/,
+      "plugins: [\n    metricsPlugin({ reporters: [{ type: 'prometheus', port: 9249 }] }),",
+    )
+  } else if (/\n\s*environments:\s*\{/.test(result)) {
+    result = result.replace(
+      /(\n\s*environments:\s*\{)/,
+      "\n  plugins: [\n    metricsPlugin({ reporters: [{ type: 'prometheus', port: 9249 }] }),\n  ],$1",
+    )
+  }
+
+  return result
+}
+
+function findMatchingBrace(s: string, openIdx: number): number {
+  let depth = 1
+  for (let i = openIdx + 1; i < s.length; i++) {
+    const ch = s[i]
+    if (ch === "{") depth++
+    else if (ch === "}") {
+      depth--
+      if (depth === 0) return i
+    }
+  }
+  return -1
 }
 
 export function sharedFiles(opts: ScaffoldOptions): TemplateFile[] {
