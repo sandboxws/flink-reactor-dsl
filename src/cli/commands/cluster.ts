@@ -1245,6 +1245,11 @@ async function initPostgresDatabases(
           ],
           { cwd, stdio: "pipe", env: composeChildEnv },
         )
+        // `--single-transaction` makes the dump load atomic: any error
+        // (CREATE SCHEMA conflict, COPY failure, etc.) rolls back the
+        // entire transaction, so we can never end up with the partial
+        // state the recovery logic above is paying off. Combined with
+        // `ON_ERROR_STOP=1`, the first error short-circuits the script.
         execFileSync(
           engine.bin,
           [
@@ -1257,6 +1262,7 @@ async function initPostgresDatabases(
               "psql",
               "-v",
               "ON_ERROR_STOP=1",
+              "--single-transaction",
               "-U",
               "reactor",
               "-d",
