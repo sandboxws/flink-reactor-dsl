@@ -210,16 +210,33 @@ function submitPipelineYaml(yamlPath: string, pipelineName: string): void {
 }
 
 /**
- * Substitute `${env:VAR}` tokens with the matching host env-var value.
- * Throws when a placeholder has no corresponding env var so deploys fail
- * loudly instead of silently passing an empty password.
+ * Hard-coded credentials baked into the Docker-lane cluster bootstrap.
+ * These values are not secrets in any meaningful sense — they're public
+ * knowledge from `src/cli/cluster/init/pg-cdc-bootstrap.sql` and the
+ * compose file. Defaulting them keeps `flink-reactor deploy` working
+ * out-of-the-box against `fr up` clusters without making users export
+ * env vars whose values they'd just copy from our own bootstrap files.
+ *
+ * Real env vars always win — this map only fills in undefined ones.
+ * Production runtimes (kubernetes) use real Secrets and never hit this.
+ */
+const DEV_CLUSTER_ENV_FALLBACKS: Readonly<Record<string, string>> = {
+  PG_PRIMARY_PASSWORD: "flink_cdc",
+  POSTGRES_PASSWORD: "reactor",
+}
+
+/**
+ * Substitute `${env:VAR}` tokens with the matching host env-var value,
+ * or a dev-cluster fallback when the host doesn't set one. Throws when
+ * neither resolves so deploys fail loudly instead of silently passing
+ * an empty password.
  */
 function resolveEnvPlaceholders(text: string): string {
   return text.replace(/\$\{env:([A-Z_][A-Z0-9_]*)\}/g, (_match, name) => {
-    const value = process.env[name]
+    const value = process.env[name] ?? DEV_CLUSTER_ENV_FALLBACKS[name]
     if (value === undefined) {
       throw new Error(
-        `pipeline.yaml references \${env:${name}} but ${name} is not set in the host environment`,
+        `pipeline.yaml references \${env:${name}} but ${name} is not set in the host environment and has no dev-cluster default`,
       )
     }
     return value
