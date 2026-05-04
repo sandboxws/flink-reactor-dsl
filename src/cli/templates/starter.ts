@@ -18,7 +18,7 @@ export default defineConfig({
 
   // Kafka-only template: \`fr cluster up\` and \`fr sim up\` start Flink + Kafka.
   // No Postgres, Iceberg, or Fluss.
-  services: { kafka: {} },
+  services: { kafka: { bootstrapServers: 'kafka:9092' } },
 
   environments: {
     // Docker-compose by default — matches the platform docs' recommended
@@ -28,7 +28,6 @@ export default defineConfig({
       runtime: 'docker',
       supportedRuntimes: ['docker', 'minikube'],
       cluster:    { url: 'http://localhost:8081' },
-      kafka:      { bootstrapServers: 'localhost:9092' },
       sqlGateway: { url: 'http://localhost:8083' },   // used when runtime=docker
       kubectl:    { context: 'minikube' },             // used when runtime=minikube
       sim: {
@@ -62,7 +61,6 @@ export default defineConfig({
       runtime: 'minikube',
       kubectl:    { context: 'minikube' },
       kubernetes: { namespace: 'flink-test' },
-      kafka:      { bootstrapServers: 'kafka:9092' },
       pipelines:  { '*': { parallelism: 1 } },
     },
 

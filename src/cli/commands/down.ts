@@ -3,6 +3,7 @@ import { Effect } from "effect"
 import pc from "picocolors"
 import { resolveProjectContext } from "@/cli/discovery.js"
 import { runCommand } from "@/cli/effect-runner.js"
+import type { ContainerEngineChoice } from "@/cli/runtime/container-engine.js"
 import { selectAdapter } from "@/cli/runtime/index.js"
 import type { Runtime } from "@/core/config.js"
 import { CliError } from "@/core/errors.js"
@@ -18,12 +19,17 @@ export function registerDownCommand(program: Command): void {
       "--runtime <name>",
       "Override the env's runtime (docker | minikube | homebrew | kubernetes)",
     )
+    .option(
+      "--container-engine <name>",
+      "Container engine (auto | docker | podman); pinned via FR_DOCKER_BIN if set",
+    )
     .option("--volumes", "Remove persistent volumes")
     .option("--all", "Full teardown (e.g. stop the minikube VM entirely)")
     .action(
       async (opts: {
         env?: string
         runtime?: string
+        containerEngine?: ContainerEngineChoice
         volumes?: boolean
         all?: boolean
       }) => {
@@ -38,6 +44,7 @@ export function registerDownCommand(program: Command): void {
               await adapter.down(ctx, {
                 volumes: opts.volumes,
                 all: opts.all,
+                containerEngine: opts.containerEngine,
               })
             },
             catch: (err) =>

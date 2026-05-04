@@ -11,7 +11,10 @@
  * `cluster.ts`.
  */
 
-const DEFAULT_WAREHOUSE = "s3a://flink-state/paimon"
+// `s3://` (not `s3a://`) routes through Paimon's bundled S3FileIO via the
+// `paimon-s3` plugin in /opt/flink/lib. The Hadoop-native `s3a://` path
+// would require `hadoop-aws` on the user classpath, which isn't present.
+const DEFAULT_WAREHOUSE = "s3://flink-state/paimon"
 const S3_ENDPOINT = "http://seaweedfs.flink-demo.svc:8333"
 
 function createCatalogDdl(warehouse: string): string {

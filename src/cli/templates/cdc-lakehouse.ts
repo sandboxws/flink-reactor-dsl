@@ -20,12 +20,11 @@ export default defineConfig({
 
   // CDC stream lands in Kafka, lakehouse stores in Iceberg
   // (Lakekeeper-backed Iceberg REST → Postgres pulls in implicitly).
-  services: { kafka: {}, iceberg: {} },
+  services: { kafka: { bootstrapServers: 'kafka:9092' }, iceberg: {} },
 
   environments: {
     minikube: {
       cluster: { url: 'http://localhost:8081' },
-      kafka: { bootstrapServers: 'kafka:9092' },
       sim: {
         init: {
           iceberg: { databases: ['inventory'] },

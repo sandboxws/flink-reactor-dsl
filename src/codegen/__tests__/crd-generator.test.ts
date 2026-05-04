@@ -507,6 +507,48 @@ describe("CRD generation: Flink CDC Pipeline Connector variant", () => {
 // Hand-rolled emitters tend to fail this; a real YAML library should
 // always pass.
 
+describe("sourceSql → flinkConfiguration['pipeline.sql']", () => {
+  it("writes pipeline.sql to flinkConfiguration when sourceSql is supplied", () => {
+    const source = KafkaSource({
+      topic: "orders",
+      schema: OrderSchema,
+      bootstrapServers: "kafka:9092",
+    })
+    const sink = KafkaSink({ topic: "out", children: [source] })
+    const pipeline = Pipeline({ name: "with-sql", children: [sink] })
+
+    const sqlText =
+      "CREATE TABLE orders (...) WITH (...);\nINSERT INTO out SELECT * FROM orders;"
+    const crd = generateCrd(pipeline, {
+      flinkVersion: "2.0",
+      sourceSql: sqlText,
+    }) as { spec: { flinkConfiguration: Record<string, string> } }
+
+    expect(crd.spec.flinkConfiguration["pipeline.sql"]).toBe(sqlText)
+  })
+
+  it("omits pipeline.sql when sourceSql is missing or empty", () => {
+    const source = KafkaSource({
+      topic: "orders",
+      schema: OrderSchema,
+      bootstrapServers: "kafka:9092",
+    })
+    const sink = KafkaSink({ topic: "out", children: [source] })
+    const pipeline = Pipeline({ name: "without-sql", children: [sink] })
+
+    const noOpt = generateCrd(pipeline, { flinkVersion: "2.0" }) as {
+      spec: { flinkConfiguration: Record<string, string> }
+    }
+    expect(noOpt.spec.flinkConfiguration["pipeline.sql"]).toBeUndefined()
+
+    const emptyOpt = generateCrd(pipeline, {
+      flinkVersion: "2.0",
+      sourceSql: "   \n\t  ",
+    }) as { spec: { flinkConfiguration: Record<string, string> } }
+    expect(emptyOpt.spec.flinkConfiguration["pipeline.sql"]).toBeUndefined()
+  })
+})
+
 describe("toYaml: round-trips through parse", () => {
   it("preserves all fields for a representative CRD", async () => {
     const { parse } = await import("yaml")

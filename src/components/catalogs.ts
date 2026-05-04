@@ -32,6 +32,27 @@ export interface PaimonCatalogProps extends BaseComponentProps {
   readonly name: string
   readonly warehouse: string
   readonly metastore?: "filesystem" | "hive"
+  /**
+   * S3 endpoint for `s3a://`/`s3://` warehouses (e.g. `http://seaweedfs:8333`).
+   * Required when using a non-AWS S3-compatible store; without it Paimon
+   * defaults to AWS endpoints. Ignored when warehouse uses `file://` etc.
+   */
+  readonly s3Endpoint?: string
+  /**
+   * S3 access/secret keys are passed as plain strings: SQL `CREATE CATALOG`
+   * DDL is sent verbatim to the gateway, and Flink does not resolve
+   * `${env:VAR}` placeholders inside catalog options. For real deployments,
+   * inject the value at synth time via `process.env.S3_KEY` rather than a
+   * `secretRef()`.
+   */
+  readonly s3AccessKey?: string
+  readonly s3SecretKey?: string
+  /**
+   * Whether to use path-style addressing (`http://endpoint/bucket/key`)
+   * instead of virtual-hosted-style (`http://bucket.endpoint/key`).
+   * Required for SeaweedFS, MinIO, and most non-AWS S3 stores.
+   */
+  readonly s3PathStyleAccess?: boolean
   readonly children?: ConstructNode | ConstructNode[]
 }
 
@@ -40,6 +61,11 @@ export interface PaimonCatalogProps extends BaseComponentProps {
  *
  * The optional `metastore` prop controls whether Paimon uses the filesystem
  * (default) or a Hive metastore for metadata management.
+ *
+ * For `s3a://`/`s3://` warehouses, supply `s3Endpoint`/`s3AccessKey`/
+ * `s3SecretKey`/`s3PathStyleAccess` so the emitted CREATE CATALOG DDL can
+ * reach a non-AWS S3 store. Without these, Paimon's HadoopFileIO falls back
+ * to the default AWS credentials/endpoint chain at deploy time.
  */
 export function PaimonCatalog(props: PaimonCatalogProps): CatalogResult {
   const { children, ...rest } = props

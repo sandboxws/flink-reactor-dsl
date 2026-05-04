@@ -16,14 +16,17 @@ describe("paimonInitStatements", () => {
     expect(stmts).toMatchSnapshot()
   })
 
-  it("uses the default s3a://flink-state/paimon warehouse when omitted", () => {
+  it("uses the default s3://flink-state/paimon warehouse when omitted", () => {
+    // The default uses `s3://` rather than `s3a://` so Paimon routes
+    // through the bundled paimon-s3 plugin rather than Hadoop's
+    // S3AFileSystem (which isn't on the user classpath).
     const stmts = paimonInitStatements(["benchmark"])
-    expect(stmts[0]).toContain("'warehouse' = 's3a://flink-state/paimon'")
+    expect(stmts[0]).toContain("'warehouse' = 's3://flink-state/paimon'")
   })
 
   it("threads a custom warehouse override", () => {
-    const stmts = paimonInitStatements(["benchmark"], "s3a://my-bucket/lake")
-    expect(stmts[0]).toContain("'warehouse' = 's3a://my-bucket/lake'")
+    const stmts = paimonInitStatements(["benchmark"], "s3://my-bucket/lake")
+    expect(stmts[0]).toContain("'warehouse' = 's3://my-bucket/lake'")
   })
 
   it("includes SeaweedFS-flavored S3 client overrides in the catalog DDL", () => {

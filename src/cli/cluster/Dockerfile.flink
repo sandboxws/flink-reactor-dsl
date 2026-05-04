@@ -39,6 +39,16 @@ RUN wget -q -P /opt/flink/lib/ \
 RUN wget -q -P /opt/flink/lib/ \
   https://repo1.maven.org/maven2/org/apache/paimon/paimon-flink-2.2/1.4.1/paimon-flink-2.2-1.4.1.jar
 
+# Apache Paimon S3 plugin — bundles the Hadoop S3 filesystem (S3AFileSystem)
+# under a `paimon-plugin-s3/` prefix so Paimon's plugin classloader can load
+# it without colliding with anything else on the user classpath. Required
+# whenever a Paimon catalog uses an `s3a://` or `s3://` warehouse URI;
+# otherwise Paimon's HadoopFileIO fails with `ClassNotFoundException:
+# org.apache.hadoop.fs.s3a.S3AFileSystem` at CREATE CATALOG time. Version
+# pinned to match `paimon-flink-2.2` above.
+RUN wget -q -P /opt/flink/lib/ \
+  https://repo1.maven.org/maven2/org/apache/paimon/paimon-s3/1.4.1/paimon-s3-1.4.1.jar
+
 # Hadoop client (api + runtime) — required by Iceberg FlinkCatalogFactory's
 # clusterHadoopConf() even when using a REST catalog with S3FileIO. These two
 # shaded artifacts replace the legacy 1GB Hadoop tarball install.
@@ -52,3 +62,48 @@ RUN wget -q -P /opt/flink/lib/ \
 RUN mkdir -p /opt/flink/plugins/s3-fs-hadoop \
   && wget -q -O /opt/flink/plugins/s3-fs-hadoop/flink-s3-fs-hadoop-2.2.0.jar \
   https://repo1.maven.org/maven2/org/apache/flink/flink-s3-fs-hadoop/2.2.0/flink-s3-fs-hadoop-2.2.0.jar
+
+# Pre-create the checkpoint and data directories with Flink ownership.
+# The compose stack mounts named volumes onto these paths; without this
+# `chown` the root-owned mount roots prevent the `flink` user (uid 9999)
+# from writing checkpoint subdirectories at job submit time, surfacing as
+# `Failed to create directory for shared state` from the JobManager.
+RUN mkdir -p /opt/flink/checkpoints /opt/flink/data \
+  && chown -R flink:flink /opt/flink/checkpoints /opt/flink/data
+
+# Apache Flink CDC 3.6.0 (Flink 2.2 binding) — the runtime for Pipeline
+# Connector pipelines emitted by the DSL (e.g. the pg-fluss-paimon
+# template's ingest job). The binary distribution ships only the dist
+# jar + launcher script + config; pipeline connectors live on Maven
+# Central under the `<version>-<flink-major>` coordinate (3.6.0-2.2).
+#
+# `/opt/flink-cdc/lib/flink-cdc-cli.jar` is the path the DSL's emitted
+# FlinkDeployment CRD names via `local://` — keep it as a symlink so
+# version bumps stay localised here.
+# `flink:2.2.0` runs as the `flink` user (uid 9999), which can only write
+# to /opt/flink (its home). Drop to root for the /opt extraction, then
+# chown so the runtime user can launch flink-cdc.sh.
+USER root
+RUN wget -q -O /tmp/flink-cdc.tar.gz https://archive.apache.org/dist/flink/flink-cdc-3.6.0/flink-cdc-3.6.0-2.2-bin.tar.gz \
+  && tar -xzf /tmp/flink-cdc.tar.gz -C /opt/ \
+  && rm /tmp/flink-cdc.tar.gz \
+  && mv /opt/flink-cdc-3.6.0-2.2 /opt/flink-cdc \
+  && ln -s /opt/flink-cdc/lib/flink-cdc-dist-3.6.0-2.2.jar /opt/flink-cdc/lib/flink-cdc-cli.jar
+
+# Pipeline Connectors used by the pg-fluss-paimon template. Add more
+# coordinates here as templates introduce new sources/sinks.
+RUN wget -q -P /opt/flink-cdc/lib/ \
+  https://repo1.maven.org/maven2/org/apache/flink/flink-cdc-pipeline-connector-postgres/3.6.0-2.2/flink-cdc-pipeline-connector-postgres-3.6.0-2.2.jar \
+  && wget -q -P /opt/flink-cdc/lib/ \
+  https://repo1.maven.org/maven2/org/apache/flink/flink-cdc-pipeline-connector-fluss/3.6.0-2.2/flink-cdc-pipeline-connector-fluss-3.6.0-2.2.jar \
+  && chown -R flink:flink /opt/flink-cdc
+USER flink
+
+# `flink-cdc.sh` defaults to looking for the running Flink REST endpoint
+# at `localhost:8081`. Inside the cluster JobManager container that's the
+# correct loopback. The script also requires `FLINK_HOME` and a discoverable
+# `flink-cdc.yaml` — both ship inside /opt/flink-cdc as the tarball
+# layout demands.
+ENV FLINK_HOME=/opt/flink \
+    FLINK_CDC_HOME=/opt/flink-cdc \
+    PATH="/opt/flink-cdc/bin:${PATH}"

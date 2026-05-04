@@ -37,6 +37,13 @@ export interface CrdGeneratorOptions {
   readonly labels?: Record<string, string>
   /** Extra annotations on the CRD metadata */
   readonly annotations?: Record<string, string>
+  /**
+   * Synthesized SQL for this pipeline. When set, written into
+   * `flinkConfiguration["pipeline.sql"]` so the resulting Flink job preserves
+   * the source SQL on its user-config map (visible via /jobs/:id/config and
+   * the dashboard's SQL tab).
+   */
+  readonly sourceSql?: string
 }
 
 /** The generated FlinkDeployment CRD as a plain object */
@@ -293,6 +300,12 @@ function buildInnerSpec(
     for (const key of sortedKeys) {
       config[key] = props.flinkConfig[key]
     }
+  }
+
+  // Preserve the synthesized SQL on user-config so /jobs/:id/config (and the
+  // dashboard's SQL tab) can surface it for the resulting job.
+  if (options.sourceSql && options.sourceSql.trim().length > 0) {
+    config["pipeline.sql"] = options.sourceSql
   }
 
   const normalizedConfig = FlinkVersionCompat.normalizeConfig(

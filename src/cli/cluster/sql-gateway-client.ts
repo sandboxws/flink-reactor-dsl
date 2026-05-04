@@ -83,13 +83,20 @@ export class SqlGatewayClient extends SharedSqlGatewayClient {
   /**
    * Read a SQL file, split into statements, and submit each one.
    * Polls status for each statement, handling streaming vs batch differently.
+   *
+   * Opens the session with `pipeline.sql` set to the full SQL file content so
+   * every job created in this session preserves the source SQL on its
+   * user-config map (visible via /jobs/:id/config and the dashboard's SQL
+   * tab). Flink propagates session properties to job-level config.
    */
   async submitSqlFile(filePath: string): Promise<SubmitResult> {
     const { readFileSync } = await import("node:fs")
     const sql = readFileSync(filePath, "utf-8")
     const statements = splitSqlStatements(sql)
 
-    const sessionHandle = await this.openSession()
+    const sessionHandle = await this.openSession({
+      properties: { "pipeline.sql": sql },
+    })
 
     let lastOperationHandle = ""
     let lastStatus: "RUNNING" | "FINISHED" | "ERROR" = "RUNNING"

@@ -46,19 +46,8 @@ CREATE CATALOG \`lake\` WITH (
 -- table-type  : PrimaryKey (retract)
 -- ====================================================================
 
-CREATE TABLE \`shop_orders\` (
-  \`order_id\` BIGINT,
-  \`customer_region\` STRING,
-  \`amount\` DECIMAL(10, 2),
-  \`order_ts\` TIMESTAMP(3),
-  PRIMARY KEY (\`order_id\`) NOT ENFORCED
-) WITH (
-  'connector' = 'fluss',
-  'catalog' = 'fluss_cat',
-  'database' = 'shop',
-  'table' = 'orders',
-  'scan.startup.mode' = 'initial'
-);
+CREATE TABLE \`shop_orders\`
+LIKE \`fluss_cat\`.\`shop\`.\`orders\` (EXCLUDING WATERMARKS);
 
 -- ====================================================================
 -- SINK TABLE
@@ -136,19 +125,8 @@ CREATE CATALOG \`lake\` WITH (
 -- table-type  : PrimaryKey (retract)
 -- ====================================================================
 
-CREATE TABLE \`shop_orders\` (
-  \`order_id\` BIGINT,
-  \`customer_region\` STRING,
-  \`amount\` DECIMAL(10, 2),
-  \`order_ts\` TIMESTAMP(3),
-  PRIMARY KEY (\`order_id\`) NOT ENFORCED
-) WITH (
-  'connector' = 'fluss',
-  'catalog' = 'fluss_cat',
-  'database' = 'shop',
-  'table' = 'orders',
-  'scan.startup.mode' = 'initial'
-);
+CREATE TABLE \`shop_orders\`
+LIKE \`fluss_cat\`.\`shop\`.\`orders\` (EXCLUDING WATERMARKS);
 
 -- ====================================================================
 -- SINK TABLE
@@ -228,19 +206,8 @@ CREATE CATALOG \`lake\` WITH (
 -- table-type  : PrimaryKey (retract)
 -- ====================================================================
 
-CREATE TABLE \`shop_orders\` (
-  \`order_id\` BIGINT,
-  \`customer_region\` STRING,
-  \`amount\` DECIMAL(10, 2),
-  \`order_ts\` TIMESTAMP(3),
-  PRIMARY KEY (\`order_id\`) NOT ENFORCED
-) WITH (
-  'connector' = 'fluss',
-  'catalog' = 'fluss_cat',
-  'database' = 'shop',
-  'table' = 'orders',
-  'scan.startup.mode' = 'initial'
-);
+CREATE TABLE \`shop_orders\`
+LIKE \`fluss_cat\`.\`shop\`.\`orders\` (EXCLUDING WATERMARKS);
 
 -- ====================================================================
 -- SINK TABLE
@@ -319,19 +286,8 @@ CREATE CATALOG \`lake\` WITH (
 -- table-type  : PrimaryKey (retract)
 -- ====================================================================
 
-CREATE TABLE \`shop_orders\` (
-  \`order_id\` BIGINT,
-  \`customer_region\` STRING,
-  \`amount\` DECIMAL(10, 2),
-  \`order_ts\` TIMESTAMP(3),
-  PRIMARY KEY (\`order_id\`) NOT ENFORCED
-) WITH (
-  'connector' = 'fluss',
-  'catalog' = 'fluss_cat',
-  'database' = 'shop',
-  'table' = 'orders',
-  'scan.startup.mode' = 'initial'
-);
+CREATE TABLE \`shop_orders\`
+LIKE \`fluss_cat\`.\`shop\`.\`orders\` (EXCLUDING WATERMARKS);
 
 -- ====================================================================
 -- SINK TABLE
@@ -413,19 +369,8 @@ CREATE CATALOG \`lake\` WITH (
 -- table-type  : PrimaryKey (retract)
 -- ====================================================================
 
-CREATE TABLE \`shop_orders\` (
-  \`order_id\` BIGINT,
-  \`customer_region\` STRING,
-  \`amount\` DECIMAL(10, 2),
-  \`order_ts\` TIMESTAMP(3),
-  PRIMARY KEY (\`order_id\`) NOT ENFORCED
-) WITH (
-  'connector' = 'fluss',
-  'catalog' = 'fluss_cat',
-  'database' = 'shop',
-  'table' = 'orders',
-  'scan.startup.mode' = 'initial'
-);
+CREATE TABLE \`shop_orders\`
+LIKE \`fluss_cat\`.\`shop\`.\`orders\` (EXCLUDING WATERMARKS);
 
 -- ====================================================================
 -- SINK TABLE

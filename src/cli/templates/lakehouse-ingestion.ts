@@ -19,12 +19,11 @@ export default defineConfig({
   flink: { version: '${opts.flinkVersion}' },
 
   // Lakehouse ingestion: Kafka events land in Iceberg.
-  services: { kafka: {}, iceberg: {} },
+  services: { kafka: { bootstrapServers: 'kafka:9092' }, iceberg: {} },
 
   environments: {
     minikube: {
       cluster: { url: 'http://localhost:8081' },
-      kafka: { bootstrapServers: 'kafka:9092' },
       sim: {
         init: {
           iceberg: { databases: ['raw'] },

@@ -17,12 +17,11 @@ export default defineConfig({
   flink: { version: '${opts.flinkVersion}' },
 
   // Kafka for telemetry; Postgres for the JDBC sinks the pipelines write to.
-  services: { kafka: {}, postgres: {} },
+  services: { kafka: { bootstrapServers: 'kafka:9092' }, postgres: {} },
 
   environments: {
     minikube: {
       cluster: { url: 'http://localhost:8081' },
-      kafka: { bootstrapServers: 'kafka:9092' },
       sim: {
         init: {
           kafka: {

@@ -665,7 +665,7 @@ export default defineConfig({
   flink: { version: '${opts.flinkVersion}' },
 
   // Kafka-only template.
-  services: { kafka: {} },
+  services: { kafka: { bootstrapServers: 'kafka:9092' } },
 
   environments: {
     development: {
@@ -675,7 +675,6 @@ export default defineConfig({
     },
     minikube: {
       cluster: { url: 'http://localhost:8081' },
-      kafka: { bootstrapServers: 'kafka:9092' },
       sim: {
         init: {
           kafka: {

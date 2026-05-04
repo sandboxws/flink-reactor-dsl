@@ -1,10 +1,16 @@
 // ── Kubernetes Secret reference primitive ───────────────────────────
 // secretRef() creates a branded marker object that represents a reference
 // to a Kubernetes Secret. At synthesis time it expands into:
-//   • a `${env:<envName>}` placeholder in the emitted pipeline YAML
-//     (Flink CDC 3.6's native env-substitution syntax), and
+//   • a `${env:<envName>}` placeholder in the emitted pipeline YAML, and
 //   • an individual `env` entry in the FlinkDeployment podTemplate with
 //     `valueFrom.secretKeyRef.{name, key}`.
+//
+// The placeholder is *not* substituted by Flink CDC 3.6's pipeline.yaml
+// loader (only `flink-conf.yaml` honours `${env:...}` — a separate path).
+// Each runtime adapter resolves placeholders the way its environment
+// supports: the docker adapter inlines values from the host env at deploy
+// time; the kubernetes adapter relies on the secretKeyRef → env binding
+// it emits in the FlinkDeployment CRD.
 //
 // The DSL never sees the cleartext secret value — the k8s Secret itself
 // is managed by the user out-of-band (kubectl / External Secrets Operator
@@ -115,7 +121,9 @@ export function isSecretRef(value: unknown): value is SecretRef {
 }
 
 /**
- * Render the YAML placeholder string Flink CDC 3.6 substitutes at runtime.
+ * Render a placeholder string in the synthesised pipeline.yaml. Runtime
+ * adapters substitute the placeholder before submission (docker inlines
+ * from the host env; kubernetes binds via secretKeyRef in the pod spec).
  */
 export function renderSecretPlaceholder(ref: SecretRef): string {
   return `\${env:${ref.envName}}`

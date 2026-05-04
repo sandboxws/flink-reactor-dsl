@@ -29,3 +29,8 @@ RUN wget -q -P /opt/flink/lib/ \
 # runtime/sim drift.
 RUN wget -q -P /opt/flink/lib/ \
   https://repo1.maven.org/maven2/org/apache/paimon/paimon-flink-2.2/1.4.1/paimon-flink-2.2-1.4.1.jar
+
+# Paimon S3 plugin — see `src/cli/cluster/Dockerfile.flink` for why this is
+# required for `s3a://`/`s3://` warehouse URIs.
+RUN wget -q -P /opt/flink/lib/ \
+  https://repo1.maven.org/maven2/org/apache/paimon/paimon-s3/1.4.1/paimon-s3-1.4.1.jar

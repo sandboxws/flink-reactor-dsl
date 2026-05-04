@@ -225,11 +225,12 @@ describe("ingest ↔ serve cross-pipeline contract", () => {
     // The Flink CDC Pipeline Connector for Fluss auto-derives the target
     // Fluss table from upstream Postgres tables, so the ingest YAML stanza
     // does not emit `database:` / `table:` keys — the cross-pipeline contract
-    // is `bootstrap.servers` (asserted in the previous test). The serve side,
-    // by contrast, declares its FlussSource read target explicitly in the
-    // SQL DDL WITH clause.
-    expect(serveSql).toContain("'database' = 'benchmark'")
-    expect(serveSql).toContain("'table' = 'orders'")
+    // is `bootstrap.servers` (asserted in the previous test). The serve side
+    // declares its FlussSource read target via a `CREATE TABLE … LIKE
+    // <catalog>.<database>.<table>` clause (Fluss 0.9.0-incubating is
+    // catalog-only — no SQL `connector='fluss'` factory exists, so the
+    // database/table coordinates live in the LIKE path, not in WITH).
+    expect(serveSql).toContain("`benchmark`.`orders`")
   })
 
   it("produces byte-identical output across two synthesis runs (ingest)", () => {

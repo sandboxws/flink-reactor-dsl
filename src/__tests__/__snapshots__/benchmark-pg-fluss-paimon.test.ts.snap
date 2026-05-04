@@ -526,25 +526,12 @@ CREATE CATALOG \`paimon_catalog\` WITH (
 -- ====================================================================
 
 CREATE TABLE \`benchmark_orders\` (
-  \`o_orderkey\` BIGINT,
-  \`o_custkey\` BIGINT,
-  \`o_orderstatus\` STRING,
-  \`o_totalprice\` DECIMAL(15, 2),
-  \`o_orderdate\` DATE,
-  \`o_orderpriority\` STRING,
-  \`o_clerk\` STRING,
-  \`o_shippriority\` INT,
-  \`o_comment\` STRING,
-  \`event_time\` TIMESTAMP(3),
-  WATERMARK FOR \`event_time\` AS event_time - INTERVAL '5' SECOND,
-  PRIMARY KEY (\`o_orderkey\`) NOT ENFORCED
-) WITH (
-  'connector' = 'fluss',
-  'catalog' = 'fluss_catalog',
-  'database' = 'benchmark',
-  'table' = 'orders',
+  WATERMARK FOR \`event_time\` AS event_time - INTERVAL '5' SECOND
+)
+WITH (
   'scan.startup.mode' = 'initial'
-);
+)
+LIKE \`fluss_catalog\`.\`benchmark\`.\`orders\` (EXCLUDING WATERMARKS);
 
 -- ====================================================================
 -- SINK TABLE
@@ -683,25 +670,12 @@ CREATE CATALOG \`paimon_catalog\` WITH (
 -- ====================================================================
 
 CREATE TABLE \`benchmark_orders\` (
-  \`o_orderkey\` BIGINT,
-  \`o_custkey\` BIGINT,
-  \`o_orderstatus\` STRING,
-  \`o_totalprice\` DECIMAL(15, 2),
-  \`o_orderdate\` DATE,
-  \`o_orderpriority\` STRING,
-  \`o_clerk\` STRING,
-  \`o_shippriority\` INT,
-  \`o_comment\` STRING,
-  \`event_time\` TIMESTAMP(3),
-  WATERMARK FOR \`event_time\` AS event_time - INTERVAL '5' SECOND,
-  PRIMARY KEY (\`o_orderkey\`) NOT ENFORCED
-) WITH (
-  'connector' = 'fluss',
-  'catalog' = 'fluss_catalog',
-  'database' = 'benchmark',
-  'table' = 'orders',
+  WATERMARK FOR \`event_time\` AS event_time - INTERVAL '5' SECOND
+)
+WITH (
   'scan.startup.mode' = 'initial'
-);
+)
+LIKE \`fluss_catalog\`.\`benchmark\`.\`orders\` (EXCLUDING WATERMARKS);
 
 -- ====================================================================
 -- SINK TABLE
@@ -840,25 +814,12 @@ CREATE CATALOG \`paimon_catalog\` WITH (
 -- ====================================================================
 
 CREATE TABLE \`benchmark_orders\` (
-  \`o_orderkey\` BIGINT,
-  \`o_custkey\` BIGINT,
-  \`o_orderstatus\` STRING,
-  \`o_totalprice\` DECIMAL(15, 2),
-  \`o_orderdate\` DATE,
-  \`o_orderpriority\` STRING,
-  \`o_clerk\` STRING,
-  \`o_shippriority\` INT,
-  \`o_comment\` STRING,
-  \`event_time\` TIMESTAMP(3),
-  WATERMARK FOR \`event_time\` AS event_time - INTERVAL '5' SECOND,
-  PRIMARY KEY (\`o_orderkey\`) NOT ENFORCED
-) WITH (
-  'connector' = 'fluss',
-  'catalog' = 'fluss_catalog',
-  'database' = 'benchmark',
-  'table' = 'orders',
+  WATERMARK FOR \`event_time\` AS event_time - INTERVAL '5' SECOND
+)
+WITH (
   'scan.startup.mode' = 'initial'
-);
+)
+LIKE \`fluss_catalog\`.\`benchmark\`.\`orders\` (EXCLUDING WATERMARKS);
 
 -- ====================================================================
 -- SINK TABLE
@@ -997,25 +958,12 @@ CREATE CATALOG \`paimon_catalog\` WITH (
 -- ====================================================================
 
 CREATE TABLE \`benchmark_orders\` (
-  \`o_orderkey\` BIGINT,
-  \`o_custkey\` BIGINT,
-  \`o_orderstatus\` STRING,
-  \`o_totalprice\` DECIMAL(15, 2),
-  \`o_orderdate\` DATE,
-  \`o_orderpriority\` STRING,
-  \`o_clerk\` STRING,
-  \`o_shippriority\` INT,
-  \`o_comment\` STRING,
-  \`event_time\` TIMESTAMP(3),
-  WATERMARK FOR \`event_time\` AS event_time - INTERVAL '5' SECOND,
-  PRIMARY KEY (\`o_orderkey\`) NOT ENFORCED
-) WITH (
-  'connector' = 'fluss',
-  'catalog' = 'fluss_catalog',
-  'database' = 'benchmark',
-  'table' = 'orders',
+  WATERMARK FOR \`event_time\` AS event_time - INTERVAL '5' SECOND
+)
+WITH (
   'scan.startup.mode' = 'initial'
-);
+)
+LIKE \`fluss_catalog\`.\`benchmark\`.\`orders\` (EXCLUDING WATERMARKS);
 
 -- ====================================================================
 -- SINK TABLE

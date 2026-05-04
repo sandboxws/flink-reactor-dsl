@@ -308,10 +308,13 @@ export function synthesizeApp(
           chain.ddlGenerators.size > 0 ? chain.ddlGenerators : undefined,
       })
 
-      // Generate CRD
+      // Generate CRD. Thread the synthesized SQL into the CRD generator so
+      // it lands in flinkConfiguration["pipeline.sql"] and round-trips back
+      // through /jobs/:id/config to the dashboard's SQL tab.
       const crdOpts: CrdGeneratorOptions = {
         flinkVersion,
         ...options?.crdOptions,
+        sourceSql: sql.sql,
       }
       let crd = generateCrd(node, crdOpts)
 
@@ -521,10 +524,12 @@ export function synthesizeAppEffect(
               chain.ddlGenerators.size > 0 ? chain.ddlGenerators : undefined,
           })
 
-          // CRD generation with typed error
+          // CRD generation with typed error. Thread synthesized SQL so it
+          // round-trips to /jobs/:id/config user-config (see synthesizeApp).
           const crdOpts: CrdGeneratorOptions = {
             flinkVersion,
             ...options?.crdOptions,
+            sourceSql: sql.sql,
           }
           let crd = yield* generateCrdEither(node, crdOpts)
           crd = chain.transformCrd(crd, node)

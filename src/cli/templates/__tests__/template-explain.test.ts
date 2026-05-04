@@ -25,6 +25,14 @@ const REQUIRE_SQL_GATEWAY = process.env.REQUIRE_SQL_GATEWAY === "1"
 const SKIP = new Set<string>([
   // ── Codegen issues needing deeper fixes ───────────────────────────
   // "ecom-order-enrichment", // bugs/029 — multiple rowtime cols in Kafka sink after interval join
+
+  // ── Cross-pipeline runtime dependencies ───────────────────────────
+  // The serve pipeline's `LIKE fluss_catalog.public.orders` resolves
+  // against a table the ingest pipeline materializes at runtime via
+  // Flink CDC. Validating it in isolation against an empty Fluss
+  // catalog fails as expected — synthesis correctness is covered by
+  // the template-scaffold-synth and pg-fluss-paimon snapshot tests.
+  "serve",
 ])
 
 // ── Helpers ──────────────────────────────────────────────────────────

@@ -1277,6 +1277,54 @@ async function initPostgresDatabases(
       }
     }
 
+    // Apply CDC bootstrap (flink_cdc role + publication on tpch tables).
+    // Idempotent — DO blocks guard against re-creation. Required for the
+    // pg-fluss-paimon template's PostgresCdcPipelineSource to authenticate
+    // and read from the publication. Runs after tpch loads so the
+    // publication's `FOR TABLE orders, lineitem, customer` resolves the
+    // named relations.
+    const cdcBootstrapPath = join(initDir, "pg-cdc-bootstrap.sql")
+    if (existsSync(cdcBootstrapPath)) {
+      spinner.message(
+        "Applying CDC bootstrap (flink_cdc role + publication)...",
+      )
+      execFileSync(
+        engine.bin,
+        [
+          ...engine.composeArgv([
+            "-f",
+            compose,
+            "cp",
+            cdcBootstrapPath,
+            `${pgService}:/tmp/pg-cdc-bootstrap.sql`,
+          ]),
+        ],
+        { cwd, stdio: "pipe", env: composeChildEnv },
+      )
+      execFileSync(
+        engine.bin,
+        [
+          ...engine.composeArgv([
+            "-f",
+            compose,
+            "exec",
+            "-T",
+            pgService,
+            "psql",
+            "-v",
+            "ON_ERROR_STOP=1",
+            "-U",
+            "reactor",
+            "-d",
+            "postgres",
+            "-f",
+            "/tmp/pg-cdc-bootstrap.sql",
+          ]),
+        ],
+        { cwd, stdio: "pipe", timeout: 60_000, env: composeChildEnv },
+      )
+    }
+
     spinner.stop(pc.green("PostgreSQL databases ready."))
   } catch (err) {
     spinner.stop(pc.yellow("PostgreSQL initialization failed (non-critical)."))

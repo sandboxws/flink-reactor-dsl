@@ -1048,6 +1048,14 @@ function generateCatalogDdl(node: ConstructNode): string {
       withProps.type = "paimon"
       withProps.warehouse = props.warehouse as string
       if (props.metastore) withProps.metastore = props.metastore as string
+      if (props.s3Endpoint)
+        withProps["s3.endpoint"] = props.s3Endpoint as string
+      if (props.s3AccessKey)
+        withProps["s3.access-key"] = props.s3AccessKey as string
+      if (props.s3SecretKey)
+        withProps["s3.secret-key"] = props.s3SecretKey as string
+      if (props.s3PathStyleAccess !== undefined)
+        withProps["s3.path-style-access"] = String(props.s3PathStyleAccess)
       break
     case "IcebergCatalog":
       withProps.type = "iceberg"
@@ -1096,6 +1104,17 @@ function generateUdfDdl(node: ConstructNode): string {
 function generateSourceDdl(node: ConstructNode): string | null {
   if (node.component === "CatalogSource") return null
 
+  // FlussSource is catalog-managed. Apache Fluss 0.9.0-incubating registers
+  // only `FlinkCatalogFactory` (not a `DynamicTableFactory`), so emitting
+  // a standalone `CREATE TABLE … WITH ('connector'='fluss', …)` fails at
+  // deploy time with `Cannot discover a connector using option:
+  // 'connector'='fluss'`. Derive an alias in default_catalog from the
+  // catalog-qualified table via `CREATE TABLE LIKE` — Fluss handles
+  // routing internally through the catalog binding.
+  if (node.component === "FlussSource" && node.props.catalogName) {
+    return generateCatalogManagedSourceDdl(node)
+  }
+
   const props = node.props
   const schema = props.schema as SchemaDefinition
   const tableName = node.id
@@ -1114,6 +1133,57 @@ function generateSourceDdl(node: ConstructNode): string | null {
   parts.push(`) WITH (\n${withClause}\n);`)
 
   return parts.join("\n")
+}
+
+function generateCatalogManagedSourceDdl(node: ConstructNode): string {
+  const props = node.props
+  const tableName = node.id
+  const catalogName = String(props.catalogName)
+  const database = String(props.database)
+  const table = String(props.table)
+  const fullName = `${q(catalogName)}.${q(database)}.${q(table)}`
+  const schema = props.schema as SchemaDefinition | undefined
+
+  // Self-bootstrap the upstream catalog table so the consumer-side view
+  // below resolves regardless of whether a producer pipeline (e.g. Flink
+  // CDC ingest) has already materialized it. `IF NOT EXISTS` makes us a
+  // no-op when the producer wins the race; when we win, downstream
+  // producers still write into the table we created.
+  //
+  // Watermarks are stripped from the catalog body — they're query-level,
+  // not storage-level, and Fluss/Paimon catalogs reject them at storage
+  // declaration time. The consumer-side TEMPORARY TABLE below re-applies
+  // the watermark on top of a SELECT against the catalog.
+  const stmts: string[] = []
+  if (schema && Object.keys(schema.fields).length > 0) {
+    const storageSchema: SchemaDefinition = { ...schema, watermark: undefined }
+    const columns = generateColumns(storageSchema)
+    const constraints = generateConstraints(storageSchema, props)
+    const tableBody =
+      constraints.length > 0 ? `${columns},\n${constraints}` : columns
+    stmts.push(
+      `CREATE DATABASE IF NOT EXISTS ${q(catalogName)}.${q(database)};`,
+      `CREATE TABLE IF NOT EXISTS ${fullName} (\n${tableBody}\n);`,
+    )
+  }
+
+  // A TEMPORARY VIEW re-exposes the catalog table into default_catalog
+  // under a short alias usable in downstream FROM clauses. `LIKE` would
+  // copy columns but leave the WITH clause empty, and the resulting
+  // alias fails planner-time connector discovery for catalog-only
+  // factories (Fluss 0.9, Paimon).
+  //
+  // Watermarks declared on the FlussSource schema are intentionally
+  // dropped here — they're query-level metadata that Fluss's storage
+  // catalog rejects, and views can't carry WATERMARK clauses. Pipelines
+  // that need event-time semantics on a Fluss source should declare the
+  // watermark on the producer-side CREATE TABLE (i.e. via the FlussSink
+  // that materializes the table).
+  stmts.push(
+    `CREATE TEMPORARY VIEW ${q(tableName)} AS SELECT * FROM ${fullName};`,
+  )
+
+  return stmts.join("\n")
 }
 
 function generateColumns(schema: SchemaDefinition): string {

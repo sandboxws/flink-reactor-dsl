@@ -13,13 +13,19 @@ import pc from "picocolors"
 
 // ── Constants ──────────────────────────────────────────────────────────
 
-export const SAMPLE_DATABASES = ["pagila", "chinook", "employees"] as const
+export const SAMPLE_DATABASES = [
+  "pagila",
+  "chinook",
+  "employees",
+  "tpch",
+] as const
 
 /** Schema to check for table counts — employees uses a custom schema */
 export const DB_SCHEMA: Record<string, string> = {
   pagila: "public",
   chinook: "public",
   employees: "employees",
+  tpch: "public",
 }
 
 // ── Dump sources ───────────────────────────────────────────────────────

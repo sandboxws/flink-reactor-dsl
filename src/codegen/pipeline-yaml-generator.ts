@@ -82,33 +82,54 @@ function buildPostgresSourceStanza(
 ): Record<string, unknown> {
   const p = node.props
   const tableList = p.tableList as readonly string[]
-  const schemaList = p.schemaList as readonly string[]
 
+  // Flink CDC 3.6 collapsed the per-coordinate options
+  // (`database-name` + `schema-name` + `table-name`) into a single
+  // `tables` option carrying fully-qualified `<db>.<schema>.<table>`
+  // patterns. `tableList` already arrives as `<schema>.<table>`
+  // strings on the construct node; prepend the database name to land
+  // in the new format.
+  const fqTables = tableList
+    .map((t) =>
+      t.includes(".") && t.split(".").length >= 2
+        ? `${p.database}.${t}`
+        : `${p.database}.${t}`,
+    )
+    .join(",")
+
+  // Flink CDC 3.6 dropped `publication.name` and `scan.snapshot.enabled`
+  // from the Postgres pipeline source factory. The publication is now
+  // implicitly the one CDC creates as a side-effect of the slot lifecycle,
+  // and snapshot toggling moved entirely onto `scan.startup.mode`
+  // (`initial` keeps snapshot+log; `latest-offset` skips snapshot;
+  // `snapshot` for snapshot-only).
   const stanza: Record<string, unknown> = {
     type: "postgres",
     hostname: p.hostname,
     port: p.port ?? 5432,
     username: p.username,
     password: renderValue(p.password),
-    "database-name": p.database,
-    "schema-name": schemaList.join(","),
-    "table-name": tableList.join(","),
+    tables: fqTables,
     "decoding.plugin.name": p.decodingPluginName ?? "pgoutput",
     "slot.name": p.replicationSlotName ?? deriveSlotName(pipelineName),
-    "publication.name":
-      p.publicationName ?? derivePublicationName(pipelineName),
-    "scan.startup.mode": p.startupMode ?? "initial",
+    // Debezium's default `publication.autocreate.mode` is `all_tables`,
+    // which requires PostgreSQL superuser to run `CREATE PUBLICATION ...
+    // FOR ALL TABLES`. `filtered` instead emits `FOR TABLE <captured>`
+    // which only needs `CREATE` on the database (granted to the
+    // dedicated `flink_cdc` role). Pass-through happens via the
+    // `debezium.` prefix recognised by PostgresDataSourceFactory.
+    "debezium.publication.autocreate.mode": "filtered",
   }
 
-  // snapshotMode → Flink CDC scan.* keys
+  // snapshotMode → scan.startup.mode (replaces the older
+  // scan.snapshot.enabled toggle).
   const snapshotMode = (p.snapshotMode as string | undefined) ?? "initial"
   if (snapshotMode === "never") {
-    stanza["scan.snapshot.enabled"] = false
+    stanza["scan.startup.mode"] = "latest-offset"
   } else if (snapshotMode === "initial_only") {
-    stanza["scan.snapshot.enabled"] = true
     stanza["scan.startup.mode"] = "snapshot"
   } else {
-    stanza["scan.snapshot.enabled"] = true
+    stanza["scan.startup.mode"] = (p.startupMode as string) ?? "initial"
   }
 
   if (p.chunkSize !== undefined) {
@@ -290,19 +311,24 @@ function buildFlussSinkStanza(
     stanza["bootstrap.servers"] = catalogNode.props.bootstrapServers
   }
 
-  if (p.buckets !== undefined) {
-    stanza["table.properties.bucket.num"] = String(p.buckets)
-  }
-
-  // bucket.key is only meaningful for PrimaryKey tables. When primaryKey is
-  // omitted the sink writes a Log table — we deliberately omit the key so
-  // Fluss falls back to round-robin bucketing instead of misleading the
-  // operator into thinking a partition strategy exists.
-  if (Array.isArray(p.primaryKey) && p.primaryKey.length > 0) {
-    stanza["table.properties.bucket.key"] = (
-      p.primaryKey as readonly string[]
-    ).join(",")
-  }
+  // Flink CDC 3.6's `flink-cdc-pipeline-connector-fluss` exposes a flat
+  // option surface: only `bucket.num`, `bucket.key`, `bootstrap.servers`,
+  // and the SASL props are honoured by FlussDataSinkFactory. The older
+  // `table.properties.*` namespace was the SQL-connector convention and
+  // is rejected by the 3.6 pipeline factory's validateExcept() check.
+  //
+  // Both `bucket.num` and `bucket.key` use the per-table form
+  // `<schema.table>:<value>;<schema.table>:<value>` — a flat scalar is
+  // rejected with "Invalid bucket {number,key} configuration". Pipeline
+  // CDC fans out multiple upstream tables through one sink stanza, so the
+  // FlussSink's flat `buckets` and `primaryKey` props can't be applied
+  // to one of them without misrouting the others. Resolving the upstream
+  // table set requires walking back up the DAG to the source's
+  // tableList prop; until that's wired, omit both options and let Fluss
+  // fall back to defaults (round-robin bucketing, source-PK as bucket
+  // key, server-default bucket count). Per-table overrides should land
+  // on the source/transform side, not the sink, since they're
+  // table-scoped concepts.
 
   // Forward SASL credentials when the catalog declares them. The password
   // is rendered through the same `${env:VAR}` placeholder path Postgres
@@ -325,11 +351,10 @@ function buildFlussSinkStanza(
     }
   }
 
-  // Schema evolution defaults to lenient — Flink CDC 3.6's strict mode
-  // crashes on column additions, which is the dominant evolution case for
-  // OLTP CDC. Override via `FlussSink.schemaEvolution`.
-  stanza["schema.evolution.behavior"] =
-    (p.schemaEvolution as string | undefined) ?? "lenient"
+  // schema.evolution.behavior moved out of the sink stanza in Flink CDC
+  // 3.6 — schema-change handling is now a pipeline-level concern (see
+  // `schema.change.behavior` emitted in buildPipelineStanza). Leaving it
+  // on the sink causes FactoryHelper.validateExcept() to reject the YAML.
 
   return stanza
 }
