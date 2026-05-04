@@ -84,18 +84,25 @@ export class SqlGatewayClient extends SharedSqlGatewayClient {
    * Read a SQL file, split into statements, and submit each one.
    * Polls status for each statement, handling streaming vs batch differently.
    *
-   * Opens the session with `pipeline.sql` set to the full SQL file content so
-   * every job created in this session preserves the source SQL on its
-   * user-config map (visible via /jobs/:id/config and the dashboard's SQL
-   * tab). Flink propagates session properties to job-level config.
+   * Opens the session with the full SQL file base64-encoded under
+   * `pipeline.sql.b64` inside Flink's recognized `pipeline.global-job-parameters`
+   * map, so every job created in this session preserves the source SQL on its
+   * user-config (visible via /jobs/:id/config and the dashboard's SQL tab).
+   *
+   * Base64 keeps the value free of `:` and `,` which would otherwise collide
+   * with Flink's mapType parser. The dashboard decodes pipeline.sql.b64 back
+   * to UTF-8 before display.
    */
   async submitSqlFile(filePath: string): Promise<SubmitResult> {
     const { readFileSync } = await import("node:fs")
     const sql = readFileSync(filePath, "utf-8")
     const statements = splitSqlStatements(sql)
 
+    const sqlB64 = Buffer.from(sql, "utf-8").toString("base64")
     const sessionHandle = await this.openSession({
-      properties: { "pipeline.sql": sql },
+      properties: {
+        "pipeline.global-job-parameters": `pipeline.sql.b64:${sqlB64}`,
+      },
     })
 
     let lastOperationHandle = ""

@@ -213,6 +213,44 @@ export function toMilliseconds(duration: string): number {
   }
 }
 
+// ── pipeline.global-job-parameters merge ────────────────────────────
+
+/**
+ * Merge a single key/value into the encoded form of Flink's
+ * `pipeline.global-job-parameters` map.
+ *
+ * Flink parses this config option as `key1:value1,key2:value2`. We use it as
+ * the transport for round-tripping FR metadata (e.g. the synthesized SQL)
+ * onto a job's user-config. The `value` must contain neither `:` nor `,`;
+ * callers are expected to base64-encode anything that might.
+ *
+ * If the user already supplied `pipeline.global-job-parameters` via
+ * `flinkConfig`, we preserve their entries and only add ours when the key
+ * is absent (user-set values win, so they can opt out by setting their own
+ * `pipeline.sql.b64` to an empty string or any other value).
+ */
+function mergeGlobalJobParameters(
+  existing: string | undefined,
+  key: string,
+  value: string,
+): string {
+  if (!existing || existing.trim().length === 0) {
+    return `${key}:${value}`
+  }
+  // Parse existing entries — `key1:value1,key2:value2`.
+  const entries = existing
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0)
+  const hasKey = entries.some((entry) => {
+    const colonIdx = entry.indexOf(":")
+    if (colonIdx === -1) return entry === key
+    return entry.slice(0, colonIdx) === key
+  })
+  if (hasKey) return existing
+  return `${existing},${key}:${value}`
+}
+
 // ── CRD generation ──────────────────────────────────────────────────
 
 // ── Shared CRD building helpers ─────────────────────────────────────
@@ -303,9 +341,17 @@ function buildInnerSpec(
   }
 
   // Preserve the synthesized SQL on user-config so /jobs/:id/config (and the
-  // dashboard's SQL tab) can surface it for the resulting job.
+  // dashboard's SQL tab) can surface it for the resulting job. We carry the
+  // SQL inside `pipeline.global-job-parameters` (Flink's recognized passthrough
+  // map → ExecutionConfig.globalJobParameters → user-config), base64-encoded
+  // under the key `pipeline.sql.b64` so colons/commas/newlines in the SQL
+  // don't collide with Flink's map-type parser.
   if (options.sourceSql && options.sourceSql.trim().length > 0) {
-    config["pipeline.sql"] = options.sourceSql
+    config["pipeline.global-job-parameters"] = mergeGlobalJobParameters(
+      config["pipeline.global-job-parameters"],
+      "pipeline.sql.b64",
+      Buffer.from(options.sourceSql, "utf-8").toString("base64"),
+    )
   }
 
   const normalizedConfig = FlinkVersionCompat.normalizeConfig(

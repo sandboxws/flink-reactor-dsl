@@ -507,8 +507,25 @@ describe("CRD generation: Flink CDC Pipeline Connector variant", () => {
 // Hand-rolled emitters tend to fail this; a real YAML library should
 // always pass.
 
-describe("sourceSql → flinkConfiguration['pipeline.sql']", () => {
-  it("writes pipeline.sql to flinkConfiguration when sourceSql is supplied", () => {
+describe("sourceSql → pipeline.global-job-parameters[pipeline.sql.b64]", () => {
+  function decodeFromGlobalParams(
+    paramsValue: string | undefined,
+    key: string,
+  ): string | undefined {
+    if (!paramsValue) return undefined
+    for (const entry of paramsValue.split(",")) {
+      const colonIdx = entry.indexOf(":")
+      if (colonIdx === -1) continue
+      if (entry.slice(0, colonIdx) === key) {
+        return Buffer.from(entry.slice(colonIdx + 1), "base64").toString(
+          "utf-8",
+        )
+      }
+    }
+    return undefined
+  }
+
+  it("base64-encodes sourceSql under pipeline.sql.b64 inside pipeline.global-job-parameters", () => {
     const source = KafkaSource({
       topic: "orders",
       schema: OrderSchema,
@@ -518,16 +535,73 @@ describe("sourceSql → flinkConfiguration['pipeline.sql']", () => {
     const pipeline = Pipeline({ name: "with-sql", children: [sink] })
 
     const sqlText =
-      "CREATE TABLE orders (...) WITH (...);\nINSERT INTO out SELECT * FROM orders;"
+      "CREATE TABLE orders (...) WITH (...);\nINSERT INTO out SELECT * FROM orders WHERE region = 'EU';"
     const crd = generateCrd(pipeline, {
       flinkVersion: "2.0",
       sourceSql: sqlText,
     }) as { spec: { flinkConfiguration: Record<string, string> } }
 
-    expect(crd.spec.flinkConfiguration["pipeline.sql"]).toBe(sqlText)
+    const params = crd.spec.flinkConfiguration["pipeline.global-job-parameters"]
+    expect(params).toBeDefined()
+    expect(decodeFromGlobalParams(params, "pipeline.sql.b64")).toBe(sqlText)
+    // Raw key must NOT be set — Flink wouldn't recognize it.
+    expect(crd.spec.flinkConfiguration["pipeline.sql"]).toBeUndefined()
   })
 
-  it("omits pipeline.sql when sourceSql is missing or empty", () => {
+  it("merges with the user's existing pipeline.global-job-parameters", () => {
+    const source = KafkaSource({
+      topic: "orders",
+      schema: OrderSchema,
+      bootstrapServers: "kafka:9092",
+    })
+    const sink = KafkaSink({ topic: "out", children: [source] })
+    const pipeline = Pipeline({
+      name: "merge",
+      flinkConfig: {
+        "pipeline.global-job-parameters": "tenant:acme,region:eu",
+      },
+      children: [sink],
+    })
+
+    const crd = generateCrd(pipeline, {
+      flinkVersion: "2.0",
+      sourceSql: "INSERT INTO out SELECT * FROM orders;",
+    }) as { spec: { flinkConfiguration: Record<string, string> } }
+
+    const params = crd.spec.flinkConfiguration["pipeline.global-job-parameters"]
+    expect(params).toContain("tenant:acme")
+    expect(params).toContain("region:eu")
+    expect(decodeFromGlobalParams(params, "pipeline.sql.b64")).toBe(
+      "INSERT INTO out SELECT * FROM orders;",
+    )
+  })
+
+  it("respects the user's pipeline.sql.b64 if they already set one", () => {
+    const source = KafkaSource({
+      topic: "orders",
+      schema: OrderSchema,
+      bootstrapServers: "kafka:9092",
+    })
+    const sink = KafkaSink({ topic: "out", children: [source] })
+    const pipeline = Pipeline({
+      name: "user-override",
+      flinkConfig: {
+        "pipeline.global-job-parameters": "pipeline.sql.b64:CUSTOM",
+      },
+      children: [sink],
+    })
+
+    const crd = generateCrd(pipeline, {
+      flinkVersion: "2.0",
+      sourceSql: "INSERT INTO out SELECT * FROM orders;",
+    }) as { spec: { flinkConfiguration: Record<string, string> } }
+
+    expect(crd.spec.flinkConfiguration["pipeline.global-job-parameters"]).toBe(
+      "pipeline.sql.b64:CUSTOM",
+    )
+  })
+
+  it("omits the propagation entirely when sourceSql is missing or whitespace", () => {
     const source = KafkaSource({
       topic: "orders",
       schema: OrderSchema,
@@ -539,13 +613,17 @@ describe("sourceSql → flinkConfiguration['pipeline.sql']", () => {
     const noOpt = generateCrd(pipeline, { flinkVersion: "2.0" }) as {
       spec: { flinkConfiguration: Record<string, string> }
     }
-    expect(noOpt.spec.flinkConfiguration["pipeline.sql"]).toBeUndefined()
+    expect(
+      noOpt.spec.flinkConfiguration["pipeline.global-job-parameters"],
+    ).toBeUndefined()
 
     const emptyOpt = generateCrd(pipeline, {
       flinkVersion: "2.0",
       sourceSql: "   \n\t  ",
     }) as { spec: { flinkConfiguration: Record<string, string> } }
-    expect(emptyOpt.spec.flinkConfiguration["pipeline.sql"]).toBeUndefined()
+    expect(
+      emptyOpt.spec.flinkConfiguration["pipeline.global-job-parameters"],
+    ).toBeUndefined()
   })
 })
 
