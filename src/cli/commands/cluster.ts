@@ -256,8 +256,22 @@ async function resolveClusterContext(opts: {
         resolved = resolveConfig(config, envName)
       }
     }
-  } catch {
-    // Config absent or unparseable — fall through.
+  } catch (err) {
+    // We DO surface load errors when a config file exists at cwd: a
+    // broken `flink-reactor.config.ts` (e.g. a missing import that
+    // throws on evaluation) used to silently fall through to "always-on
+    // services only" — looked identical to "no config", which made the
+    // failure mode hard to diagnose. Only swallow the error if there's
+    // no config to begin with.
+    const cfgPath = join(process.cwd(), "flink-reactor.config.ts")
+    if (existsSync(cfgPath)) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.log(
+        pc.yellow(
+          `  Warning: failed to load flink-reactor.config.ts — only always-on services will start.\n  ${pc.dim(msg)}`,
+        ),
+      )
+    }
   }
   const engine = await detectContainerEngine({
     flag: opts.containerEngine,

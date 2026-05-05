@@ -8,11 +8,18 @@ const dslVersion = pkg.version as string
 
 export default defineConfig([
   // Library entry — importable as `import { ... } from '@flink-reactor/dsl'`
+  // and as `import { ... } from '@flink-reactor/dsl/plugins'`. The plugins
+  // subpath is its own bundle (not a re-export from index) so users who
+  // never opt into Grafana / metrics don't pay for the plugins code in
+  // their config eval. A matching `./plugins` entry must exist in
+  // package.json `exports` — Node's ESM resolver refuses unlisted subpaths
+  // even when the file is on disk.
   {
     entry: {
       index: "src/index.ts",
       "jsx-runtime": "src/jsx-runtime.ts",
       "jsx-dev-runtime": "src/jsx-dev-runtime.ts",
+      plugins: "src/plugins/index.ts",
     },
     format: ["esm"],
     target: "node18",
