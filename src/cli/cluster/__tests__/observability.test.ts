@@ -118,8 +118,9 @@ describe("observability provisioning", () => {
 })
 
 describe("observability theme", () => {
-  it("gruvppuccin.css overrides the Grafana background CSS variables", () => {
-    const raw = readFileSync(join(themeDir, "gruvppuccin.css"), "utf8")
+  const raw = readFileSync(join(themeDir, "gruvppuccin.css"), "utf8")
+
+  it("overrides the Grafana background CSS variables with Gruvppuccin tokens", () => {
     // The variable assignments are what win against Grafana's theme
     // defaults at runtime. Each must reference a Gruvppuccin token.
     expect(raw).toContain("--background-canvas:")
@@ -128,6 +129,33 @@ describe("observability theme", () => {
     expect(raw).toContain("--gp-green: #a9b665")
     expect(raw).toContain("--gp-peach: #e78a4e")
     expect(raw).toContain("--gp-text: #d4be98")
+  })
+
+  it("defines the translucent-white interaction recipe used by Console chrome", () => {
+    // Console's hover/active affordances are translucent-white overlays
+    // (e.g. `hover:bg-white/[0.04]`, `bg-white/[0.08]`). Re-using the
+    // same tokens across Grafana surfaces is what makes the two feel
+    // cohesive — solid background shifts read as stock Grafana.
+    expect(raw).toContain("--gp-hover: rgba(255, 255, 255, 0.04)")
+    expect(raw).toContain("--gp-active: rgba(255, 255, 255, 0.08)")
+  })
+
+  it("uses green as the primary CTA + focus-ring accent (matches Console's `bg-fr-purple`)", () => {
+    // The Console's primary button is `bg-fr-purple` despite the
+    // variable name — fr-purple is #a9b665 (green). Our --primary-main
+    // and form-focus border must follow suit, otherwise dashboards feel
+    // off-brand (orange where they should be green).
+    expect(raw).toContain("--primary-main: var(--gp-green)")
+    expect(raw).toMatch(/focus[^{]*\{[^}]*border-color:\s*var\(--gp-green\)/s)
+  })
+
+  it("brand gradient flows coral → green at 135° (matches Console's `bg-gradient-to-br from-fr-coral to-fr-purple`)", () => {
+    // The 5×5 logo square in Console's sidebar is a top-left → bottom-right
+    // gradient with coral at the start and green at the end. Direction
+    // matters — mirroring it makes login screens feel native.
+    expect(raw).toMatch(
+      /--gradient-brand-vertical:\s*linear-gradient\(\s*135deg,\s*var\(--gp-peach\)/,
+    )
   })
 })
 

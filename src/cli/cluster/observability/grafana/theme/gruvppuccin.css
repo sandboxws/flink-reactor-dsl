@@ -9,11 +9,24 @@
  * rename CSS variables — re-validate after a Grafana version bump. The
  * docker-compose.yml pins the image tag for this reason.
  *
- * Scope: chrome only (background hierarchy, text, borders, primary accent).
- * Semantic colors (red/green/yellow for alerts and status indicators) stay
- * close to Grafana defaults so dashboards still read correctly. Per-panel
- * chart colors are set in dashboards/*.json's `fieldConfig` blocks because
- * Grafana renders charts via VisX/D3, not via CSS variables.
+ * Strategy: lean on Grafana's documented theme custom properties first
+ * (--background-canvas, --primary-main, --text-link, etc) — those are stable
+ * contracts. Only reach for class-substring selectors for the surfaces
+ * tokens don't expose (panel radius, dropdown shadows, code blocks, tables).
+ *
+ * Two-tier identity, mirroring the Console:
+ *   • Primary accent (CTAs, focus rings, progress fill, active state)
+ *     = green (--gp-green, "fr-purple" in Console). The Console's primary
+ *     button is `bg-fr-purple` despite the variable name.
+ *   • Brand-chrome flourish (logo gradient, status pills) = coral
+ *     (--gp-peach, "fr-coral"). Used for spotlight elements only.
+ *
+ * Hover/active recipe across all interactive surfaces:
+ *   hover:  rgba(255,255,255,0.04)
+ *   active: rgba(255,255,255,0.08)
+ * This is the same translucent-white overlay the Console uses on its
+ * sidebar nav, ghost buttons, and dialog close icons. Solid color shifts
+ * are reserved for primary CTAs.
  */
 
 /* ── Self-hosted Geist font (matches Console) ─────────────────────────
@@ -42,42 +55,51 @@
 
 /* ── Color tokens (Gruvppuccin dark variant) ──────────────────────────
  *
- * Surfaces       crust  #101213   page bg
- *                mantle #141617   secondary surface (sidebar)
- *                base   #181a1b   panel bg
- *                surface0 #242424 elevated/hover
- *                surface1 #2e2c2b borders
- * Text           text   #d4be98   primary
- *                subtext1 #bfb3a2 secondary
- *                subtext0 #a69a8a muted
- *                overlay2 #7c7269 disabled
- * Accent         green  #a9b665   primary action / active
- *                peach  #e78a4e   secondary action / hover
- *                yellow #d8a657   warning
- *                red    #ea6962   error
- *                teal   #7daea3   info / link
+ * Surfaces       crust    #101213   page bg  (Console: --color-fr-bg)
+ *                mantle   #141617   sidebar  (Console: --color-fr-subtle)
+ *                base     #181a1b   panel    (Console: --color-dash-panel)
+ *                surface0 #242424   elevated (Console: --color-dash-elevated)
+ *                surface1 #2e2c2b   border   (Console: --color-dash-border)
+ * Text           text     #d4be98   primary  (Console: --color-fg)
+ *                subtext1 #bfb3a2   secondary
+ *                subtext0 #a69a8a   muted
+ *                overlay2 #7c7269   disabled
+ * Accent         green    #a9b665   primary CTA / focus / progress (Console: --color-fr-purple)
+ *                peach    #e78a4e   brand flourish / pills         (Console: --color-fr-coral)
+ *                yellow   #d8a657   warning                         (Console: --color-fr-amber)
+ *                red      #ea6962   error
+ *                teal     #7daea3   info / link
  */
 
 :root,
 :root.theme-dark,
 body.theme-dark,
 body[class*="theme-dark"] {
-  /* Tokens we expose so per-panel CSS or dashboard JSON can reference them. */
+  /* Tokens consumed by per-panel CSS, dashboards, and the rest of this
+     stylesheet. Mirrors Console's tokens.css naming where reasonable. */
   --gp-crust: #101213;
   --gp-mantle: #141617;
   --gp-base: #181a1b;
   --gp-surface0: #242424;
   --gp-surface1: #2e2c2b;
+  --gp-surface2: #413c39;
   --gp-text: #d4be98;
   --gp-subtext1: #bfb3a2;
   --gp-subtext0: #a69a8a;
   --gp-overlay2: #7c7269;
+  --gp-overlay0: #5a524c;
   --gp-green: #a9b665;
   --gp-peach: #e78a4e;
   --gp-yellow: #d8a657;
   --gp-red: #ea6962;
   --gp-teal: #7daea3;
   --gp-mauve: #c28fd6;
+
+  /* Translucent-white overlays — the chrome interaction recipe. */
+  --gp-hover: rgba(255, 255, 255, 0.04);
+  --gp-active: rgba(255, 255, 255, 0.08);
+  --gp-elevated-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --gp-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 
   /* ── Grafana background hierarchy ─────────────────────────────────── */
   --background-canvas: var(--gp-crust);
@@ -88,7 +110,7 @@ body[class*="theme-dark"] {
   /* ── Borders ──────────────────────────────────────────────────────── */
   --border-weak: var(--gp-surface0);
   --border-medium: var(--gp-surface1);
-  --border-strong: #413c39; /* gp-surface2 */
+  --border-strong: var(--gp-surface2);
 
   /* ── Text ─────────────────────────────────────────────────────────── */
   --text-primary: var(--gp-text);
@@ -97,30 +119,33 @@ body[class*="theme-dark"] {
   --text-link: var(--gp-teal);
   --text-maxContrast: #f0e5cc;
 
-  /* ── Primary brand accent ─────────────────────────────────────────── */
+  /* ── Primary brand accent (green / fr-purple in Console) ──────────── */
   --primary-text-on-strong: #101213;
-  --primary-shade: var(--gp-green);
+  --primary-shade: #93a058; /* green at ~90% — matches Console's hover:bg-fr-purple/90 */
   --primary-main: var(--gp-green);
   --primary-bg: rgba(169, 182, 101, 0.12);
   --primary-border: rgba(169, 182, 101, 0.4);
   --primary-text: var(--gp-green);
+  --primary-transparent: rgba(169, 182, 101, 0.15);
 
-  /* ── Secondary action ─────────────────────────────────────────────── */
+  /* ── Secondary action: translucent-white, matching Console's secondary button ── */
   --secondary-text: var(--gp-text);
-  --secondary-bg: rgba(212, 190, 152, 0.05);
+  --secondary-bg: var(--gp-active);
+  --secondary-bg-hover: rgba(255, 255, 255, 0.15);
   --secondary-border: var(--gp-surface1);
   --secondary-shade: var(--gp-peach);
 
-  /* ── Brand gradient (used in login screen, sidebar pinning UI) ────── */
+  /* ── Brand gradient — matches Console's `bg-gradient-to-br from-fr-coral to-fr-purple`
+       (coral top-left → green bottom-right). */
   --gradient-brand-vertical: linear-gradient(
-    0deg,
-    var(--gp-green) 0%,
-    var(--gp-peach) 100%
+    135deg,
+    var(--gp-peach) 0%,
+    var(--gp-green) 100%
   );
   --gradient-brand-horizontal: linear-gradient(
-    90deg,
-    var(--gp-green) 0%,
-    var(--gp-peach) 100%
+    135deg,
+    var(--gp-peach) 0%,
+    var(--gp-green) 100%
   );
 
   /* ── Font stack (matches Console) ────────────────────────────────── */
@@ -140,27 +165,89 @@ body {
     "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
-/* ── Sidebar / nav ────────────────────────────────────────────────── */
+/* ── Sidebar / topbar / nav ───────────────────────────────────────────
+ *
+ * Console's sidebar is mantle (#141617) with dash-border separators.
+ * Grafana's app chrome menu and topbar both pick up the secondary
+ * background, but a few selectors bypass the token, so we pin them.
+ */
 .sidemenu,
 nav[class*="sidemenu"],
 [class*="navbar"],
-[data-testid="data-testid app chrome menu"] {
+[data-testid="data-testid app chrome menu"],
+[data-testid="data-testid Nav menu"],
+[class*="page-toolbar"] {
   background-color: var(--gp-mantle) !important;
   border-color: var(--gp-surface1) !important;
 }
 
-/* ── Panel chrome ─────────────────────────────────────────────────── */
-[class*="panel-container"],
-[data-testid="data-testid panel content"],
-.panel {
-  background-color: var(--gp-base) !important;
-  border: 1px solid var(--gp-surface1) !important;
-  border-radius: 12px;
+/* Active nav item — Console uses bg-white/[0.08] + white text. */
+[class*="NavBarMenu"] a[class*="active"],
+nav a[aria-current="page"],
+[class*="active-tab"] {
+  background-color: var(--gp-active) !important;
+  color: var(--gp-text) !important;
+  border-radius: 6px;
 }
 
-/* ── Active / hover affordances ──────────────────────────────────── */
+[class*="NavBarMenu"] a:hover,
+nav a:hover {
+  background-color: var(--gp-hover) !important;
+  color: var(--gp-text);
+}
+
+/* ── Panel chrome — Console uses rounded-lg (8px) + border-dash-border + shadow-sm */
+[class*="panel-container"],
+[data-testid="data-testid panel content"],
+.panel,
+[class*="dashboard-row"] {
+  background-color: var(--gp-base) !important;
+  border: 1px solid var(--gp-surface1) !important;
+  border-radius: 8px;
+  box-shadow: var(--gp-card-shadow);
+}
+
+[class*="panel-header"] {
+  border-bottom: 1px solid var(--gp-surface1);
+}
+
+/* Panel title — Console uses semibold tracking-wide */
+[class*="panel-title"] {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--gp-text);
+}
+
+/* ── Cards / sections (settings pages, alert lists, datasource cards) ── */
+[class*="card-item"],
+[class*="card-container"],
+section[class*="card"] {
+  background-color: var(--gp-base);
+  border: 1px solid var(--gp-surface1);
+  border-radius: 8px;
+  box-shadow: var(--gp-card-shadow);
+}
+
+[class*="card-item"]:hover,
+[class*="card-container"]:hover {
+  background-color: var(--gp-surface0);
+}
+
+/* ── Section labels (Settings sidebar, dashboard list groups) ────────
+ * Console uses uppercase + tracking-wider + tiny text + zinc-600. */
+[class*="section-header"],
+[class*="section-label"],
+h3[class*="heading"]:not([class*="page"]) {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--gp-overlay2);
+}
+
+/* ── Active / hover affordances on links ───────────────────────────── */
 a,
-[class*="link"]:not(button) {
+[class*="link"]:not(button):not([class*="button"]) {
   color: var(--gp-teal);
 }
 
@@ -168,24 +255,296 @@ a:hover {
   color: var(--gp-peach) !important;
 }
 
+/* ── Buttons — primary (green), secondary (white/8), destructive ───── */
 button[class*="primary"],
-[class*="button"][class*="primary"] {
+[class*="button"][class*="primary"],
+button[class*="-primary"] {
   background-color: var(--gp-green) !important;
   color: var(--gp-crust) !important;
   border-color: var(--gp-green) !important;
+  font-weight: 500;
 }
 
 button[class*="primary"]:hover,
 [class*="button"][class*="primary"]:hover {
-  background-color: var(--gp-peach) !important;
-  border-color: var(--gp-peach) !important;
+  background-color: var(--primary-shade) !important;
+  border-color: var(--primary-shade) !important;
+}
+
+button[class*="secondary"],
+[class*="button"][class*="secondary"] {
+  background-color: var(--gp-active) !important;
+  color: var(--gp-text) !important;
+  border-color: transparent !important;
+}
+
+button[class*="secondary"]:hover,
+[class*="button"][class*="secondary"]:hover {
+  background-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+button[class*="destructive"],
+[class*="button"][class*="destructive"] {
+  background-color: rgba(234, 105, 98, 0.15) !important;
+  color: var(--gp-red) !important;
+  border-color: transparent !important;
+}
+
+/* Ghost / icon buttons — match Console's hover:bg-white/[0.06]. */
+button[class*="ghost"],
+button[class*="-icon-"]:not([class*="primary"]):not([class*="secondary"]) {
+  background-color: transparent;
+  color: var(--gp-subtext0);
+}
+
+button[class*="ghost"]:hover,
+button[class*="-icon-"]:not([class*="primary"]):not(
+    [class*="secondary"]
+  ):hover {
+  background-color: rgba(255, 255, 255, 0.06);
+  color: var(--gp-text);
+}
+
+/* ── Form inputs / selects / textareas ───────────────────────────────
+ * Console: rounded-md + bg-dash-surface + border-dash-border + focus
+ * brings border to fr-purple (green) with no glow ring. */
+input[type="text"],
+input[type="search"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+textarea,
+select,
+[class*="input-wrapper"],
+[class*="select-container"] {
+  background-color: var(--gp-surface0) !important;
+  border: 1px solid var(--gp-surface1) !important;
+  border-radius: 6px;
+  color: var(--gp-text);
+  font-family: var(--font-family-base);
+  transition: border-color 120ms ease;
+}
+
+input[type="text"]:focus,
+input[type="search"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="number"]:focus,
+textarea:focus,
+select:focus,
+[class*="input-wrapper"]:focus-within,
+[class*="select-container"]:focus-within {
+  border-color: var(--gp-green) !important;
+  outline: none;
+  box-shadow: none;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--gp-overlay2);
 }
 
 /* ── Tabs (active indicator: peach underline, matching Console) ───── */
 [role="tab"][aria-selected="true"],
-[class*="tab"][class*="active"] {
-  border-bottom-color: var(--gp-peach) !important;
+[class*="tab"][class*="active"]:not([class*="inactive"]) {
+  border-bottom: 2px solid var(--gp-peach) !important;
   color: var(--gp-text) !important;
+  background-color: transparent !important;
+}
+
+[role="tab"]:hover {
+  background-color: var(--gp-hover);
+  color: var(--gp-text);
+}
+
+/* ── Tables — subtle row borders, hover highlight ──────────────────── */
+table,
+[class*="table"][class*="row"] {
+  border-color: var(--gp-surface1);
+}
+
+[class*="table"] th {
+  background-color: var(--gp-mantle);
+  border-bottom: 1px solid var(--gp-surface1);
+  color: var(--gp-subtext0);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 11px;
+}
+
+[class*="table"] tr {
+  border-bottom: 1px solid var(--gp-surface1);
+}
+
+[class*="table"] tr:hover {
+  background-color: var(--gp-hover);
+}
+
+/* ── Tooltips, popovers, dropdowns, menus ─────────────────────────────
+ * Console pattern: rounded-md + border-dash-border + bg-dash-elevated
+ * + shadow-md shadow-black/50 + text-zinc-300. */
+[class*="tooltip"],
+[class*="Tooltip"],
+[role="tooltip"],
+[class*="popover"],
+[class*="Popover"],
+[class*="dropdown-menu"],
+[class*="DropdownMenu"],
+[class*="menu-item"]:not([class*="active"]),
+[role="menu"],
+[role="listbox"],
+[class*="select-menu"] {
+  background-color: var(--gp-surface0) !important;
+  border: 1px solid var(--gp-surface1) !important;
+  border-radius: 6px;
+  box-shadow: var(--gp-elevated-shadow);
+  color: var(--gp-subtext1);
+}
+
+[role="menuitem"]:hover,
+[role="option"]:hover,
+[class*="dropdown-menu"] a:hover,
+[class*="menu-item"]:hover,
+[class*="select-menu"] [class*="option"]:hover {
+  background-color: var(--gp-hover) !important;
+  color: var(--gp-text) !important;
+}
+
+[role="menuitem"][aria-selected="true"],
+[role="option"][aria-selected="true"],
+[class*="select-menu"] [class*="option"][class*="selected"] {
+  background-color: var(--gp-active) !important;
+  color: var(--gp-text);
+}
+
+/* ── Modals / dialogs / drawers ─────────────────────────────────────── */
+[role="dialog"],
+[class*="modal"]:not([class*="modal-backdrop"]),
+[class*="drawer"] {
+  background-color: var(--gp-base) !important;
+  border: 1px solid var(--gp-surface1);
+  border-radius: 8px;
+  box-shadow: var(--gp-elevated-shadow);
+}
+
+[class*="modal-backdrop"],
+[class*="overlay"] {
+  background-color: rgba(0, 0, 0, 0.7) !important;
+  backdrop-filter: blur(2px);
+}
+
+[class*="modal-header"] {
+  border-bottom: 1px solid var(--gp-surface1);
+  padding-bottom: 12px;
+}
+
+/* ── Switches / toggles — green when active ─────────────────────────── */
+[class*="switch"][aria-checked="true"],
+input[type="checkbox"]:checked + [class*="track"] {
+  background-color: var(--gp-green) !important;
+}
+
+input[type="checkbox"]:checked {
+  accent-color: var(--gp-green);
+}
+
+/* ── Progress bars — white/10 track, green fill ─────────────────────── */
+[class*="progress-bar"]:not([class*="value"]),
+progress {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+[class*="progress-bar"] [class*="value"],
+progress::-webkit-progress-value {
+  background-color: var(--gp-green);
+}
+
+/* ── Code blocks / kbd / inline code ─────────────────────────────────
+ * Console: bg-dash-elevated + border-dash-border + monospace + tiny. */
+code,
+kbd,
+pre,
+[class*="code-editor"],
+[class*="json-formatter"] {
+  background-color: var(--gp-surface0);
+  border: 1px solid var(--gp-surface1);
+  border-radius: 4px;
+  font-family: var(--font-family-monospace);
+  color: var(--gp-text);
+}
+
+kbd {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--gp-overlay2);
+  vertical-align: middle;
+}
+
+pre {
+  padding: 12px 14px;
+  overflow-x: auto;
+}
+
+/* Monaco / inline JSON editors used in datasource & alert pages. */
+.monaco-editor,
+.monaco-editor .margin,
+.monaco-editor .monaco-editor-background {
+  background-color: var(--gp-base) !important;
+}
+
+/* ── Status pills / badges — Console pattern: bg/{20} text-{color} ───
+ * Each color-tinted pill uses transparent bg + solid text. Grafana's
+ * stock badges set bg to a solid color which we'd otherwise override
+ * by accident; explicit semantic targeting only. */
+[class*="badge"][class*="success"],
+[class*="alert-status"][class*="success"] {
+  background-color: rgba(169, 182, 101, 0.15) !important;
+  color: var(--gp-green) !important;
+  border: none;
+}
+
+[class*="badge"][class*="warning"],
+[class*="alert-status"][class*="warning"] {
+  background-color: rgba(216, 166, 87, 0.15) !important;
+  color: var(--gp-yellow) !important;
+  border: none;
+}
+
+[class*="badge"][class*="error"],
+[class*="alert-status"][class*="error"],
+[class*="badge"][class*="danger"] {
+  background-color: rgba(234, 105, 98, 0.15) !important;
+  color: var(--gp-red) !important;
+  border: none;
+}
+
+[class*="badge"][class*="info"] {
+  background-color: rgba(125, 174, 163, 0.15) !important;
+  color: var(--gp-teal) !important;
+  border: none;
+}
+
+/* ── Chart tooltips (uPlot — Grafana's default plotter) ────────────── */
+.u-tooltip,
+[class*="VizTooltip"] {
+  background-color: var(--gp-surface0) !important;
+  border: 1px solid var(--gp-surface1) !important;
+  border-radius: 6px;
+  box-shadow: var(--gp-elevated-shadow);
+  font-family: var(--font-family-base);
+  color: var(--gp-text);
+}
+
+/* Chart cursor crosshair — match Console's --color-chart-cursor. */
+.u-cursor-x,
+.u-cursor-y {
+  background-color: rgba(212, 190, 152, 0.08) !important;
 }
 
 /* ── Scrollbar (subtle, on-theme) ─────────────────────────────────── */
@@ -207,10 +566,15 @@ button[class*="primary"]:hover,
   background: var(--gp-overlay2);
 }
 
-/* ── Login screen polish ─────────────────────────────────────────── */
+/* ── Login screen polish — coral→green gradient brand mark, panel chrome */
 [class*="login-content"],
 [class*="login-form"] {
   background-color: var(--gp-base) !important;
   border: 1px solid var(--gp-surface1) !important;
-  border-radius: 12px;
+  border-radius: 8px;
+  box-shadow: var(--gp-elevated-shadow);
+}
+
+[class*="login-branding"] {
+  background-image: var(--gradient-brand-vertical);
 }
