@@ -962,14 +962,11 @@ exports[`pg-cdc-iceberg-f2 (Pipeline Connector) > synthesizes a stable artifact 
   port: 5432
   username: flink_cdc
   password: \${env:PG_PRIMARY_PASSWORD}
-  database-name: tpch
-  schema-name: public
-  table-name: public.orders,public.lineitem,public.customer
+  tables: tpch.public.orders,tpch.public.lineitem,tpch.public.customer
   decoding.plugin.name: pgoutput
   slot.name: fr_pg_cdc_iceberg_f2_slot
-  publication.name: fr_pg_cdc_iceberg_f2_pub
+  debezium.publication.autocreate.mode: filtered
   scan.startup.mode: initial
-  scan.snapshot.enabled: true
   scan.incremental.snapshot.chunk.size: 100000
 sink:
   type: iceberg
@@ -1078,14 +1075,11 @@ exports[`pg-cdc-iceberg-f2 (Pipeline Connector) > synthesizes a stable artifact 
   port: 5432
   username: flink_cdc
   password: \${env:PG_PRIMARY_PASSWORD}
-  database-name: tpch
-  schema-name: public
-  table-name: public.orders,public.lineitem,public.customer
+  tables: tpch.public.orders,tpch.public.lineitem,tpch.public.customer
   decoding.plugin.name: pgoutput
   slot.name: fr_pg_cdc_iceberg_f2_slot
-  publication.name: fr_pg_cdc_iceberg_f2_pub
+  debezium.publication.autocreate.mode: filtered
   scan.startup.mode: initial
-  scan.snapshot.enabled: true
   scan.incremental.snapshot.chunk.size: 100000
 sink:
   type: iceberg
@@ -1194,14 +1188,11 @@ exports[`pg-cdc-iceberg-f2 (Pipeline Connector) > synthesizes a stable artifact 
   port: 5432
   username: flink_cdc
   password: \${env:PG_PRIMARY_PASSWORD}
-  database-name: tpch
-  schema-name: public
-  table-name: public.orders,public.lineitem,public.customer
+  tables: tpch.public.orders,tpch.public.lineitem,tpch.public.customer
   decoding.plugin.name: pgoutput
   slot.name: fr_pg_cdc_iceberg_f2_slot
-  publication.name: fr_pg_cdc_iceberg_f2_pub
+  debezium.publication.autocreate.mode: filtered
   scan.startup.mode: snapshot
-  scan.snapshot.enabled: true
   scan.incremental.snapshot.chunk.size: 100000
   slot.drop.on.stop: true
 sink:
@@ -1311,14 +1302,11 @@ exports[`pg-cdc-iceberg-f2 (Pipeline Connector) > synthesizes a stable artifact 
   port: 5432
   username: flink_cdc
   password: \${env:PG_PRIMARY_PASSWORD}
-  database-name: tpch
-  schema-name: public
-  table-name: public.orders,public.lineitem,public.customer
+  tables: tpch.public.orders,tpch.public.lineitem,tpch.public.customer
   decoding.plugin.name: pgoutput
   slot.name: fr_pg_cdc_iceberg_f2_slot
-  publication.name: fr_pg_cdc_iceberg_f2_pub
+  debezium.publication.autocreate.mode: filtered
   scan.startup.mode: snapshot
-  scan.snapshot.enabled: true
   scan.incremental.snapshot.chunk.size: 100000
   slot.drop.on.stop: true
 sink:
@@ -1428,14 +1416,11 @@ exports[`pg-cdc-iceberg-f2 (Pipeline Connector) > synthesizes a stable artifact 
   port: 5432
   username: flink_cdc
   password: \${env:PG_PRIMARY_PASSWORD}
-  database-name: tpch
-  schema-name: public
-  table-name: public.orders,public.lineitem,public.customer
+  tables: tpch.public.orders,tpch.public.lineitem,tpch.public.customer
   decoding.plugin.name: pgoutput
   slot.name: fr_pg_cdc_iceberg_f2_slot
-  publication.name: fr_pg_cdc_iceberg_f2_pub
-  scan.startup.mode: initial
-  scan.snapshot.enabled: false
+  debezium.publication.autocreate.mode: filtered
+  scan.startup.mode: latest-offset
   scan.incremental.snapshot.chunk.size: 100000
 sink:
   type: iceberg
@@ -1544,14 +1529,11 @@ exports[`pg-cdc-iceberg-f2 (Pipeline Connector) > synthesizes a stable artifact 
   port: 5432
   username: flink_cdc
   password: \${env:PG_PRIMARY_PASSWORD}
-  database-name: tpch
-  schema-name: public
-  table-name: public.orders,public.lineitem,public.customer
+  tables: tpch.public.orders,tpch.public.lineitem,tpch.public.customer
   decoding.plugin.name: pgoutput
   slot.name: fr_pg_cdc_iceberg_f2_slot
-  publication.name: fr_pg_cdc_iceberg_f2_pub
-  scan.startup.mode: initial
-  scan.snapshot.enabled: false
+  debezium.publication.autocreate.mode: filtered
+  scan.startup.mode: latest-offset
   scan.incremental.snapshot.chunk.size: 100000
 sink:
   type: iceberg

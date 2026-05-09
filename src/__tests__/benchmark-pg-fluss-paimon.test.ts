@@ -76,13 +76,17 @@ describe("pg-fluss-paimon-ingest (Pipeline-YAML branch)", () => {
     expect(ids).not.toContain("fluss-flink-2.2")
   })
 
-  it("emits schema.evolution.behavior: lenient on the Fluss sink stanza", () => {
+  it("emits schema.change.behavior: evolve in the pipeline stanza", () => {
+    // Flink CDC 3.6 moved schema-change handling from the sink stanza
+    // (`schema.evolution.behavior`) to the pipeline stanza
+    // (`schema.change.behavior`) — leaving it on the sink causes
+    // FactoryHelper.validateExcept() to reject the YAML.
     const node = ingestPipeline({
       snapshotMode: "initial",
       commitMode: "throughput",
     })
     const yaml = generatePipelineYaml(node)
-    expect(yaml).toContain("schema.evolution.behavior: lenient")
+    expect(yaml).toContain("schema.change.behavior: evolve")
   })
 
   it("threads commitMode onto execution.checkpointing.interval (latency=2000ms)", () => {
@@ -96,13 +100,18 @@ describe("pg-fluss-paimon-ingest (Pipeline-YAML branch)", () => {
     ).toBe("2000")
   })
 
-  it("emits scan.snapshot.enabled: false for snapshotMode='never'", () => {
+  it("emits scan.startup.mode: latest-offset for snapshotMode='never'", () => {
+    // Flink CDC 3.6 dropped `scan.snapshot.enabled` from PostgresDataSource;
+    // snapshot toggling moved entirely onto `scan.startup.mode`
+    // (`initial` keeps snapshot+log; `latest-offset` skips snapshot;
+    // `snapshot` for snapshot-only).
     const node = ingestPipeline({
       snapshotMode: "never",
       commitMode: "throughput",
     })
     const yaml = generatePipelineYaml(node)
-    expect(yaml).toContain("scan.snapshot.enabled: false")
+    expect(yaml).toContain("scan.startup.mode: latest-offset")
+    expect(yaml).not.toContain("scan.snapshot.enabled")
   })
 })
 

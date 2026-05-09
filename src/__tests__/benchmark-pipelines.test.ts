@@ -230,13 +230,16 @@ describe("pg-cdc-iceberg-f2 (Pipeline Connector)", () => {
   })
 
   it("disables snapshot when snapshotMode=never", () => {
+    // Flink CDC 3.6 routes "no snapshot" through scan.startup.mode rather
+    // than the legacy scan.snapshot.enabled toggle.
     const node = f2Pipeline({
       snapshotMode: "never",
       commitMode: "throughput",
     })
 
     const pipelineYaml = generatePipelineYaml(node)
-    expect(pipelineYaml).toContain("scan.snapshot.enabled: false")
+    expect(pipelineYaml).toContain("scan.startup.mode: latest-offset")
+    expect(pipelineYaml).not.toContain("scan.snapshot.enabled")
   })
 
   it("emits commit-interval-ms=2000 for commitMode=latency", () => {

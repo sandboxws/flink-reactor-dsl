@@ -84,22 +84,16 @@ exports[`pg-fluss-paimon-ingest (Pipeline-YAML branch) > synthesizes a stable ar
   port: 5432
   username: flink_cdc
   password: \${env:PG_PRIMARY_PASSWORD}
-  database-name: tpch
-  schema-name: public
-  table-name: public.orders,public.lineitem,public.customer
+  tables: tpch.public.orders,tpch.public.lineitem,tpch.public.customer
   decoding.plugin.name: pgoutput
   slot.name: fr_pg_fluss_paimon_ingest_slot
-  publication.name: fr_pg_fluss_paimon_ingest_pub
+  debezium.publication.autocreate.mode: filtered
   scan.startup.mode: initial
-  scan.snapshot.enabled: true
   scan.incremental.snapshot.chunk.size: 100000
 sink:
   type: fluss
   name: pg-fluss-paimon-ingest-fluss-sink
   bootstrap.servers: fluss-coordinator:9123
-  table.properties.bucket.num: '8'
-  table.properties.bucket.key: o_orderkey
-  schema.evolution.behavior: lenient
 pipeline:
   name: pg-fluss-paimon-ingest
   parallelism: 4
@@ -192,22 +186,16 @@ exports[`pg-fluss-paimon-ingest (Pipeline-YAML branch) > synthesizes a stable ar
   port: 5432
   username: flink_cdc
   password: \${env:PG_PRIMARY_PASSWORD}
-  database-name: tpch
-  schema-name: public
-  table-name: public.orders,public.lineitem,public.customer
+  tables: tpch.public.orders,tpch.public.lineitem,tpch.public.customer
   decoding.plugin.name: pgoutput
   slot.name: fr_pg_fluss_paimon_ingest_slot
-  publication.name: fr_pg_fluss_paimon_ingest_pub
+  debezium.publication.autocreate.mode: filtered
   scan.startup.mode: initial
-  scan.snapshot.enabled: true
   scan.incremental.snapshot.chunk.size: 100000
 sink:
   type: fluss
   name: pg-fluss-paimon-ingest-fluss-sink
   bootstrap.servers: fluss-coordinator:9123
-  table.properties.bucket.num: '8'
-  table.properties.bucket.key: o_orderkey
-  schema.evolution.behavior: lenient
 pipeline:
   name: pg-fluss-paimon-ingest
   parallelism: 4
@@ -300,22 +288,16 @@ exports[`pg-fluss-paimon-ingest (Pipeline-YAML branch) > synthesizes a stable ar
   port: 5432
   username: flink_cdc
   password: \${env:PG_PRIMARY_PASSWORD}
-  database-name: tpch
-  schema-name: public
-  table-name: public.orders,public.lineitem,public.customer
+  tables: tpch.public.orders,tpch.public.lineitem,tpch.public.customer
   decoding.plugin.name: pgoutput
   slot.name: fr_pg_fluss_paimon_ingest_slot
-  publication.name: fr_pg_fluss_paimon_ingest_pub
-  scan.startup.mode: initial
-  scan.snapshot.enabled: false
+  debezium.publication.autocreate.mode: filtered
+  scan.startup.mode: latest-offset
   scan.incremental.snapshot.chunk.size: 100000
 sink:
   type: fluss
   name: pg-fluss-paimon-ingest-fluss-sink
   bootstrap.servers: fluss-coordinator:9123
-  table.properties.bucket.num: '8'
-  table.properties.bucket.key: o_orderkey
-  schema.evolution.behavior: lenient
 pipeline:
   name: pg-fluss-paimon-ingest
   parallelism: 4
@@ -408,22 +390,16 @@ exports[`pg-fluss-paimon-ingest (Pipeline-YAML branch) > synthesizes a stable ar
   port: 5432
   username: flink_cdc
   password: \${env:PG_PRIMARY_PASSWORD}
-  database-name: tpch
-  schema-name: public
-  table-name: public.orders,public.lineitem,public.customer
+  tables: tpch.public.orders,tpch.public.lineitem,tpch.public.customer
   decoding.plugin.name: pgoutput
   slot.name: fr_pg_fluss_paimon_ingest_slot
-  publication.name: fr_pg_fluss_paimon_ingest_pub
-  scan.startup.mode: initial
-  scan.snapshot.enabled: false
+  debezium.publication.autocreate.mode: filtered
+  scan.startup.mode: latest-offset
   scan.incremental.snapshot.chunk.size: 100000
 sink:
   type: fluss
   name: pg-fluss-paimon-ingest-fluss-sink
   bootstrap.servers: fluss-coordinator:9123
-  table.properties.bucket.num: '8'
-  table.properties.bucket.key: o_orderkey
-  schema.evolution.behavior: lenient
 pipeline:
   name: pg-fluss-paimon-ingest
   parallelism: 4
@@ -525,13 +501,21 @@ CREATE CATALOG \`paimon_catalog\` WITH (
 -- table-type  : PrimaryKey (retract)
 -- ====================================================================
 
-CREATE TABLE \`benchmark_orders\` (
-  WATERMARK FOR \`event_time\` AS event_time - INTERVAL '5' SECOND
-)
-WITH (
-  'scan.startup.mode' = 'initial'
-)
-LIKE \`fluss_catalog\`.\`benchmark\`.\`orders\` (EXCLUDING WATERMARKS);
+CREATE DATABASE IF NOT EXISTS \`fluss_catalog\`.\`benchmark\`;
+CREATE TABLE IF NOT EXISTS \`fluss_catalog\`.\`benchmark\`.\`orders\` (
+  \`o_orderkey\` BIGINT,
+  \`o_custkey\` BIGINT,
+  \`o_orderstatus\` STRING,
+  \`o_totalprice\` DECIMAL(15, 2),
+  \`o_orderdate\` DATE,
+  \`o_orderpriority\` STRING,
+  \`o_clerk\` STRING,
+  \`o_shippriority\` INT,
+  \`o_comment\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  PRIMARY KEY (\`o_orderkey\`) NOT ENFORCED
+);
+CREATE TEMPORARY VIEW \`benchmark_orders\` AS SELECT * FROM \`fluss_catalog\`.\`benchmark\`.\`orders\`;
 
 -- ====================================================================
 -- SINK TABLE
@@ -669,13 +653,21 @@ CREATE CATALOG \`paimon_catalog\` WITH (
 -- table-type  : PrimaryKey (retract)
 -- ====================================================================
 
-CREATE TABLE \`benchmark_orders\` (
-  WATERMARK FOR \`event_time\` AS event_time - INTERVAL '5' SECOND
-)
-WITH (
-  'scan.startup.mode' = 'initial'
-)
-LIKE \`fluss_catalog\`.\`benchmark\`.\`orders\` (EXCLUDING WATERMARKS);
+CREATE DATABASE IF NOT EXISTS \`fluss_catalog\`.\`benchmark\`;
+CREATE TABLE IF NOT EXISTS \`fluss_catalog\`.\`benchmark\`.\`orders\` (
+  \`o_orderkey\` BIGINT,
+  \`o_custkey\` BIGINT,
+  \`o_orderstatus\` STRING,
+  \`o_totalprice\` DECIMAL(15, 2),
+  \`o_orderdate\` DATE,
+  \`o_orderpriority\` STRING,
+  \`o_clerk\` STRING,
+  \`o_shippriority\` INT,
+  \`o_comment\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  PRIMARY KEY (\`o_orderkey\`) NOT ENFORCED
+);
+CREATE TEMPORARY VIEW \`benchmark_orders\` AS SELECT * FROM \`fluss_catalog\`.\`benchmark\`.\`orders\`;
 
 -- ====================================================================
 -- SINK TABLE
@@ -813,13 +805,21 @@ CREATE CATALOG \`paimon_catalog\` WITH (
 -- table-type  : PrimaryKey (retract)
 -- ====================================================================
 
-CREATE TABLE \`benchmark_orders\` (
-  WATERMARK FOR \`event_time\` AS event_time - INTERVAL '5' SECOND
-)
-WITH (
-  'scan.startup.mode' = 'initial'
-)
-LIKE \`fluss_catalog\`.\`benchmark\`.\`orders\` (EXCLUDING WATERMARKS);
+CREATE DATABASE IF NOT EXISTS \`fluss_catalog\`.\`benchmark\`;
+CREATE TABLE IF NOT EXISTS \`fluss_catalog\`.\`benchmark\`.\`orders\` (
+  \`o_orderkey\` BIGINT,
+  \`o_custkey\` BIGINT,
+  \`o_orderstatus\` STRING,
+  \`o_totalprice\` DECIMAL(15, 2),
+  \`o_orderdate\` DATE,
+  \`o_orderpriority\` STRING,
+  \`o_clerk\` STRING,
+  \`o_shippriority\` INT,
+  \`o_comment\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  PRIMARY KEY (\`o_orderkey\`) NOT ENFORCED
+);
+CREATE TEMPORARY VIEW \`benchmark_orders\` AS SELECT * FROM \`fluss_catalog\`.\`benchmark\`.\`orders\`;
 
 -- ====================================================================
 -- SINK TABLE
@@ -957,13 +957,21 @@ CREATE CATALOG \`paimon_catalog\` WITH (
 -- table-type  : PrimaryKey (retract)
 -- ====================================================================
 
-CREATE TABLE \`benchmark_orders\` (
-  WATERMARK FOR \`event_time\` AS event_time - INTERVAL '5' SECOND
-)
-WITH (
-  'scan.startup.mode' = 'initial'
-)
-LIKE \`fluss_catalog\`.\`benchmark\`.\`orders\` (EXCLUDING WATERMARKS);
+CREATE DATABASE IF NOT EXISTS \`fluss_catalog\`.\`benchmark\`;
+CREATE TABLE IF NOT EXISTS \`fluss_catalog\`.\`benchmark\`.\`orders\` (
+  \`o_orderkey\` BIGINT,
+  \`o_custkey\` BIGINT,
+  \`o_orderstatus\` STRING,
+  \`o_totalprice\` DECIMAL(15, 2),
+  \`o_orderdate\` DATE,
+  \`o_orderpriority\` STRING,
+  \`o_clerk\` STRING,
+  \`o_shippriority\` INT,
+  \`o_comment\` STRING,
+  \`event_time\` TIMESTAMP(3),
+  PRIMARY KEY (\`o_orderkey\`) NOT ENFORCED
+);
+CREATE TEMPORARY VIEW \`benchmark_orders\` AS SELECT * FROM \`fluss_catalog\`.\`benchmark\`.\`orders\`;
 
 -- ====================================================================
 -- SINK TABLE

@@ -46,11 +46,14 @@ CREATE CATALOG \`lake\` WITH (
 -- table-type  : Log (append-only)
 -- ====================================================================
 
-CREATE TABLE \`shop_orders\`
-WITH (
-  'scan.startup.mode' = 'earliest'
-)
-LIKE \`fluss_cat\`.\`shop\`.\`orders\` (EXCLUDING WATERMARKS);
+CREATE DATABASE IF NOT EXISTS \`fluss_cat\`.\`shop\`;
+CREATE TABLE IF NOT EXISTS \`fluss_cat\`.\`shop\`.\`orders\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`order_ts\` TIMESTAMP(3)
+);
+CREATE TEMPORARY VIEW \`shop_orders\` AS SELECT * FROM \`fluss_cat\`.\`shop\`.\`orders\`;
 
 -- ====================================================================
 -- SINK TABLE
@@ -125,11 +128,14 @@ CREATE CATALOG \`lake\` WITH (
 -- table-type  : Log (append-only)
 -- ====================================================================
 
-CREATE TABLE \`shop_orders\`
-WITH (
-  'scan.startup.mode' = 'initial'
-)
-LIKE \`fluss_cat\`.\`shop\`.\`orders\` (EXCLUDING WATERMARKS);
+CREATE DATABASE IF NOT EXISTS \`fluss_cat\`.\`shop\`;
+CREATE TABLE IF NOT EXISTS \`fluss_cat\`.\`shop\`.\`orders\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`order_ts\` TIMESTAMP(3)
+);
+CREATE TEMPORARY VIEW \`shop_orders\` AS SELECT * FROM \`fluss_cat\`.\`shop\`.\`orders\`;
 
 -- ====================================================================
 -- SINK TABLE
@@ -204,11 +210,14 @@ CREATE CATALOG \`lake\` WITH (
 -- table-type  : Log (append-only)
 -- ====================================================================
 
-CREATE TABLE \`shop_orders\`
-WITH (
-  'scan.startup.mode' = 'latest'
-)
-LIKE \`fluss_cat\`.\`shop\`.\`orders\` (EXCLUDING WATERMARKS);
+CREATE DATABASE IF NOT EXISTS \`fluss_cat\`.\`shop\`;
+CREATE TABLE IF NOT EXISTS \`fluss_cat\`.\`shop\`.\`orders\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`order_ts\` TIMESTAMP(3)
+);
+CREATE TEMPORARY VIEW \`shop_orders\` AS SELECT * FROM \`fluss_cat\`.\`shop\`.\`orders\`;
 
 -- ====================================================================
 -- SINK TABLE
@@ -284,12 +293,14 @@ CREATE CATALOG \`lake\` WITH (
 -- table-type  : Log (append-only)
 -- ====================================================================
 
-CREATE TABLE \`shop_orders\`
-WITH (
-  'scan.startup.mode' = 'timestamp',
-  'scan.startup.timestamp' = '1735689600000'
-)
-LIKE \`fluss_cat\`.\`shop\`.\`orders\` (EXCLUDING WATERMARKS);
+CREATE DATABASE IF NOT EXISTS \`fluss_cat\`.\`shop\`;
+CREATE TABLE IF NOT EXISTS \`fluss_cat\`.\`shop\`.\`orders\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`order_ts\` TIMESTAMP(3)
+);
+CREATE TEMPORARY VIEW \`shop_orders\` AS SELECT * FROM \`fluss_cat\`.\`shop\`.\`orders\`;
 
 -- ====================================================================
 -- SINK TABLE
@@ -364,11 +375,15 @@ CREATE CATALOG \`lake\` WITH (
 -- table-type  : PrimaryKey (retract)
 -- ====================================================================
 
-CREATE TABLE \`shop_orders\`
-WITH (
-  'scan.startup.mode' = 'earliest'
-)
-LIKE \`fluss_cat\`.\`shop\`.\`orders\` (EXCLUDING WATERMARKS);
+CREATE DATABASE IF NOT EXISTS \`fluss_cat\`.\`shop\`;
+CREATE TABLE IF NOT EXISTS \`fluss_cat\`.\`shop\`.\`orders\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`order_ts\` TIMESTAMP(3),
+  PRIMARY KEY (\`order_id\`) NOT ENFORCED
+);
+CREATE TEMPORARY VIEW \`shop_orders\` AS SELECT * FROM \`fluss_cat\`.\`shop\`.\`orders\`;
 
 -- ====================================================================
 -- SINK TABLE
@@ -446,11 +461,15 @@ CREATE CATALOG \`lake\` WITH (
 -- table-type  : PrimaryKey (retract)
 -- ====================================================================
 
-CREATE TABLE \`shop_orders\`
-WITH (
-  'scan.startup.mode' = 'initial'
-)
-LIKE \`fluss_cat\`.\`shop\`.\`orders\` (EXCLUDING WATERMARKS);
+CREATE DATABASE IF NOT EXISTS \`fluss_cat\`.\`shop\`;
+CREATE TABLE IF NOT EXISTS \`fluss_cat\`.\`shop\`.\`orders\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`order_ts\` TIMESTAMP(3),
+  PRIMARY KEY (\`order_id\`) NOT ENFORCED
+);
+CREATE TEMPORARY VIEW \`shop_orders\` AS SELECT * FROM \`fluss_cat\`.\`shop\`.\`orders\`;
 
 -- ====================================================================
 -- SINK TABLE
@@ -528,11 +547,15 @@ CREATE CATALOG \`lake\` WITH (
 -- table-type  : PrimaryKey (retract)
 -- ====================================================================
 
-CREATE TABLE \`shop_orders\`
-WITH (
-  'scan.startup.mode' = 'latest'
-)
-LIKE \`fluss_cat\`.\`shop\`.\`orders\` (EXCLUDING WATERMARKS);
+CREATE DATABASE IF NOT EXISTS \`fluss_cat\`.\`shop\`;
+CREATE TABLE IF NOT EXISTS \`fluss_cat\`.\`shop\`.\`orders\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`order_ts\` TIMESTAMP(3),
+  PRIMARY KEY (\`order_id\`) NOT ENFORCED
+);
+CREATE TEMPORARY VIEW \`shop_orders\` AS SELECT * FROM \`fluss_cat\`.\`shop\`.\`orders\`;
 
 -- ====================================================================
 -- SINK TABLE
@@ -611,12 +634,15 @@ CREATE CATALOG \`lake\` WITH (
 -- table-type  : PrimaryKey (retract)
 -- ====================================================================
 
-CREATE TABLE \`shop_orders\`
-WITH (
-  'scan.startup.mode' = 'timestamp',
-  'scan.startup.timestamp' = '1735689600000'
-)
-LIKE \`fluss_cat\`.\`shop\`.\`orders\` (EXCLUDING WATERMARKS);
+CREATE DATABASE IF NOT EXISTS \`fluss_cat\`.\`shop\`;
+CREATE TABLE IF NOT EXISTS \`fluss_cat\`.\`shop\`.\`orders\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`order_ts\` TIMESTAMP(3),
+  PRIMARY KEY (\`order_id\`) NOT ENFORCED
+);
+CREATE TEMPORARY VIEW \`shop_orders\` AS SELECT * FROM \`fluss_cat\`.\`shop\`.\`orders\`;
 
 -- ====================================================================
 -- SINK TABLE
@@ -695,8 +721,15 @@ CREATE CATALOG \`iceberg_cat\` WITH (
 -- table-type  : PrimaryKey (retract)
 -- ====================================================================
 
-CREATE TABLE \`shop_orders\`
-LIKE \`fluss_cat\`.\`shop\`.\`orders\` (EXCLUDING WATERMARKS);
+CREATE DATABASE IF NOT EXISTS \`fluss_cat\`.\`shop\`;
+CREATE TABLE IF NOT EXISTS \`fluss_cat\`.\`shop\`.\`orders\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`order_ts\` TIMESTAMP(3),
+  PRIMARY KEY (\`order_id\`) NOT ENFORCED
+);
+CREATE TEMPORARY VIEW \`shop_orders\` AS SELECT * FROM \`fluss_cat\`.\`shop\`.\`orders\`;
 
 -- ====================================================================
 -- SINK TABLE
@@ -776,8 +809,15 @@ CREATE CATALOG \`paimon_cat\` WITH (
 -- table-type  : PrimaryKey (retract)
 -- ====================================================================
 
-CREATE TABLE \`shop_orders\`
-LIKE \`fluss_cat\`.\`shop\`.\`orders\` (EXCLUDING WATERMARKS);
+CREATE DATABASE IF NOT EXISTS \`fluss_cat\`.\`shop\`;
+CREATE TABLE IF NOT EXISTS \`fluss_cat\`.\`shop\`.\`orders\` (
+  \`order_id\` BIGINT,
+  \`user_id\` STRING,
+  \`amount\` DECIMAL(10, 2),
+  \`order_ts\` TIMESTAMP(3),
+  PRIMARY KEY (\`order_id\`) NOT ENFORCED
+);
+CREATE TEMPORARY VIEW \`shop_orders\` AS SELECT * FROM \`fluss_cat\`.\`shop\`.\`orders\`;
 
 -- ====================================================================
 -- SINK TABLE

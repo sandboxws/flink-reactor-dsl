@@ -173,8 +173,13 @@ describe("generatePipelineYaml", () => {
     })
 
     const yaml = generatePipelineYaml(pipeline) as string
+    // Flink CDC 3.6 still derives a deterministic slot.name. publication.name
+    // was dropped from the Postgres source factory — the publication is now
+    // implicitly the one CDC creates as a side-effect of the slot lifecycle,
+    // gated by `debezium.publication.autocreate.mode: filtered`.
     expect(yaml).toContain("slot.name: fr_shop_orders_cdc_slot")
-    expect(yaml).toContain("publication.name: fr_shop_orders_cdc_pub")
+    expect(yaml).not.toContain("publication.name")
+    expect(yaml).toContain("debezium.publication.autocreate.mode: filtered")
   })
 
   it("is deterministic across runs (byte-equal output)", () => {
@@ -415,12 +420,17 @@ describe("generatePipelineYaml", () => {
       children: [catalog.node, sink],
     })
 
+    // Flink CDC 3.6's FlussDataSinkFactory rejects the legacy
+    // `table.properties.*` namespace and the sink-scoped
+    // `schema.evolution.behavior` key. Bucket options moved to a per-table
+    // form that the emitter doesn't yet construct, so they're omitted; the
+    // schema-change handling moved to the pipeline stanza.
     const yaml = generatePipelineYaml(pipeline) as string
     expect(yaml).toContain("type: fluss")
     expect(yaml).toContain("bootstrap.servers: fluss-coordinator:9123")
-    expect(yaml).toContain("table.properties.bucket.num: '8'")
-    expect(yaml).toContain("table.properties.bucket.key: order_id")
-    expect(yaml).toContain("schema.evolution.behavior: lenient")
+    expect(yaml).not.toContain("table.properties")
+    expect(yaml).not.toContain("schema.evolution.behavior")
+    expect(yaml).toContain("schema.change.behavior: evolve")
     expect(yaml).toMatchSnapshot()
   })
 
@@ -467,10 +477,13 @@ describe("generatePipelineYaml", () => {
     expect(yaml).toMatchSnapshot()
   })
 
-  it("schema.evolution.behavior defaults to lenient and is overridable", () => {
-    const buildPipeline = (
-      schemaEvolution?: "lenient" | "strict",
-    ): ReturnType<typeof Pipeline> => {
+  it("emits schema.change.behavior in the pipeline stanza (Flink CDC 3.6)", () => {
+    // Flink CDC 3.6 moved schema-change handling from the sink stanza
+    // (`schema.evolution.behavior: lenient|strict`, sink-scoped) to the
+    // pipeline stanza (`schema.change.behavior: evolve|...`, pipeline-scoped).
+    // The default is `evolve`. Sink-stanza overrides are no longer accepted by
+    // FactoryHelper.validateExcept().
+    const buildPipeline = (): ReturnType<typeof Pipeline> => {
       resetNodeIdCounter()
       const catalog = FlussCatalog({
         name: "fluss",
@@ -484,33 +497,33 @@ describe("generatePipelineYaml", () => {
         schemaList: ["public"],
         tableList: ["public.orders"],
       })
-      const sinkProps = {
+      const sink = FlussSink({
         catalog: catalog.handle,
         database: "shop",
         table: "orders",
         primaryKey: ["order_id"],
-        ...(schemaEvolution !== undefined ? { schemaEvolution } : {}),
         children: [source],
-      } as Parameters<typeof FlussSink>[0]
-      const sink = FlussSink(sinkProps)
+      })
       return Pipeline({
         name: "shop",
         children: [catalog.node, sink],
       })
     }
 
-    const defaultYaml = generatePipelineYaml(buildPipeline()) as string
-    expect(defaultYaml).toContain("schema.evolution.behavior: lenient")
-
-    const strictYaml = generatePipelineYaml(buildPipeline("strict")) as string
-    expect(strictYaml).toContain("schema.evolution.behavior: strict")
+    const yaml = generatePipelineYaml(buildPipeline()) as string
+    expect(yaml).toContain("schema.change.behavior: evolve")
+    // Old sink-scoped key must not leak through.
+    expect(yaml).not.toContain("schema.evolution.behavior")
   })
 
-  it("omits bucket.key when primaryKey is empty (Log table fallthrough)", () => {
-    // The cross-node validator rejects FlussSink without primaryKey downstream
-    // of PostgresCdcPipelineSource, but the YAML emitter's contract is "omit
-    // the key when primaryKey is empty" so Fluss falls back to round-robin
-    // bucketing — we cover the emitter shape independently from validation.
+  it("omits bucket options on the FlussSink stanza (CDC 3.6 contract)", () => {
+    // Flink CDC 3.6's FlussDataSinkFactory expects per-table bucket options
+    // (`<schema.table>:<value>;...`) not flat scalars. Until the emitter
+    // walks the source tableList to expand the per-table form, both
+    // `bucket.num` and `bucket.key` are intentionally omitted so Fluss falls
+    // back to round-robin bucketing and source-PK keying. See the source
+    // comment in pipeline-yaml-generator.ts (buildFlussSinkStanza) for the
+    // rationale; this test guards the omission.
     const catalog = FlussCatalog({
       name: "fluss",
       bootstrapServers: "fluss:9123",
@@ -537,6 +550,7 @@ describe("generatePipelineYaml", () => {
 
     const yaml = generatePipelineYaml(pipeline) as string
     expect(yaml).not.toContain("bucket.key")
-    expect(yaml).toContain("table.properties.bucket.num: '4'")
+    expect(yaml).not.toContain("bucket.num")
+    expect(yaml).not.toContain("table.properties")
   })
 })
