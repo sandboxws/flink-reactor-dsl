@@ -69,8 +69,11 @@ function basicKafkaSource() {
 describe("synthesis reentrancy guard", () => {
   it("throws when generateSql is invoked recursively (synchronous nesting)", () => {
     // The tripwire defends an invariant: codegen is purely synchronous, so
-    // module-level state (`_synthVersion`, `_fragments`) can be safely
-    // captured per-call. Reentrancy would corrupt the active accumulator.
+    // BuildContext fragments / synthDepth accumulators can be safely owned
+    // per-call. The module-level `_activeSynthesisCount` in
+    // sql-build-context.ts catches the case where a plugin re-enters
+    // generateSql with a fresh ctx — that path would otherwise interleave
+    // fragment writes from two synthesis passes.
     // We trigger it by registering a plugin SQL generator that re-enters
     // generateSql for the same component — that's the only realistic path
     // that exercises the recursive call site without modifying source.

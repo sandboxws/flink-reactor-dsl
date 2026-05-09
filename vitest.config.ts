@@ -48,17 +48,16 @@ export default defineConfig({
           branches: 65,
           statements: 70,
         },
-        // sql-generator.ts is a 4.5k-line synthesis hub queued for
-        // decomposition. Its tests are the regression net for that work, so
-        // we lock in the achieved baseline as a per-file floor: any
-        // extraction commit that drops below these numbers is a red flag.
-        // The thresholds tick down slightly with each extraction as covered
-        // helpers move to dedicated files (which keep their own coverage).
+        // After the Phase C decomposition (commits 213fb6a..34fe7c9),
+        // sql-generator.ts is the orchestrator (~566 LOC) and tests cover
+        // the full driver path. We lock in 99% lines / 91% branches as a
+        // regression net — drift below means a code path was added but not
+        // exercised; investigate before bumping down.
         "src/codegen/sql-generator.ts": {
-          lines: 94,
+          lines: 99,
           functions: 100,
-          branches: 87,
-          statements: 94,
+          branches: 91,
+          statements: 99,
         },
       },
     },
