@@ -40,6 +40,7 @@ import { toInterval } from "./sql-duration.js"
 // the previous local copy did not.
 import { quoteIdentifier as q } from "./sql-identifiers.js"
 import { sameNameJoinKeys } from "./sql-join-helpers.js"
+import { resolveJoinOperand, resolveRef, resolveSinkRef } from "./sql-refs.js"
 import { generateSetStatements } from "./sql-set-statements.js"
 import { resolveSinkMetadata, type SinkMetadata } from "./sql-sink-metadata.js"
 import {
@@ -1220,13 +1221,6 @@ function collectRouteDml(
   }
 }
 
-function resolveSinkRef(sink: ConstructNode): string {
-  if (sink.props.catalogName) {
-    return `${q(String(sink.props.catalogName))}.${q(String(sink.props.database))}.${q(String(sink.props.table))}`
-  }
-  return q(sink.id)
-}
-
 // ── Query building ──────────────────────────────────────────────────
 
 /*
@@ -1958,8 +1952,8 @@ function buildJoinQuery(ctx: BuildContext, node: ConstructNode): string {
   const leftId = node.props.left as string
   const rightId = node.props.right as string
 
-  const left = resolveJoinOperand(ctx, leftId)
-  const right = resolveJoinOperand(ctx, rightId)
+  const left = resolveJoinOperand(ctx, leftId, buildQuery)
+  const right = resolveJoinOperand(ctx, rightId, buildQuery)
   const ctes = [left.cte, right.cte].filter(Boolean)
   const ctePrefix = ctes.length > 0 ? `WITH ${ctes.join(",\n")}\n` : ""
 
@@ -2011,8 +2005,8 @@ function buildTemporalJoinQuery(
   const streamId = node.props.stream as string
   const temporalId = node.props.temporal as string
 
-  const stream = resolveJoinOperand(ctx, streamId)
-  const temporal = resolveJoinOperand(ctx, temporalId)
+  const stream = resolveJoinOperand(ctx, streamId, buildQuery)
+  const temporal = resolveJoinOperand(ctx, temporalId, buildQuery)
   const ctes = [stream.cte, temporal.cte].filter(Boolean)
   const ctePrefix = ctes.length > 0 ? `WITH ${ctes.join(",\n")}\n` : ""
 
@@ -2075,7 +2069,7 @@ function buildLookupJoinQuery(ctx: BuildContext, node: ConstructNode): string {
   const table = node.props.table as string
   const select = node.props.select as Record<string, string> | undefined
 
-  const input = resolveJoinOperand(ctx, inputId)
+  const input = resolveJoinOperand(ctx, inputId, buildQuery)
 
   // Wrap the driving input in a CTE that adds PROCTIME() AS proc_time.
   // Lookup joins require a processing-time attribute on the left side;
@@ -2129,8 +2123,8 @@ function buildIntervalJoinQuery(
   const leftId = node.props.left as string
   const rightId = node.props.right as string
 
-  const left = resolveJoinOperand(ctx, leftId)
-  const right = resolveJoinOperand(ctx, rightId)
+  const left = resolveJoinOperand(ctx, leftId, buildQuery)
+  const right = resolveJoinOperand(ctx, rightId, buildQuery)
   const ctes = [left.cte, right.cte].filter(Boolean)
   const ctePrefix = ctes.length > 0 ? `WITH ${ctes.join(",\n")}\n` : ""
 
@@ -2815,39 +2809,6 @@ function buildLateralJoinQuery(ctx: BuildContext, node: ConstructNode): string {
   const sqlJoinType = joinType === "left" ? "LEFT JOIN" : "JOIN"
 
   return `SELECT ${inputRef}.*, T.${Object.keys(asFields).map(q).join(`, T.`)} FROM ${inputRef} ${sqlJoinType} LATERAL TABLE(${funcName}(${argList})) AS T(${aliases})`
-}
-
-// ── Ref resolution ──────────────────────────────────────────────────
-
-function resolveRef(ctx: BuildContext, nodeId: string): string {
-  const node = ctx.nodeIndex.get(nodeId)
-  if (!node) return q(nodeId)
-
-  if (node.component === "CatalogSource") {
-    return `${q(String(node.props.catalogName))}.${q(String(node.props.database))}.${q(String(node.props.table))}`
-  }
-
-  return q(nodeId)
-}
-
-/**
- * Resolve a join operand (left/right input).
- * If the operand is a Source, returns a simple table reference.
- * If the operand is a non-Source (e.g. another Join), inlines its SQL
- * as a CTE so the join can reference it by name.
- */
-function resolveJoinOperand(
-  ctx: BuildContext,
-  nodeId: string,
-): { ref: string; cte: string | null } {
-  const node = ctx.nodeIndex.get(nodeId)
-  if (!node || node.kind === "Source") {
-    return { ref: resolveRef(ctx, nodeId), cte: null }
-  }
-  // Non-source operand — build its query and wrap as a CTE
-  const sql = buildQuery(ctx, node)
-  const cteName = q(nodeId)
-  return { ref: cteName, cte: `${cteName} AS (\n${sql}\n)` }
 }
 
 // ── Effect-typed variant ─────────────────────────────────────────────
