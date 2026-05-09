@@ -33,15 +33,12 @@ import {
   type StatementOrigin,
   shiftFragmentsSince,
 } from "./sql-build-context.js"
-import {
-  toInsertOnlyFormat,
-  toInterval,
-  toMilliseconds,
-} from "./sql-duration.js"
+import { toInsertOnlyFormat, toInterval } from "./sql-duration.js"
 // `q` is the historical alias used by the ~96 inline call sites in this
 // file. The shared helper additionally escapes embedded backticks, which
 // the previous local copy did not.
 import { quoteIdentifier as q } from "./sql-identifiers.js"
+import { generateSetStatements } from "./sql-set-statements.js"
 import {
   buildCatalogDetails,
   buildCommentBlock,
@@ -582,82 +579,6 @@ export function generateTapManifest(
   }
 
   return { manifest, diagnostics }
-}
-
-// ── SET statements ──────────────────────────────────────────────────
-
-function generateSetStatements(
-  pipeline: ConstructNode,
-  version: FlinkMajorVersion,
-): string[] {
-  const config: Record<string, string> = {}
-  const props = pipeline.props
-
-  // Always set pipeline.name so Flink job name matches the pipeline name.
-  // This enables the dashboard to match running jobs to tap manifests by name.
-  const pipelineName = props.name as string | undefined
-  if (pipelineName) {
-    config["pipeline.name"] = pipelineName
-  }
-
-  if (props.mode) {
-    config["execution.runtime-mode"] = props.mode as string
-  }
-
-  if (props.parallelism !== undefined) {
-    config["parallelism.default"] = String(props.parallelism)
-  }
-
-  const checkpoint = props.checkpoint as
-    | { interval: string; mode?: string }
-    | undefined
-  if (checkpoint) {
-    config["execution.checkpointing.interval"] = String(
-      toMilliseconds(checkpoint.interval),
-    )
-    if (checkpoint.mode) {
-      // Flink SQL expects the enum literals EXACTLY_ONCE / AT_LEAST_ONCE,
-      // not the DSL-ergonomic kebab-case values.
-      config["execution.checkpointing.mode"] =
-        checkpoint.mode === "exactly-once" ? "EXACTLY_ONCE" : "AT_LEAST_ONCE"
-    }
-  }
-
-  if (props.stateBackend) {
-    config["state.backend.type"] = props.stateBackend as string
-  }
-
-  if (props.stateTtl) {
-    config["table.exec.state.ttl"] = String(
-      toMilliseconds(props.stateTtl as string),
-    )
-  }
-
-  if (props.restartStrategy) {
-    const rs = props.restartStrategy as {
-      type: string
-      attempts?: number
-      delay?: string
-    }
-    config["restart-strategy.type"] = rs.type
-    if (rs.attempts !== undefined) {
-      config["restart-strategy.fixed-delay.attempts"] = String(rs.attempts)
-    }
-    if (rs.delay) {
-      config["restart-strategy.fixed-delay.delay"] = rs.delay
-    }
-  }
-
-  const userConfig = props.flinkConfig as Record<string, string> | undefined
-  if (userConfig) {
-    Object.assign(config, userConfig)
-  }
-
-  const normalized = FlinkVersionCompat.normalizeConfig(config, version)
-
-  return Object.entries(normalized).map(
-    ([key, value]) => `SET '${key}' = '${value}';`,
-  )
 }
 
 // ── CREATE CATALOG DDL ──────────────────────────────────────────────
