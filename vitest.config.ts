@@ -48,6 +48,16 @@ export default defineConfig({
           branches: 65,
           statements: 70,
         },
+        // sql-generator.ts is a 4.5k-line synthesis hub queued for
+        // decomposition. Its tests are the regression net for that work, so
+        // we lock in the post-edge-test baseline as a per-file floor: any
+        // extraction commit that drops below these numbers is a red flag.
+        "src/codegen/sql-generator.ts": {
+          lines: 95,
+          functions: 100,
+          branches: 87,
+          statements: 95,
+        },
       },
     },
   },
