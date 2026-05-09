@@ -1,6 +1,5 @@
 import { Either } from "effect"
 import { SqlGenerationError } from "@/core/errors.js"
-import { FlinkVersionCompat } from "@/core/flink-compat.js"
 import type { PluginDdlGenerator, PluginSqlGenerator } from "@/core/plugin.js"
 import type { ValidationDiagnostic } from "@/core/synth-context.js"
 import { SynthContext } from "@/core/synth-context.js"
@@ -31,6 +30,10 @@ import {
 import { generateCatalogDdl, generateUdfDdl } from "./sql-ddl-catalog.js"
 import { generateSinkDdl, resolvePartitionExpression } from "./sql-ddl-sink.js"
 import { generateSourceDdl } from "./sql-ddl-source.js"
+import {
+  generateMaterializedTableDdl,
+  generateViewDdl,
+} from "./sql-ddl-views.js"
 import type { DmlEntry } from "./sql-dml-types.js"
 // `q` is the historical alias used by the ~96 inline call sites in this
 // file. The shared helper additionally escapes embedded backticks, which
@@ -1217,120 +1220,6 @@ function collectRouteDml(
       entries.push({ sql: fullSql, contributors })
     }
   }
-}
-
-// ── View ────────────────────────────────────────────────────────────
-
-function generateViewDdl(ctx: BuildContext, node: ConstructNode): string {
-  const name = node.props.name as string
-
-  // The view's children define the upstream query
-  const upstream =
-    node.children.length > 0
-      ? buildQuery(ctx, node.children[0])
-      : "SELECT * FROM unknown"
-
-  return `CREATE VIEW ${q(name)} AS\n${upstream};`
-}
-
-// ── MaterializedTable DDL ───────────────────────────────────────────
-
-function generateMaterializedTableDdl(
-  ctx: BuildContext,
-  node: ConstructNode,
-): string {
-  const props = node.props
-  const name = props.name as string
-  const catalogName = props.catalogName as string
-  const database = props.database as string | undefined
-
-  // Version gate: require Flink >= 2.0
-  const versionCheck = FlinkVersionCompat.checkFeature(
-    "MATERIALIZED_TABLE",
-    ctx.version,
-  )
-  if (versionCheck) {
-    throw new Error(versionCheck.message)
-  }
-
-  // Freshness is required for Flink < 2.2
-  if (
-    !props.freshness &&
-    !FlinkVersionCompat.isVersionAtLeast(ctx.version, "2.2")
-  ) {
-    throw new Error("MaterializedTable freshness is required for Flink < 2.2")
-  }
-
-  // Bucketing requires Flink >= 2.2
-  if (props.bucketing) {
-    const bucketCheck = FlinkVersionCompat.checkFeature(
-      "MATERIALIZED_TABLE_BUCKETING",
-      ctx.version,
-    )
-    if (bucketCheck) {
-      throw new Error(bucketCheck.message)
-    }
-  }
-
-  // Catalog-qualified table name
-  const tableRef = database
-    ? `${q(catalogName)}.${q(database)}.${q(name)}`
-    : `${q(catalogName)}.${q(name)}`
-
-  const parts: string[] = [`CREATE MATERIALIZED TABLE ${tableRef}`]
-
-  // COMMENT clause
-  if (props.comment) {
-    parts.push(`  COMMENT '${String(props.comment)}'`)
-  }
-
-  // PARTITIONED BY clause
-  const partitionedBy = props.partitionedBy as readonly string[] | undefined
-  if (partitionedBy && partitionedBy.length > 0) {
-    parts.push(`  PARTITIONED BY (${partitionedBy.map(q).join(", ")})`)
-  }
-
-  // DISTRIBUTED BY HASH ... INTO N BUCKETS (Flink 2.2+)
-  if (props.bucketing) {
-    const bucketing = props.bucketing as {
-      columns: readonly string[]
-      count: number
-    }
-    const bucketCols = bucketing.columns.map(q).join(", ")
-    parts.push(
-      `  DISTRIBUTED BY HASH(${bucketCols}) INTO ${bucketing.count} BUCKETS`,
-    )
-  }
-
-  // WITH clause (table options)
-  const withOpts = props.with as Record<string, string> | undefined
-  if (withOpts && Object.keys(withOpts).length > 0) {
-    const entries = Object.entries(withOpts)
-      .map(([k, v]) => `    '${k}' = '${v}'`)
-      .join(",\n")
-    parts.push(`  WITH (\n${entries}\n  )`)
-  }
-
-  // FRESHNESS clause
-  if (props.freshness) {
-    parts.push(`  FRESHNESS = ${String(props.freshness)}`)
-  }
-
-  // REFRESH_MODE clause (omit for "automatic" — Flink auto-selects)
-  const refreshMode = props.refreshMode as string | undefined
-  if (refreshMode && refreshMode !== "automatic") {
-    parts.push(`  REFRESH_MODE = ${refreshMode.toUpperCase()}`)
-  }
-
-  // AS SELECT (upstream query from children)
-  const upstream =
-    node.children.length > 0
-      ? buildQuery(ctx, node.children[0])
-      : "SELECT * FROM unknown"
-
-  parts.push(`AS\n${upstream};`)
-
-  return parts.join("\n")
 }
 
 // ── Effect-typed variant ─────────────────────────────────────────────
