@@ -1,5 +1,5 @@
 import type { ConstructNode } from "@/core/types.js"
-import { quoteIdentifier as q } from "./sql/sql-identifiers.js"
+import { quoteIdentifier as q } from "./sql-identifiers.js"
 
 /**
  * Catalog and UDF DDL emission. Pure helpers — both take a node and

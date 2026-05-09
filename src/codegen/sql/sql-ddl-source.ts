@@ -1,6 +1,6 @@
 import type { SchemaDefinition } from "@/core/schema.js"
 import type { ConstructNode } from "@/core/types.js"
-import { quoteIdentifier as q } from "./sql/sql-identifiers.js"
+import { quoteIdentifier as q } from "./sql-identifiers.js"
 
 /**
  * Source-side CREATE TABLE emission. Splits into three regular shapes

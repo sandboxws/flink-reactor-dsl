@@ -1,6 +1,6 @@
 import type { ConstructNode } from "@/core/types.js"
-import { toInsertOnlyFormat } from "./sql/sql-duration.js"
-import { quoteIdentifier as q } from "./sql/sql-identifiers.js"
+import { toInsertOnlyFormat } from "./sql-duration.js"
+import { quoteIdentifier as q } from "./sql-identifiers.js"
 import type { SinkMetadata } from "./sql-sink-metadata.js"
 
 /**

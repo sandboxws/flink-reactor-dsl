@@ -1,7 +1,7 @@
 import { FlinkVersionCompat } from "@/core/flink-compat.js"
 import type { ConstructNode } from "@/core/types.js"
-import { quoteIdentifier as q } from "./sql/sql-identifiers.js"
-import type { BuildContext } from "./sql-build-context.js"
+import type { BuildContext } from "../sql-build-context.js"
+import { quoteIdentifier as q } from "./sql-identifiers.js"
 
 /**
  * `CREATE VIEW` and `CREATE MATERIALIZED TABLE` emission. Both wrap a
