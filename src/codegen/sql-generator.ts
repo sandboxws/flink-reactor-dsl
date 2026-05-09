@@ -36,46 +36,13 @@ import type { DmlEntry } from "./sql-dml-types.js"
 // file. The shared helper additionally escapes embedded backticks, which
 // the previous local copy did not.
 import { quoteIdentifier as q } from "./sql-identifiers.js"
-import {
-  buildAggregateQuery,
-  buildWindowQuery,
-} from "./sql-query-aggregate-window.js"
-import {
-  buildMatchRecognizeQuery,
-  buildQueryComponentQuery,
-  buildRawSqlQuery,
-} from "./sql-query-escape.js"
-import {
-  buildAddFieldQuery,
-  buildCastQuery,
-  buildCoalesceQuery,
-  buildDropQuery,
-  buildRenameQuery,
-} from "./sql-query-field-ops.js"
+import { buildQuery } from "./sql-query-dispatcher.js"
 import { getUpstream } from "./sql-query-helpers.js"
 import {
-  buildIntervalJoinQuery,
-  buildJoinQuery,
-  buildLateralJoinQuery,
-  buildLookupJoinQuery,
-  buildTemporalJoinQuery,
-} from "./sql-query-joins.js"
-import {
-  buildSideOutputQuery,
-  buildValidateQuery,
   collectSideDml,
   collectSideOutputDml,
   collectValidateDml,
 } from "./sql-query-side-paths.js"
-import {
-  buildDeduplicateQuery,
-  buildFilterQuery,
-  buildFlatMapQuery,
-  buildMapQuery,
-  buildQualifyQuery,
-  buildTopNQuery,
-  buildUnionQuery,
-} from "./sql-query-transforms.js"
 import { resolveSinkRef } from "./sql-refs.js"
 import { generateSetStatements } from "./sql-set-statements.js"
 import { resolveSinkMetadata, type SinkMetadata } from "./sql-sink-metadata.js"
@@ -1249,137 +1216,6 @@ function collectRouteDml(
 
       entries.push({ sql: fullSql, contributors })
     }
-  }
-}
-
-// ── Query building ──────────────────────────────────────────────────
-
-/*
- * buildQuery walks a node and its children (toward sources) to
- * produce a SQL SELECT expression. Each transform type adds its
- * own SQL clause on top of the upstream query.
- */
-
-function buildQuery(ctx: BuildContext, node: ConstructNode): string {
-  // Check plugin SQL generators first (allows overriding built-in components)
-  const pluginGen = ctx.pluginSqlGenerators?.get(node.component)
-  if (pluginGen) {
-    return pluginGen(node, ctx.nodeIndex)
-  }
-
-  switch (node.component) {
-    // Virtual reference (used internally by Route branch chaining)
-    case "VirtualRef":
-      if (node.props._sql) return node.props._sql as string
-      return `SELECT * FROM ${q(node.id)}`
-
-    // Sources — terminal unless they have child transforms
-    case "KafkaSource":
-    case "JdbcSource":
-    case "GenericSource":
-    case "DataGenSource":
-    case "FlussSource":
-      if (node.children.length > 0) {
-        // Source wraps child transforms (e.g. <KafkaSource><Map/></KafkaSource>)
-        // Build query by chaining children on top of the source reference.
-        let result = `SELECT * FROM ${q(node.id)}`
-        for (const child of node.children) {
-          const virtualSource: ConstructNode = {
-            id: node.id,
-            kind: "Source",
-            component: "VirtualRef",
-            props: {},
-            children: [],
-          }
-          const saved = child.children
-          ;(child as { children: ConstructNode[] }).children = [virtualSource]
-          result = buildQuery(ctx, child)
-          ;(child as { children: ConstructNode[] }).children = saved
-        }
-        return result
-      }
-      return `SELECT * FROM ${q(node.id)}`
-    case "CatalogSource":
-      return `SELECT * FROM ${q(String(node.props.catalogName))}.${q(String(node.props.database))}.${q(String(node.props.table))}`
-
-    // Transforms
-    case "Filter":
-      return buildFilterQuery(ctx, node)
-    case "Map":
-      return buildMapQuery(ctx, node)
-    case "FlatMap":
-      return buildFlatMapQuery(ctx, node)
-    case "Aggregate":
-      return buildAggregateQuery(ctx, node)
-    case "Union":
-      return buildUnionQuery(ctx, node)
-    case "Deduplicate":
-      return buildDeduplicateQuery(ctx, node)
-    case "TopN":
-      return buildTopNQuery(ctx, node)
-
-    // Field transforms
-    case "Rename":
-      return buildRenameQuery(ctx, node)
-    case "Drop":
-      return buildDropQuery(ctx, node)
-    case "Cast":
-      return buildCastQuery(ctx, node)
-    case "Coalesce":
-      return buildCoalesceQuery(ctx, node)
-    case "AddField":
-      return buildAddFieldQuery(ctx, node)
-
-    // Joins
-    case "Join":
-      return buildJoinQuery(ctx, node)
-    case "TemporalJoin":
-      return buildTemporalJoinQuery(ctx, node)
-    case "LookupJoin":
-      return buildLookupJoinQuery(ctx, node)
-    case "IntervalJoin":
-      return buildIntervalJoinQuery(ctx, node)
-
-    // Windows
-    case "TumbleWindow":
-    case "SlideWindow":
-    case "SessionWindow":
-      return buildWindowQuery(ctx, node)
-
-    // Escape hatches
-    case "Query":
-      return buildQueryComponentQuery(ctx, node)
-    case "RawSQL":
-      return buildRawSqlQuery(node)
-    case "Qualify":
-      return buildQualifyQuery(ctx, node)
-
-    // CEP
-    case "MatchRecognize":
-      return buildMatchRecognizeQuery(ctx, node)
-
-    // Validate — main path (valid records)
-    case "Validate":
-      return buildValidateQuery(ctx, node)
-
-    // View — reference by name
-    case "View":
-      return `SELECT * FROM ${q(node.props.name as string)}`
-
-    // SideOutput — main path (non-matching records)
-    case "SideOutput":
-      return buildSideOutputQuery(ctx, node)
-
-    // LateralJoin — LATERAL TABLE TVF join
-    case "LateralJoin":
-      return buildLateralJoinQuery(ctx, node)
-
-    default:
-      // Unknown — try first child
-      if (node.children.length > 0) {
-        return buildQuery(ctx, node.children[0])
-      }
-      return `SELECT * FROM ${q(node.id)}`
   }
 }
 
