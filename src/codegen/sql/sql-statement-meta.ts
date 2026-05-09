@@ -1,7 +1,7 @@
 import type { SchemaDefinition } from "@/core/schema.js"
 import type { ConstructNode } from "@/core/types.js"
-import type { DmlEntry } from "./sql/sql-dml-types.js"
 import type { BuildContext } from "./sql-build-context.js"
+import type { DmlEntry } from "./sql-dml-types.js"
 
 /**
  * Per-statement metadata builders that surface in the dashboard's hover

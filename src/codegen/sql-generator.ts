@@ -41,6 +41,14 @@ import type {
 import type { OptimizeOptions } from "./pipeline-optimizer.js"
 import { optimizePipeline } from "./pipeline-optimizer.js"
 import { indexTree } from "./schema-introspect.js"
+import {
+  type BuildContext,
+  createBuildContext,
+  enterSynthesis,
+  exitSynthesis,
+  type SqlFragment,
+  type StatementOrigin,
+} from "./sql/sql-build-context.js"
 import { generateCatalogDdl, generateUdfDdl } from "./sql/sql-ddl-catalog.js"
 import { generateSinkDdl } from "./sql/sql-ddl-sink.js"
 import { generateSourceDdl } from "./sql/sql-ddl-source.js"
@@ -50,16 +58,8 @@ import {
 } from "./sql/sql-ddl-views.js"
 import { generateDml } from "./sql/sql-dml-collection.js"
 import { buildQuery } from "./sql/sql-query-dispatcher.js"
+import { generateSetStatements } from "./sql/sql-set-statements.js"
 import { resolveSinkMetadata } from "./sql/sql-sink-metadata.js"
-import {
-  type BuildContext,
-  createBuildContext,
-  enterSynthesis,
-  exitSynthesis,
-  type SqlFragment,
-  type StatementOrigin,
-} from "./sql-build-context.js"
-import { generateSetStatements } from "./sql-set-statements.js"
 import {
   buildCatalogDetails,
   buildCommentBlock,
@@ -67,8 +67,8 @@ import {
   buildSinkDetails,
   buildSourceDetails,
   buildSourceSchema,
-} from "./sql-statement-meta.js"
-import { verifySql } from "./sql-verifier.js"
+} from "./sql/sql-statement-meta.js"
+import { verifySql } from "./sql/sql-verifier.js"
 
 // Re-export the synthesis types from sql-build-context.ts so existing
 // public consumers (e.g. browser.ts) keep their imports stable.

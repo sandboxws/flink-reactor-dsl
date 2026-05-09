@@ -1,6 +1,6 @@
 import type { SchemaDefinition } from "@/core/schema.js"
 import type { ConstructNode } from "@/core/types.js"
-import type { BuildContext } from "../sql-build-context.js"
+import type { BuildContext } from "./sql-build-context.js"
 import { quoteIdentifier as q } from "./sql-identifiers.js"
 import { sameNameJoinKeys } from "./sql-join-helpers.js"
 import { resolveJoinOperand, resolveRef } from "./sql-refs.js"

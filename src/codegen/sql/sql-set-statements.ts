@@ -1,6 +1,6 @@
 import { FlinkVersionCompat } from "@/core/flink-compat.js"
 import type { ConstructNode, FlinkMajorVersion } from "@/core/types.js"
-import { toMilliseconds } from "./sql/sql-duration.js"
+import { toMilliseconds } from "./sql-duration.js"
 
 /**
  * Generate the leading `SET 'key' = 'value';` block from a Pipeline node's

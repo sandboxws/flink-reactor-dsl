@@ -3,7 +3,7 @@ import {
   type BuildContext,
   pushFragment,
   shiftFragmentsSince,
-} from "../sql-build-context.js"
+} from "./sql-build-context.js"
 import { toInterval } from "./sql-duration.js"
 import { quoteIdentifier as q } from "./sql-identifiers.js"
 import { getUpstream } from "./sql-query-helpers.js"

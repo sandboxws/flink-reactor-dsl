@@ -6,7 +6,7 @@ import {
   resolveNodeSchema,
   resolveTransformSchema,
 } from "../schema-introspect.js"
-import type { BuildContext } from "../sql-build-context.js"
+import type { BuildContext } from "./sql-build-context.js"
 import { sameNameJoinKeys } from "./sql-join-helpers.js"
 
 /**

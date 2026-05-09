@@ -93,7 +93,7 @@ export async function runValidate(opts: {
     // Deep validation: dt-sql-parser parse check + EXPLAIN against a running Flink cluster
     if (opts.deepValidate && result.errors.length === 0) {
       // Tier 2a: dt-sql-parser full statement parsing
-      const { deepVerifySql } = await import("@/codegen/sql-verifier.js")
+      const { deepVerifySql } = await import("@/codegen/sql/sql-verifier.js")
       const { generateSql } = await import("@/codegen/sql-generator.js")
       const sqlResult = generateSql(pipelineNode, { flinkVersion })
       const parseDiags = await deepVerifySql(sqlResult.statements)

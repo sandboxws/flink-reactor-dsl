@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { verifySql } from "@/codegen/sql-verifier.js"
+import { verifySql } from "@/codegen/sql/sql-verifier.js"
 
 describe("verifySql — Tier 1 static checks", () => {
   // ── INSERT INTO / CREATE TABLE pairing ─────────────────────────────

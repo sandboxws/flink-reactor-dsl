@@ -1,5 +1,5 @@
 import type { ConstructNode } from "@/core/types.js"
-import type { BuildContext, BuildQueryFn } from "../sql-build-context.js"
+import type { BuildContext, BuildQueryFn } from "./sql-build-context.js"
 import { quoteIdentifier as q } from "./sql-identifiers.js"
 import {
   buildAggregateQuery,

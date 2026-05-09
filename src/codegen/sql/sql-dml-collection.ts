@@ -9,7 +9,7 @@ import {
   beginFragmentCollection,
   endFragmentCollection,
   type SqlFragment,
-} from "../sql-build-context.js"
+} from "./sql-build-context.js"
 import { resolvePartitionExpression } from "./sql-ddl-sink.js"
 import type { DmlEntry } from "./sql-dml-types.js"
 import { quoteIdentifier as q } from "./sql-identifiers.js"
