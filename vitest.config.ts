@@ -48,16 +48,17 @@ export default defineConfig({
           branches: 65,
           statements: 70,
         },
-        // After the Phase C decomposition (commits 213fb6a..34fe7c9),
-        // sql-generator.ts is the orchestrator (~566 LOC) and tests cover
-        // the full driver path. We lock in 99% lines / 91% branches as a
-        // regression net — drift below means a code path was added but not
-        // exercised; investigate before bumping down.
+        // After the Phase C decomposition (commits 213fb6a..34fe7c9) and
+        // the plugin-DDL test that closed the last 0.58% gap, the
+        // orchestrator (~566 LOC) is at 100% lines / 92% branches.
+        // Lock in 100/92 as a regression net — drift below 100 lines means
+        // a code path was added but not exercised; investigate before
+        // bumping down.
         "src/codegen/sql-generator.ts": {
-          lines: 99,
+          lines: 100,
           functions: 100,
-          branches: 91,
-          statements: 99,
+          branches: 92,
+          statements: 100,
         },
       },
     },

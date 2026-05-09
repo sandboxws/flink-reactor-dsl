@@ -32,7 +32,7 @@ import {
 import { Aggregate, FlatMap, Map as MapTx } from "@/components/transforms.js"
 import { SessionWindow, SlideWindow } from "@/components/windows.js"
 import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
-import type { PluginSqlGenerator } from "@/core/plugin.js"
+import type { PluginDdlGenerator, PluginSqlGenerator } from "@/core/plugin.js"
 import { Field, Schema } from "@/core/schema.js"
 import type { ConstructNode } from "@/core/types.js"
 
@@ -483,6 +483,34 @@ describe("plugin SQL generator dispatch", () => {
       { pluginSqlGenerators: generators },
     )
     expect(sql).toContain("'plugin-rendered' AS marker")
+  })
+
+  it("uses pluginDdlGenerators[node.component] for sink DDL when provided", () => {
+    // The sink-DDL plugin path: when a custom-component sink has a registered
+    // DDL generator, the orchestrator emits its return value verbatim and
+    // skips generateSinkDdl. Returning null is also valid — it means "skip
+    // DDL emission entirely" (e.g. for sinks pre-registered out-of-band).
+    const ddlGenerators = new Map<string, PluginDdlGenerator>([
+      [
+        "MyCustomSink",
+        (node) =>
+          `CREATE TABLE \`${node.id}\` (id BIGINT) WITH ('connector'='custom');`,
+      ],
+    ])
+    const customSink: ConstructNode = {
+      component: "MyCustomSink",
+      kind: "Sink",
+      id: "MyCustomSink_1",
+      props: {},
+      children: [basicKafkaSource()],
+    }
+    const { sql } = generateSql(
+      Pipeline({ name: "plugin-ddl", children: [customSink] }),
+      { pluginDdlGenerators: ddlGenerators },
+    )
+    expect(sql).toContain(
+      "CREATE TABLE `MyCustomSink_1` (id BIGINT) WITH ('connector'='custom');",
+    )
   })
 })
 
