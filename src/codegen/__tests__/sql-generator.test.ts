@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { generateSql } from "@/codegen/sql-generator.js"
+import { generateSql } from "@/codegen/sql/sql-generator.js"
 import { CatalogSource } from "@/components/catalog-source.js"
 import { PaimonCatalog } from "@/components/catalogs.js"
 import { MatchRecognize } from "@/components/cep.js"

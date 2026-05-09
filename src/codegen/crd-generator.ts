@@ -5,7 +5,7 @@ import { FlinkVersionCompat } from "@/core/flink-compat.js"
 import { isSecretRef, type SecretRef } from "@/core/secret-ref.js"
 import type { ConstructNode, FlinkMajorVersion } from "@/core/types.js"
 import { pipelineYamlConfigMapName } from "./secondary-resources.js"
-import { hasPipelineConnectorSource } from "./sql-generator.js"
+import { hasPipelineConnectorSource } from "./sql/sql-generator.js"
 
 // ── Types ───────────────────────────────────────────────────────────
 

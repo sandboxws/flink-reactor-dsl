@@ -8,7 +8,7 @@ import {
   resolveFormatArtifacts,
   resolveJdbcDialectArtifacts,
 } from "./connector-registry.js"
-import { hasPipelineConnectorSource } from "./sql-generator.js"
+import { hasPipelineConnectorSource } from "./sql/sql-generator.js"
 
 // ── Types ───────────────────────────────────────────────────────────
 

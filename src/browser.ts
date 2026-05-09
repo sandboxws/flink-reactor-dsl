@@ -5,13 +5,13 @@
 
 // Codegen: YAML serializer (pure, no I/O — safe for browser)
 export { toYaml } from "./codegen/crd-generator.js"
-export { verifySql } from "./codegen/sql/sql-verifier.js"
 export type {
   SqlFragment,
   SqlSection,
   StatementMeta,
   StatementOrigin,
-} from "./codegen/sql-generator.js"
+} from "./codegen/sql/sql-generator.js"
+export { verifySql } from "./codegen/sql/sql-verifier.js"
 // Components: catalog source
 export type { CatalogSourceProps } from "./components/catalog-source.js"
 export { CatalogSource } from "./components/catalog-source.js"

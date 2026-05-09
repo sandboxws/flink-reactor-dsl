@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
 import { beforeEach, describe, expect, it } from "vitest"
 import { generateCrdYaml } from "@/codegen/crd-generator.js"
-import { generateSql } from "@/codegen/sql-generator.js"
+import { generateSql } from "@/codegen/sql/sql-generator.js"
 import { synthesizeApp } from "@/core/app.js"
 import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
 import { synth } from "@/testing/synth.js"

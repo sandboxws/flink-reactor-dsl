@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest"
-import { generateSql, generateTapManifest } from "@/codegen/sql-generator.js"
+import {
+  generateSql,
+  generateTapManifest,
+} from "@/codegen/sql/sql-generator.js"
 import { Pipeline } from "@/components/pipeline.js"
 import { FileSystemSink, KafkaSink } from "@/components/sinks.js"
 import { KafkaSource } from "@/components/sources.js"

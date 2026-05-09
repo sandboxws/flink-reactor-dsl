@@ -15,7 +15,7 @@ import {
   generateSql,
   generateSqlEither,
   generateTapManifest,
-} from "@/codegen/sql-generator.js"
+} from "@/codegen/sql/sql-generator.js"
 import type { FlinkReactorConfig, InfraConfig } from "./config.js"
 import type { ResolvedConfig } from "./config-resolver.js"
 import { toInfraConfigFromResolved } from "./config-resolver.js"

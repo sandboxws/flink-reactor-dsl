@@ -12,7 +12,7 @@ import type { SecretRef } from "@/core/secret-ref.js"
 import { isSecretRef, renderSecretPlaceholder } from "@/core/secret-ref.js"
 import type { ConstructNode } from "@/core/types.js"
 import { toYaml } from "./crd-generator.js"
-import { hasPipelineConnectorSource } from "./sql-generator.js"
+import { hasPipelineConnectorSource } from "./sql/sql-generator.js"
 
 // ── Types ───────────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 import { Either } from "effect"
 import { beforeEach, describe, expect, it } from "vitest"
-import { generateSql, generateSqlEither } from "@/codegen/sql-generator.js"
+import { generateSql, generateSqlEither } from "@/codegen/sql/sql-generator.js"
 import {
   FlussCatalog,
   GenericCatalog,

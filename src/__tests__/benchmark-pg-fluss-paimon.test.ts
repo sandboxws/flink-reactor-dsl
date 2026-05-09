@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest"
 import { resolveConnectors } from "@/codegen/connector-resolver.js"
 import { generateCrd } from "@/codegen/crd-generator.js"
 import { generatePipelineYaml } from "@/codegen/pipeline-yaml-generator.js"
-import { generateSql } from "@/codegen/sql-generator.js"
+import { generateSql } from "@/codegen/sql/sql-generator.js"
 import { resetNodeIdCounter } from "@/core/jsx-runtime.js"
 import type { FlinkMajorVersion } from "@/core/types.js"
 import ingestPipeline, {

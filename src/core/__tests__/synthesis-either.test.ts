@@ -1,7 +1,7 @@
 import { Effect, Either } from "effect"
 import { beforeEach, describe, expect, it } from "vitest"
 import { generateCrdEither } from "@/codegen/crd-generator.js"
-import { generateSqlEither } from "@/codegen/sql-generator.js"
+import { generateSqlEither } from "@/codegen/sql/sql-generator.js"
 import { Pipeline } from "@/components/pipeline.js"
 import { KafkaSink } from "@/components/sinks.js"
 import { KafkaSource } from "@/components/sources.js"

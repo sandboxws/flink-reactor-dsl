@@ -8,7 +8,10 @@ import { loadPipeline, resolveProjectContext } from "@/cli/discovery.js"
 import { runCommand } from "@/cli/effect-runner.js"
 import { pushTapManifest } from "@/cli/tap-push.js"
 import { generateCrd, toYaml } from "@/codegen/crd-generator.js"
-import { generateSql, generateTapManifest } from "@/codegen/sql-generator.js"
+import {
+  generateSql,
+  generateTapManifest,
+} from "@/codegen/sql/sql-generator.js"
 import { type PipelineArtifact, synthesizeApp } from "@/core/app.js"
 import { DiscoveryError, type FileSystemError } from "@/core/errors.js"
 import { generatePipelineManifest } from "@/core/manifest.js"
@@ -99,7 +102,7 @@ export async function runSynth(opts: {
     // treat the whole tree as a single pipeline.
     if (result.pipelines.length === 0) {
       const { generateSql, generateTapManifest } = await import(
-        "@/codegen/sql-generator.js"
+        "@/codegen/sql/sql-generator.js"
       )
       const { generateCrd } = await import("@/codegen/crd-generator.js")
 

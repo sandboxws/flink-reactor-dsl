@@ -1,6 +1,6 @@
 import { Effect } from "effect"
 import { type AnyFlinkCrd, generateCrd } from "@/codegen/crd-generator.js"
-import { generateSql } from "@/codegen/sql-generator.js"
+import { generateSql } from "@/codegen/sql/sql-generator.js"
 import type {
   CrdGenerationError,
   PluginError,

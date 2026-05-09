@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest"
 import { resolveConnectors } from "@/codegen/connector-resolver.js"
-import { generateSql } from "@/codegen/sql-generator.js"
+import { generateSql } from "@/codegen/sql/sql-generator.js"
 import {
   FlussCatalog,
   IcebergCatalog,

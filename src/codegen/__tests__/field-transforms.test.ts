@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest"
 import { introspectPipelineSchemas } from "@/codegen/schema-introspect.js"
-import { generateSql } from "@/codegen/sql-generator.js"
+import { generateSql } from "@/codegen/sql/sql-generator.js"
 import {
   AddField,
   Cast,
