@@ -3,24 +3,24 @@ import {
   type ResolvedColumn,
   resolveNodeSchema,
   resolveTransformSchema,
-} from "./schema-introspect.js"
-import { resolvePartitionExpression } from "./sql/sql-ddl-sink.js"
-import { quoteIdentifier as q } from "./sql/sql-identifiers.js"
-import { resolveSinkRef } from "./sql/sql-refs.js"
-import type { SinkMetadata } from "./sql/sql-sink-metadata.js"
+} from "../schema-introspect.js"
 import {
   type BuildContext,
   beginFragmentCollection,
   endFragmentCollection,
   type SqlFragment,
-} from "./sql-build-context.js"
-import type { DmlEntry } from "./sql-dml-types.js"
-import { getUpstream } from "./sql-query-helpers.js"
+} from "../sql-build-context.js"
+import { getUpstream } from "../sql-query-helpers.js"
 import {
   collectSideDml,
   collectSideOutputDml,
   collectValidateDml,
-} from "./sql-query-side-paths.js"
+} from "../sql-query-side-paths.js"
+import { resolvePartitionExpression } from "./sql-ddl-sink.js"
+import type { DmlEntry } from "./sql-dml-types.js"
+import { quoteIdentifier as q } from "./sql-identifiers.js"
+import { resolveSinkRef } from "./sql-refs.js"
+import type { SinkMetadata } from "./sql-sink-metadata.js"
 
 /**
  * INSERT-statement collection from a Pipeline construct tree.

@@ -48,6 +48,7 @@ import {
   generateMaterializedTableDdl,
   generateViewDdl,
 } from "./sql/sql-ddl-views.js"
+import { generateDml } from "./sql/sql-dml-collection.js"
 import { resolveSinkMetadata } from "./sql/sql-sink-metadata.js"
 import {
   type BuildContext,
@@ -57,7 +58,6 @@ import {
   type SqlFragment,
   type StatementOrigin,
 } from "./sql-build-context.js"
-import { generateDml } from "./sql-dml-collection.js"
 import { buildQuery } from "./sql-query-dispatcher.js"
 import { generateSetStatements } from "./sql-set-statements.js"
 import {

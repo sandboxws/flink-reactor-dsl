@@ -1,8 +1,8 @@
 import type { ConstructNode } from "@/core/types.js"
+import type { DmlEntry } from "./sql/sql-dml-types.js"
 import { quoteIdentifier as q } from "./sql/sql-identifiers.js"
 import { resolveSinkRef } from "./sql/sql-refs.js"
 import type { BuildContext } from "./sql-build-context.js"
-import type { DmlEntry } from "./sql-dml-types.js"
 import { getUpstream } from "./sql-query-helpers.js"
 
 /**

@@ -1,4 +1,4 @@
-import type { SqlFragment } from "./sql-build-context.js"
+import type { SqlFragment } from "../sql-build-context.js"
 
 /**
  * Output shape for DML emission — a single `INSERT INTO …` statement
