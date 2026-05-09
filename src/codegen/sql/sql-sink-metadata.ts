@@ -7,7 +7,7 @@ import {
   resolveTransformSchema,
 } from "../schema-introspect.js"
 import type { BuildContext } from "../sql-build-context.js"
-import { sameNameJoinKeys } from "../sql-join-helpers.js"
+import { sameNameJoinKeys } from "./sql-join-helpers.js"
 
 /**
  * Sink metadata resolution — derives the schema, changelog mode, and

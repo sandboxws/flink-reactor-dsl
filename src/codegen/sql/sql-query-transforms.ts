@@ -1,11 +1,11 @@
 import { FlinkVersionCompat } from "@/core/flink-compat.js"
 import type { ConstructNode } from "@/core/types.js"
-import { quoteIdentifier as q } from "./sql/sql-identifiers.js"
 import {
   type BuildContext,
   pushFragment,
   shiftFragmentsSince,
-} from "./sql-build-context.js"
+} from "../sql-build-context.js"
+import { quoteIdentifier as q } from "./sql-identifiers.js"
 import { getUpstream } from "./sql-query-helpers.js"
 
 /**
