@@ -1,5 +1,7 @@
 import type { SchemaDefinition } from "@/core/schema.js"
 import type { ConstructNode } from "@/core/types.js"
+import type { BuildContext } from "./sql-build-context.js"
+import type { DmlEntry } from "./sql-dml-types.js"
 
 /**
  * Per-statement metadata builders that surface in the dashboard's hover
@@ -262,4 +264,71 @@ export function getTransformDetail(
     default:
       return null
   }
+}
+
+/**
+ * Per-DML metadata builder for the dashboard's hover tooltip on
+ * `INSERT INTO ... SELECT ...` statements.
+ *
+ * Lifts the sink name from the INSERT target, gathers contributors from
+ * the entry's fragment list (sources directly; transforms via the
+ * `nodeIndex`), and renders a `{ step, type, input, output, rule }`-
+ * shaped detail block. For multi-transform chains it switches to a
+ * `transforms: A → B → C` summary line. Falls back to parsing the FROM
+ * clause when contributors are absent (defensive — production paths
+ * should always populate fragments).
+ */
+export function buildDmlDetails(
+  ctx: BuildContext,
+  entry: DmlEntry,
+): Array<{ key: string; value: string }> {
+  const details: Array<{ key: string; value: string }> = []
+
+  // Extract sink name from INSERT INTO `name`
+  const sinkMatch = entry.sql.match(/INSERT INTO `([^`]+)`/)
+  const sinkName = sinkMatch?.[1] ?? "unknown"
+
+  // Collect unique sources and transforms from contributors
+  const sourceIds: string[] = []
+  const transformNodes: ConstructNode[] = []
+  const seen = new Set<string>()
+  for (const c of entry.contributors) {
+    if (seen.has(c.origin.nodeId)) continue
+    seen.add(c.origin.nodeId)
+    if (c.origin.kind === "Source") sourceIds.push(c.origin.nodeId)
+    if (c.origin.kind === "Transform") {
+      const n = ctx.nodeIndex.get(c.origin.nodeId)
+      if (n) transformNodes.push(n)
+    }
+  }
+
+  // If no contributors, try parsing FROM clause
+  if (sourceIds.length === 0) {
+    const fromMatch = entry.sql.match(/FROM `([^`]+)`/)
+    if (fromMatch) sourceIds.push(fromMatch[1])
+  }
+
+  // Build details based on transform chain
+  if (transformNodes.length === 1) {
+    const t = transformNodes[0]
+    details.push({ key: "step", value: t.id })
+    details.push({ key: "type", value: t.component })
+    details.push({ key: "input", value: sourceIds.join(", ") || "unknown" })
+    details.push({ key: "output", value: sinkName })
+    const detail = getTransformDetail(t)
+    if (detail) details.push(detail)
+  } else if (transformNodes.length > 1) {
+    details.push({
+      key: "transforms",
+      value: transformNodes.map((t) => t.component).join(" → "),
+    })
+    details.push({ key: "input", value: sourceIds.join(", ") || "unknown" })
+    details.push({ key: "output", value: sinkName })
+  } else {
+    // No transforms — direct source to sink
+    details.push({ key: "input", value: sourceIds.join(", ") || "unknown" })
+    details.push({ key: "output", value: sinkName })
+  }
+
+  return details
 }

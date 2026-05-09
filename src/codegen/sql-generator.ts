@@ -1,3 +1,32 @@
+/**
+ * SQL synthesis orchestrator. This file owns the public API surface
+ * (`generateSql`, `generateSqlEither`, `generateTapManifest`,
+ * `hasPipelineConnectorSource`) and the private driver
+ * (`generateSqlImpl`) that walks the construct tree and emits SQL in
+ * deterministic order: SET → CATALOG → UDF → SOURCE → SINK → VIEW →
+ * MATERIALIZED TABLE → INSERT.
+ *
+ * Every concrete builder lives in a focused sibling module:
+ *
+ *   - sql-build-context.ts      — BuildContext + lifecycle helpers
+ *   - sql-set-statements.ts     — leading SET 'k' = 'v' block
+ *   - sql-ddl-{catalog,source,sink,views}.ts — CREATE TABLE/CATALOG/VIEW DDL
+ *   - sql-sink-metadata.ts      — schema/changelog/PK propagation
+ *   - sql-query-{transforms,field-ops,aggregate-window,joins,escape,
+ *                side-paths}.ts — per-component SELECT builders
+ *   - sql-query-dispatcher.ts   — Map-based registry that routes a node
+ *                                  to its builder
+ *   - sql-dml-collection.ts     — INSERT statement collection (the engine
+ *                                  that walks sinks → sources)
+ *   - sql-statement-meta.ts     — dashboard hover-tooltip metadata
+ *
+ * Synthesis state lives on a per-call `BuildContext` threaded through
+ * every internal helper as the first argument. The reentrancy tripwire
+ * (module-level `_activeSynthesisCount` in sql-build-context.ts) fires
+ * when a plugin re-enters `generateSql` synchronously — that path is
+ * unsupported because fragment accumulators would interleave.
+ */
+
 import { Either } from "effect"
 import { SqlGenerationError } from "@/core/errors.js"
 import type { PluginDdlGenerator, PluginSqlGenerator } from "@/core/plugin.js"
@@ -28,17 +57,16 @@ import {
   generateViewDdl,
 } from "./sql-ddl-views.js"
 import { generateDml } from "./sql-dml-collection.js"
-import type { DmlEntry } from "./sql-dml-types.js"
 import { buildQuery } from "./sql-query-dispatcher.js"
 import { generateSetStatements } from "./sql-set-statements.js"
 import { resolveSinkMetadata } from "./sql-sink-metadata.js"
 import {
   buildCatalogDetails,
   buildCommentBlock,
+  buildDmlDetails,
   buildSinkDetails,
   buildSourceDetails,
   buildSourceSchema,
-  getTransformDetail,
 } from "./sql-statement-meta.js"
 import { verifySql } from "./sql-verifier.js"
 
@@ -68,12 +96,6 @@ export function hasPipelineConnectorSource(node: ConstructNode): boolean {
 }
 
 // ── Public API ──────────────────────────────────────────────────────
-//
-// Synthesis state lives on a per-call `BuildContext` (see
-// sql-build-context.ts) threaded through every internal helper as the
-// first argument. The reentrancy tripwire fires when a plugin tries to
-// re-enter `generateSql` synchronously — `BuildContext.synthDepth.value`
-// is set to 1 on entry and reset on exit; nested calls throw.
 
 export interface GenerateSqlOptions {
   readonly flinkVersion?: FlinkMajorVersion
@@ -476,61 +498,6 @@ function generateSqlImpl(
     commentIndices,
     statementMeta,
   }
-}
-
-function buildDmlDetails(
-  ctx: BuildContext,
-  entry: DmlEntry,
-): Array<{ key: string; value: string }> {
-  const details: Array<{ key: string; value: string }> = []
-
-  // Extract sink name from INSERT INTO `name`
-  const sinkMatch = entry.sql.match(/INSERT INTO `([^`]+)`/)
-  const sinkName = sinkMatch?.[1] ?? "unknown"
-
-  // Collect unique sources and transforms from contributors
-  const sourceIds: string[] = []
-  const transformNodes: ConstructNode[] = []
-  const seen = new Set<string>()
-  for (const c of entry.contributors) {
-    if (seen.has(c.origin.nodeId)) continue
-    seen.add(c.origin.nodeId)
-    if (c.origin.kind === "Source") sourceIds.push(c.origin.nodeId)
-    if (c.origin.kind === "Transform") {
-      const n = ctx.nodeIndex.get(c.origin.nodeId)
-      if (n) transformNodes.push(n)
-    }
-  }
-
-  // If no contributors, try parsing FROM clause
-  if (sourceIds.length === 0) {
-    const fromMatch = entry.sql.match(/FROM `([^`]+)`/)
-    if (fromMatch) sourceIds.push(fromMatch[1])
-  }
-
-  // Build details based on transform chain
-  if (transformNodes.length === 1) {
-    const t = transformNodes[0]
-    details.push({ key: "step", value: t.id })
-    details.push({ key: "type", value: t.component })
-    details.push({ key: "input", value: sourceIds.join(", ") || "unknown" })
-    details.push({ key: "output", value: sinkName })
-    const detail = getTransformDetail(t)
-    if (detail) details.push(detail)
-  } else if (transformNodes.length > 1) {
-    details.push({
-      key: "transforms",
-      value: transformNodes.map((t) => t.component).join(" → "),
-    })
-    details.push({ key: "input", value: sourceIds.join(", ") || "unknown" })
-    details.push({ key: "output", value: sinkName })
-  } else {
-    // No transforms — direct source to sink
-    details.push({ key: "input", value: sourceIds.join(", ") || "unknown" })
-    details.push({ key: "output", value: sinkName })
-  }
-
-  return details
 }
 
 /**
