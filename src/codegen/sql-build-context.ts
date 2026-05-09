@@ -1,6 +1,16 @@
 import type { PluginDdlGenerator, PluginSqlGenerator } from "@/core/plugin.js"
 import type { ConstructNode, FlinkMajorVersion } from "@/core/types.js"
 
+/** Maps a statement index to the construct node that produced it. */
+export interface StatementOrigin {
+  /** Unique node ID from the ConstructNode tree */
+  readonly nodeId: string
+  /** Component class name (e.g. "KafkaSource", "Filter", "Aggregate") */
+  readonly component: string
+  /** Node kind (e.g. "Source", "Sink", "Transform", "Pipeline") */
+  readonly kind: string
+}
+
 /**
  * Per-synthesis state threaded through every internal codegen helper.
  *
@@ -35,6 +45,12 @@ export interface BuildContext {
   fragments: SqlFragment[] | null
   /** Reentrancy guard. Boxed so callers can mutate the counter. */
   readonly synthDepth: { value: number }
+  /**
+   * Per-synthesis lookup of nodes by ID. Built once from the (optimised)
+   * construct tree and threaded through every builder so dispatchers can
+   * resolve cross-references without walking the tree repeatedly.
+   */
+  readonly nodeIndex: Map<string, ConstructNode>
   /** Plugin-provided custom SQL builders, keyed by component name. */
   readonly pluginSqlGenerators?: ReadonlyMap<string, PluginSqlGenerator>
   /** Plugin-provided custom DDL builders, keyed by component name. */
@@ -48,16 +64,13 @@ export interface SqlFragment {
   /** Length in bytes. */
   readonly length: number
   /** The construct node that produced this fragment. */
-  readonly origin: {
-    readonly nodeId: string
-    readonly component: string
-    readonly kind: string
-  }
+  readonly origin: StatementOrigin
 }
 
 /** Factory for a fresh synthesis context. */
 export function createBuildContext(opts: {
   readonly version: FlinkMajorVersion
+  readonly nodeIndex: Map<string, ConstructNode>
   readonly pluginSqlGenerators?: ReadonlyMap<string, PluginSqlGenerator>
   readonly pluginDdlGenerators?: ReadonlyMap<string, PluginDdlGenerator>
 }): BuildContext {
@@ -65,31 +78,43 @@ export function createBuildContext(opts: {
     version: opts.version,
     fragments: null,
     synthDepth: { value: 0 },
+    nodeIndex: opts.nodeIndex,
     pluginSqlGenerators: opts.pluginSqlGenerators,
     pluginDdlGenerators: opts.pluginDdlGenerators,
   }
 }
 
 /**
+ * Module-level synthesis depth. Each `generateSql` call gets its own
+ * `BuildContext` with its own `synthDepth.value`, so we additionally
+ * track depth at the module level — that's what the reentrancy tripwire
+ * checks. A plugin that synchronously calls `generateSql` inside a tree
+ * transformer would otherwise just create a second ctx and proceed.
+ */
+let _activeSynthesisCount = 0
+
+/**
  * Enter a fresh synthesis pass. Throws on reentrant calls — a plugin that
  * calls `generateSql` inside a tree transformer or hook is the usual
- * trigger, and that path is unsupported because module-scoped fragment
- * accumulators would interleave incorrectly.
+ * trigger, and that path is unsupported because fragment accumulators
+ * would interleave incorrectly.
  */
 export function enterSynthesis(ctx: BuildContext): void {
-  if (ctx.synthDepth.value > 0) {
+  if (_activeSynthesisCount > 0) {
     throw new Error(
       "generateSql() is not reentrant — a previous synthesis is still in flight. " +
         "This usually means a plugin called generateSql() inside a tree transformer or hook. " +
         "Plugins must not invoke synthesis directly.",
     )
   }
+  _activeSynthesisCount = 1
   ctx.synthDepth.value = 1
   ctx.fragments = null
 }
 
 /** Tear down synthesis state. Always run in a `finally`. */
 export function exitSynthesis(ctx: BuildContext): void {
+  _activeSynthesisCount = 0
   ctx.synthDepth.value = 0
   ctx.fragments = null
 }
