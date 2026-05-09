@@ -631,7 +631,7 @@ function runDeadBranchEliminationPass(tree: ConstructNode): ConstructNode {
 
 /**
  * Extract the set of config keys that the user has explicitly set
- * via pipeline props (flinkConfig, checkpoint, etc).
+ * via pipeline props (flinkConfig, checkpoint, etc.).
  */
 function extractUserSetKeys(pipeline: ConstructNode): Set<string> {
   const keys = new Set<string>()

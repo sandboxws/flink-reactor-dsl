@@ -177,8 +177,8 @@ export function generateSql(
   options: GenerateSqlOptions = {},
 ): GenerateSqlResult {
   const version = options.flinkVersion ?? "2.2"
-  // The ctx.nodeIndex is rebuilt below after optimisation; seed the context
-  // with an empty map so reentrancy is checked before optimisation runs.
+  // The ctx.nodeIndex is rebuilt below after optimization; seed the context
+  // with an empty map so reentrancy is checked before optimization runs.
   const ctx = createBuildContext({
     version,
     nodeIndex: new Map(),
@@ -212,7 +212,7 @@ function generateSqlImpl(
     optimizerSets = result.additionalSets
   }
 
-  // Build the per-synthesis node index. The optimised tree is what
+  // Build the per-synthesis node index. The optimized tree is what
   // every downstream builder walks; populate the ctx-owned index here so
   // the entire synthesis sees the same view.
   indexTree(currentTree, ctx.nodeIndex)
