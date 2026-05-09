@@ -1,4 +1,4 @@
-import { quoteIdentifier as q } from "@/codegen/sql-identifiers.js"
+import { quoteIdentifier as q } from "@/codegen/sql/sql-identifiers.js"
 import type { ValidationDiagnostic } from "./synth-context.js"
 import type {
   ConstructNode,

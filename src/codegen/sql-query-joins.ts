@@ -1,9 +1,9 @@
 import type { SchemaDefinition } from "@/core/schema.js"
 import type { ConstructNode } from "@/core/types.js"
+import { quoteIdentifier as q } from "./sql/sql-identifiers.js"
+import { resolveJoinOperand, resolveRef } from "./sql/sql-refs.js"
 import type { BuildContext } from "./sql-build-context.js"
-import { quoteIdentifier as q } from "./sql-identifiers.js"
 import { sameNameJoinKeys } from "./sql-join-helpers.js"
-import { resolveJoinOperand, resolveRef } from "./sql-refs.js"
 
 /**
  * The 5 join builders — Join, TemporalJoin, LookupJoin, IntervalJoin,

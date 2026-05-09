@@ -1,9 +1,9 @@
 import type { ConstructNode } from "@/core/types.js"
+import { quoteIdentifier as q } from "./sql/sql-identifiers.js"
+import { resolveSinkRef } from "./sql/sql-refs.js"
 import type { BuildContext } from "./sql-build-context.js"
 import type { DmlEntry } from "./sql-dml-types.js"
-import { quoteIdentifier as q } from "./sql-identifiers.js"
 import { getUpstream } from "./sql-query-helpers.js"
-import { resolveSinkRef } from "./sql-refs.js"
 
 /**
  * SideOutput and Validate — components that emit *two* INSERT

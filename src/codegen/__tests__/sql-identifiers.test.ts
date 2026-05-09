@@ -3,7 +3,7 @@ import {
   quoteIdentifier,
   quoteQualifiedName,
   quoteStringLiteral,
-} from "@/codegen/sql-identifiers.js"
+} from "@/codegen/sql/sql-identifiers.js"
 
 describe("quoteIdentifier", () => {
   it("wraps simple names in backticks", () => {
