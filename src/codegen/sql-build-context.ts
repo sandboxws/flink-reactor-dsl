@@ -33,6 +33,15 @@ export interface StatementOrigin {
  * be shared across functions that increment/decrement it. Every other
  * field is read-only.
  */
+/**
+ * Recursive dispatcher callback. The orchestrator owns the master
+ * `buildQuery` switch (or, post-C.15, a handler registry) and threads it
+ * through `BuildContext` so that builders extracted into peer modules can
+ * recurse into the dispatcher without taking a circular module dependency
+ * back to the orchestrator.
+ */
+export type BuildQueryFn = (ctx: BuildContext, node: ConstructNode) => string
+
 export interface BuildContext {
   /** Flink major version targeted by the synthesis pass. */
   readonly version: FlinkMajorVersion
@@ -55,6 +64,15 @@ export interface BuildContext {
   readonly pluginSqlGenerators?: ReadonlyMap<string, PluginSqlGenerator>
   /** Plugin-provided custom DDL builders, keyed by component name. */
   readonly pluginDdlGenerators?: ReadonlyMap<string, PluginDdlGenerator>
+  /**
+   * Dispatcher callback used by every builder that recurses into a child
+   * (Union, FlatMap with subqueries, Aggregate's pseudo-window forwarding,
+   * `getUpstream` chasing a non-Source upstream, etc.). Mutable to allow
+   * the orchestrator to install the dispatcher *after* `createBuildContext`
+   * runs — the typical `createBuildContext({ ...opts, buildQuery })` form
+   * still works because `buildQuery` is a hoisted function declaration.
+   */
+  buildQuery: BuildQueryFn
 }
 
 /** A fragment of a SQL statement attributed to a construct node. */
@@ -71,6 +89,7 @@ export interface SqlFragment {
 export function createBuildContext(opts: {
   readonly version: FlinkMajorVersion
   readonly nodeIndex: Map<string, ConstructNode>
+  readonly buildQuery: BuildQueryFn
   readonly pluginSqlGenerators?: ReadonlyMap<string, PluginSqlGenerator>
   readonly pluginDdlGenerators?: ReadonlyMap<string, PluginDdlGenerator>
 }): BuildContext {
@@ -79,6 +98,7 @@ export function createBuildContext(opts: {
     fragments: null,
     synthDepth: { value: 0 },
     nodeIndex: opts.nodeIndex,
+    buildQuery: opts.buildQuery,
     pluginSqlGenerators: opts.pluginSqlGenerators,
     pluginDdlGenerators: opts.pluginDdlGenerators,
   }
